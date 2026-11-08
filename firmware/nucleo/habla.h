@@ -24,6 +24,9 @@ enum class Situacion : uint8_t {
   // v1.7: el día con vos, cuidarte, juegos y fechas.
   BuenDia, Comiste, ADormir, Tardaste, Agua, Pausa, ComoEstas, AnimoBien, AnimoMedio, AnimoMal,
   Jugar, Gane, Perdi, Empate, AnioNuevo, Navidad, DiaDelAmigo, DiaDelNino, Aniversario,
+  // v1.9: amigos, agenda, presencia, hábitos, música y avisos de afuera.
+  ToqueRecibido, ToqueDevuelto, Agenda, AgendaManana, TeVas, HabitoHecho, HabitoRacha, HabitoCortado,
+  Musica, Pago, Mail, Github, Pedido, AvisoOtro,
   Cantidad
 };
 constexpr int N_SITUACIONES = static_cast<int>(Situacion::Cantidad);
@@ -81,6 +84,29 @@ struct Avisos {
   Aviso lista[MAX_AVISOS];
 };
 
+// "habitos" (v1.9): hasta 4; a su hora (si tiene) pregunta "¿{habito}?" y un
+// toque lo marca hecho.
+constexpr int MAX_HABITOS = 4;
+constexpr int LARGO_HABITO = 17;      // 16 bytes + terminador
+constexpr int LARGO_PRESENCIA = 41;   // 40 bytes + terminador
+enum class IconoHabito : uint8_t { Gota, Libro, Pesa, Zen, Pastilla, Cama, Fruta, Estrella, Cantidad };
+struct Habito {
+  char nombre[LARGO_HABITO] = {};
+  IconoHabito icono = IconoHabito::Estrella;
+  bool conHora = false;
+  uint16_t minuto = 0;        // del día (si conHora)
+  uint8_t dias = 0x7F;        // bit 0 lunes … bit 6 domingo
+};
+struct Habitos {
+  uint8_t n = 0;
+  Habito lista[MAX_HABITOS];
+};
+// "presencia" (v1.9): si dice algo cuando te vas y qué (vacío = las frases de te-vas).
+struct Presencia {
+  bool preguntar = true;
+  char texto[LARGO_PRESENCIA] = {};
+};
+
 // Lee "habla", "despertador" y "ubicacion" (esta la usa la nube: acá solo se
 // valida). nullptr si está bien; si no, el motivo.
 const char* leerHabla(const Json& j, int raiz, Habla* h);
@@ -92,12 +118,27 @@ const char* leerAvisos(const Json& j, int raiz, const Config& c, Avisos* a);
 // El aviso que corresponde (-1 = ninguno): sin distinguir mayúsculas; app o
 // contacto vacíos en el aviso = cualquiera.
 int buscarAviso(const Avisos& a, bool llamada, const char* app, const char* contacto);
+const char* leerHabitos(const Json& j, int raiz, Habitos* h);
+const char* leerPresencia(const Json& j, int raiz, Presencia* p);
+const char* nombreIconoHabito(IconoHabito i);
+
+// Más plantillas para una frase (v1.9): {de}, {titulo}, {minutos}, {cantidad},
+// {racha}, {habito}, {artista}. `clave` va sin las llaves.
+struct Plantilla {
+  const char* clave;
+  const char* valor;
+};
+struct Plantillas {
+  const Plantilla* lista = nullptr;
+  int n = 0;
+};
 
 // Reemplaza {dueno}, {robot} y {clima} (y, en los avisos, {app} y {contacto})
 // y corta en `cap - 1` bytes sin partir una letra. Lo que está vacío se lleva
 // la coma, los dos puntos o el espacio de antes ("¡Hola, {dueno}!" → "¡Hola!").
 size_t completarFrase(const char* plantilla, const char* dueno, const char* robot, char* salida, size_t cap,
-                      const char* clima = nullptr, const char* app = nullptr, const char* contacto = nullptr);
+                      const char* clima = nullptr, const char* app = nullptr, const char* contacto = nullptr,
+                      Plantillas extra = {});
 
 // El preset más parecido a esa personalidad (los de personalidades.json),
 // para elegir las variantes de las frases.
@@ -107,7 +148,7 @@ const char* presetCercano(const Personalidad& p);
 // más; si no, las de fábrica para todos y las de su preset (doble peso). Sin
 // dueño, saltea las que empiezan con {dueno}. false si no hay ninguna.
 bool elegirFrase(const Habla& h, Situacion s, const char* preset, const char* dueno, const char* robot, Azar& azar,
-                 char* salida, size_t cap, const char* clima = nullptr);
+                 char* salida, size_t cap, const char* clima = nullptr, Plantillas extra = {});
 
 // Lo que decide si habla o no (en RAM: unos pocos bytes).
 class Hablador {

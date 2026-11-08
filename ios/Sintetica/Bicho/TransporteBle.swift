@@ -6,11 +6,11 @@ enum ErrorBle: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .apagado: "Prendé el Bluetooth."
-        case .sinPermiso: "Para encontrar tu bicho hace falta el permiso de Bluetooth (Ajustes › Sintética)."
-        case .noEncontrado: "No encuentro el bicho. Acercalo al celu y fijate que esté prendido."
-        case .desconectado: "Se cortó la conexión con el bicho."
-        case .noEsUnBicho: "Ese dispositivo no es un bicho."
-        case .tiempo: "El bicho no contestó a tiempo."
+        case .sinPermiso: "Falta el permiso de Bluetooth (Ajustes › Sintética)."
+        case .noEncontrado: "No lo encuentro: acercalo y fijate que esté prendido."
+        case .desconectado: "Se cortó la conexión."
+        case .noEsUnBicho: "Eso no es un robot."
+        case .tiempo: "No contestó a tiempo."
         case let .gatt(m): m
         }
     }
@@ -76,6 +76,8 @@ final class Central: NSObject, CBCentralManagerDelegate {
         let datos = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data).map { Array($0) }
         MainActor.assumeIsolated {
             guard let b = buscando, idDeAnuncio(datos) == b.id else { return }
+            // Para encontrarlo después en segundo plano (la presencia).
+            UserDefaults.standard.set(p.identifier.uuidString, forKey: "periferico:\(b.id)")
             buscando = nil
             manager.stopScan()
             b.c.resume(returning: p)
@@ -184,7 +186,7 @@ final class TransporteBle: NSObject, Transporte, CBPeripheralDelegate {
     }
 
     nonisolated func peripheral(_ p: CBPeripheral, didWriteValueFor c: CBCharacteristic, error: Error?) {
-        MainActor.assumeIsolated { terminar(error.map { .failure(ErrorBle.gatt("El bicho no aceptó la escritura: \($0.localizedDescription)")) } ?? .success([])) }
+        MainActor.assumeIsolated { terminar(error.map { .failure(ErrorBle.gatt("No aceptó la escritura: \($0.localizedDescription)")) } ?? .success([])) }
     }
 
     /// Llega tanto por una lectura como por una notificación.

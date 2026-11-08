@@ -182,6 +182,7 @@ struct ModDia: View {
                 }
             }
             BloqueDespertador(modelo: modelo)
+            BloquePresencia(modelo: modelo)
             CampoVisor(rotulo: "Vos te llamás", texto: $tuNombre, ayuda: "Tu nombre", claro: true) {
                 let n = tuNombre
                 if n != modelo.config.nombreDueno { modelo.cambiar { $0.ponerNombreDueno(n) } }
@@ -356,12 +357,12 @@ struct ModVoz: View {
                     }
                 }
                 if escucha {
-                    CampoVisor(rotulo: "Responde a", texto: $palabra, ayuda: modelo.nombre) {
+                    CampoVisor(rotulo: "Responde a · una palabra común", texto: $palabra, ayuda: modelo.nombre) {
                         let t = cortarBytes(palabra.trimmingCharacters(in: .whitespaces), MAX_PALABRA)
                         modelo.cambiar { $0.ponerVoz("palabra", t.isEmpty ? nil : t) }
                     }
                     .onChange(of: palabra) { _, x in let c = cortarBytes(x, MAX_PALABRA); if c != x { palabra = c } }
-                    Llave(texto: "Conversar con IA", prendida: v["conversar"] as? Bool ?? false, ancha: true) {
+                    Llave(texto: "Charlar después de su nombre", prendida: v["conversar"] as? Bool ?? false, ancha: true) {
                         let si = !(modelo.config.voz["conversar"] as? Bool ?? false)
                         modelo.cambiar { $0.ponerVoz("conversar", si) }
                     }

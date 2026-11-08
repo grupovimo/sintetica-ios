@@ -105,6 +105,10 @@ void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
   pausaDicha_ = preguntando_ = pregApretado_ = tragarPregunta_ = false;
   animoDia_ = 0;
   juego_ = Juego::Ninguno;
+  toqueHasta_ = fuisteMs_ = habDesde_ = habToque_ = habReintento_ = musicaHasta_ = musicaFirma_ = 0;
+  fuisteEmpujado_ = habApretado_ = false;
+  habPregunta_ = habReintentoIdx_ = -1;
+  for (int i = 0; i < MAX_HABITOS; i++) habDiaHecho_[i] = habDiaPreg_[i] = 0, habRacha_[i] = 0;
 
   canal_ = Canal::Ble;
   wifi_ = nube_ = false;
@@ -290,6 +294,11 @@ void Sistema::evento(Evento e) {
       (e == Evento::Sacudida || e == Evento::SacudidaSuave || e == Evento::SacudidaFuerte || e == Evento::Levantado)) {
     juegoFase_ = 1;
     juegoDesde_ = juegoProximo_ = juegoAccion_ = hal_.ahoraMs();
+  }
+  // Un toque de un amigo también se devuelve con una caricia (aunque llegue como evento).
+  if (toqueHasta_ && e == Evento::Caricia) {
+    devolverToque(hal_.ahoraMs());
+    return;
   }
   motor_.evento(e, hal_.ahoraMs());
 }
@@ -823,6 +832,24 @@ void Sistema::tacto(bool apretado) {
     }
     return;
   }
+  // Preguntando "¿{habito}?": toque = hecho, mantener = todavía no (en tick, a los 0,8 s).
+  if (habPregunta_ >= 0) {
+    if (apretado) {
+      habApretado_ = true;
+      habToque_ = ahora;
+    } else if (habApretado_) {
+      habApretado_ = false;
+      if (ahora - habToque_ >= 800) todaviaNo(ahora);
+      else marcarHabito(habPregunta_, 0, true);
+    }
+    return;
+  }
+  // Un toque de un amigo: en los 30 s, tocarlo lo devuelve (y nada más).
+  if (apretado && toqueHasta_) {
+    devolverToque(ahora);
+    tragarSoltar_ = true;
+    return;
+  }
   // Un toque cierra el recordatorio, y ese toque no hace nada más.
   if (apretado && recVisible_ >= 0) {
     cerrarRecordatorio();
@@ -974,6 +1001,7 @@ void Sistema::tick() {
   revisarDespertador(ahora);
   avanzarAlarma(ahora);
   cuidar(ahora);
+  revisarCompania(ahora);
   avanzarJuego(ahora);
   // Mantenerlo apretado mientras pregunta "¿cómo estás?" ya es "mal".
   if (preguntando_ && pregApretado_ && ahora - pregToque_ >= 800) {
@@ -1214,7 +1242,7 @@ void Sistema::mostrarGlobo(uint32_t ahora) {
   actividad();
 }
 
-void Sistema::hablar(Situacion s) {
+void Sistema::hablar(Situacion s, Plantillas extra) {
   if (apagado_ || emparejando_) return;
   const bool siempre = situacionSiempre(s);
   // Las espontáneas no esperan: si ya está mostrando algo, no dice nada.
@@ -1229,7 +1257,8 @@ void Sistema::hablar(Situacion s) {
   const uint32_t e = epoch();
   if (!hablador_.quiere(s, hal_.ahoraMs() / 1000u, e ? e / 86400u : 0, config_.habla.frecuencia, azar_)) return;
   char t[LARGO_FRASE];
-  if (!elegirFrase(config_.habla, s, presetCercano(motor_.rasgos()), config_.vida.dueno, nombre(), azar_, t, sizeof t, c))
+  if (!elegirFrase(config_.habla, s, presetCercano(motor_.rasgos()), config_.vida.dueno, nombre(), azar_, t, sizeof t, c,
+                   extra))
     return;
   decir(t);
 }
@@ -2304,7 +2333,7 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
         // [tipo][n][app][n][contacto]
         char app[LARGO_APP] = {}, contacto[LARGO_APP] = {};
         size_t i = 2;
-        if (n < 2 || d[1] > 1) return responder(car, op, Malformado, "[u8 tipo][n][app][n][contacto]");
+        if (n < 2 || d[1] > 6) return responder(car, op, Malformado, "[u8 tipo][n][app][n][contacto]");
         if (i < n) {
           const size_t k = leerTextoCorto(d + i, n - i, app, sizeof app);
           if (!k) return responder(car, op, Malformado, "app de hasta 24 bytes");
@@ -2314,6 +2343,13 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
           const size_t k = leerTextoCorto(d + i, n - i, contacto, sizeof contacto);
           if (!k) return responder(car, op, Malformado, "contacto de hasta 24 bytes");
           i += k;
+        }
+        if (!textoUtf8Valido(app, largo(app)) || !textoUtf8Valido(contacto, largo(contacto)))
+          return responder(car, op, Malformado, "app y contacto en UTF-8");
+        // v1.9: los de afuera (pago, mail, github, pedido, otro): app es el título y contacto, quién.
+        if (d[1] >= 2) {
+          avisoEntrante(d[1], app, contacto);
+          return responder(car, op, Ok);
         }
         const bool llamada = d[1] == 1;
         evento(llamada ? Evento::Llamada : Evento::Notificacion);
@@ -2331,6 +2367,55 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
             decir(t, c);
           }
         }
+        return responder(car, op, Ok);
+      }
+      case CmdToque: {
+        // [tipo][n][de][n][expresión]
+        char de[LARGO_APP] = {}, ex[LARGO_APP] = {};
+        if (n < 4 || d[1] > 3) return responder(car, op, Malformado, "[u8 tipo][n][de][n][expresión]");
+        size_t i = 2;
+        size_t k = leerTextoCorto(d + i, n - i, de, sizeof de);
+        if (k < 2 || !textoUtf8Valido(de, largo(de))) return responder(car, op, Malformado, "de quién: de 1 a 24 bytes");
+        i += k;
+        if (i < n) {
+          k = leerTextoCorto(d + i, n - i, ex, sizeof ex);
+          if (!k || !textoUtf8Valido(ex, largo(ex))) return responder(car, op, Malformado, "expresión de hasta 24 bytes");
+        }
+        return responder(car, op, toque(d[1], de, ex) ? Ok : NoExiste);
+      }
+      case CmdAgenda: {
+        // [u16 minutos][u16 duración][n][título]
+        char t[LARGO_RECORDATORIO] = {};
+        const size_t k = n >= 6 ? leerTextoCorto(d + 5, n - 5, t, sizeof t) : 0;
+        if (k < 2 || 5 + k != n || !textoUtf8Valido(t, largo(t)))
+          return responder(car, op, Malformado, "[u16 minutos][u16 duración][n][título de 1 a 40 bytes]");
+        agenda(static_cast<uint16_t>(d[1] | d[2] << 8), static_cast<uint16_t>(d[3] | d[4] << 8), t);
+        return responder(car, op, Ok);
+      }
+      case CmdPresencia: {
+        if (n != 2 || d[1] > 1) return responder(car, op, Malformado, "0 llegaste, 1 te fuiste");
+        presencia(d[1] == 0);
+        return responder(car, op, Ok);
+      }
+      case CmdHabito: {
+        if (n != 4 || d[1] >= MAX_HABITOS || d[2] > 1) return responder(car, op, Malformado, "[u8 índice 0-3][u8 0 hecho, 1 deshacer][u8 racha]");
+        return responder(car, op, habito(d[1], d[2] == 0, d[3]) ? Ok : NoExiste);
+      }
+      case CmdMusica: {
+        // [u8 bpm][u8 flags][n][título][n][artista]
+        char t[LARGO_RECORDATORIO] = {}, a[LARGO_APP] = {};
+        if (n < 3) return responder(car, op, Malformado, "[u8 bpm][u8 flags][n][título][n][artista]");
+        size_t i = 3;
+        if (i < n) {
+          const size_t k = leerTextoCorto(d + i, n - i, t, sizeof t);
+          if (!k || !textoUtf8Valido(t, largo(t))) return responder(car, op, Malformado, "título de hasta 40 bytes");
+          i += k;
+        }
+        if (i < n) {
+          const size_t k = leerTextoCorto(d + i, n - i, a, sizeof a);
+          if (!k || !textoUtf8Valido(a, largo(a))) return responder(car, op, Malformado, "artista de hasta 24 bytes");
+        }
+        musica(d[1], (d[2] & 1) != 0, t, a);
         return responder(car, op, Ok);
       }
       case CmdAnimo: {

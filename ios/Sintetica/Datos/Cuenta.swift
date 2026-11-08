@@ -141,7 +141,7 @@ struct ApiSintetica: Sendable {
         let est = o["estado"] as? [String: Any]
         let crudo = (est?["crudo"] as? String).flatMap { Data(base64Encoded: $0) }.map { [UInt8]($0) }
         let apodo = o["apodo"] as? String ?? ""
-        return BichoNube(id: o["id"] as? String ?? "", nombre: apodo.isEmpty ? (est?["nombre"] as? String ?? "Bicho") : apodo,
+        return BichoNube(id: o["id"] as? String ?? "", nombre: apodo.isEmpty ? (est?["nombre"] as? String ?? "Robot") : apodo,
                          perfil: o["perfil"] as? String ?? "", conectado: o["conectado"] as? Bool ?? false,
                          virtual: o["virtual"] as? Bool ?? false, estadoCrudo: crudo)
     }

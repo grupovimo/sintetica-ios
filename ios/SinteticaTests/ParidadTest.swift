@@ -37,6 +37,9 @@ final class ParidadTest: XCTestCase {
         XCTAssertEqual(MAX_LISTA, limite("lista"))
         XCTAssertEqual(MAX_REGLAS, limite("reglasUsuario"))
         XCTAssertEqual(Op.maxSprites, limite("sprites"))
+        XCTAssertEqual(MAX_HABITOS, limite("habitos"))
+        XCTAssertEqual(MAX_NOMBRE_HABITO, limite("bytesHabito"))
+        XCTAssertEqual(MAX_TEXTO_PRESENCIA, limite("bytesPresencia"))
     }
 
     func testCortes() {
@@ -68,6 +71,14 @@ final class ParidadTest: XCTestCase {
         for c in deTope("bytesDecirAviso") {
             let a = AvisoCelu(["tipo": "notificacion", "decir": c.texto])
             XCTAssertEqual(a.objeto["decir"] as? String ?? "", c.resultado)
+        }
+        for c in deTope("bytesHabito") {
+            XCTAssertEqual(Habito(nombre: c.texto).objeto["nombre"] as? String ?? "", c.resultado)
+        }
+        for c in deTope("bytesPresencia") {
+            var d = ConfigDoc()
+            d.ponerPresencia(preguntar: true, texto: c.texto)
+            XCTAssertEqual(d.presenciaTexto, c.resultado)
         }
         for c in deTope("bytesAppAviso") {
             let a = AvisoCelu(["tipo": "notificacion", "app": c.texto, "contacto": c.texto])

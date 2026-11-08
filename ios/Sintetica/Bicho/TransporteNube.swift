@@ -54,7 +54,7 @@ final class TransporteNube: Transporte {
 
     func leerEstado() async throws -> [UInt8] {
         if let e = ultimoEstado { return e }
-        guard let e = try await api.bicho(id).estadoCrudo else { throw ErrorBicho.rechazo("Todavía no sé cómo está el bicho.") }
+        guard let e = try await api.bicho(id).estadoCrudo else { throw ErrorBicho.rechazo("Todavía no sé cómo está.") }
         ultimoEstado = e
         return e
     }

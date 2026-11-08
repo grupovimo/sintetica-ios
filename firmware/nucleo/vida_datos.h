@@ -12,7 +12,7 @@ struct Rostro;
 
 constexpr int MAX_CARAS_VIDA = 48;
 constexpr int MAX_AJUSTES = 28;
-constexpr int MAX_COMPORTAMIENTOS = 64;
+constexpr int MAX_COMPORTAMIENTOS = 67;  // 58 de base + 9 del usuario
 constexpr int MAX_PASOS = 6;
 constexpr int MAX_CUANDO = 3;
 constexpr int LARGO_VIDA = 25;  // nombres: 24 bytes + terminador

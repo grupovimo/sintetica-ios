@@ -14,6 +14,12 @@ enum Ruta: Hashable {
 @main
 struct SinteticaApp: App {
     @State private var ruta: [Ruta] = []
+
+    init() {
+        // La presencia: si iOS relanza la app en segundo plano (Bluetooth o la geocerca), arranca acá.
+        PresenciaCelu.compartida.arrancar()
+    }
+
     var body: some Scene {
         WindowGroup {
             NavigationStack(path: $ruta) {

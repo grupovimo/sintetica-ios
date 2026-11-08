@@ -11,7 +11,9 @@ const char* const NOMBRES_SITUACION[N_SITUACIONES] = {
     "caricia", "saludo", "hito", "cumple-dueno", "cumple-robot", "recordatorio-hecho", "despertador", "posponer",
     "clima-frio", "clima-calor", "clima-lluvia", "clima-lindo",
     "buen-dia", "comiste", "a-dormir", "tardaste", "agua", "pausa", "como-estas", "animo-bien", "animo-medio", "animo-mal",
-    "jugar", "gane", "perdi", "empate", "anio-nuevo", "navidad", "dia-del-amigo", "dia-del-nino", "aniversario"};
+    "jugar", "gane", "perdi", "empate", "anio-nuevo", "navidad", "dia-del-amigo", "dia-del-nino", "aniversario",
+    "toque-recibido", "toque-devuelto", "agenda", "agenda-manana", "te-vas", "habito-hecho", "habito-racha",
+    "habito-cortado", "musica", "pago", "mail", "github", "pedido", "aviso"};
 
 const char* const PRESETS[] = {"equilibrado", "timido", "picaro", "dormilon", "carinoso", "curioso", "grunon", "electrico"};
 
@@ -303,6 +305,78 @@ const char* leerAvisos(const Json& j, int raiz, const Config& c, Avisos* a) {
   return nullptr;
 }
 
+namespace {
+const char* const ICONOS_HABITO[] = {"gota", "libro", "pesa", "zen", "pastilla", "cama", "fruta", "estrella"};
+static_assert(sizeof ICONOS_HABITO / sizeof ICONOS_HABITO[0] == static_cast<int>(IconoHabito::Cantidad), "iconos");
+}  // namespace
+
+const char* leerHabitos(const Json& j, int raiz, Habitos* h) {
+  const int ha = j.buscar(raiz, "habitos");
+  if (ha < 0) return nullptr;
+  if (j.tipo(ha) != TipoJson::Arreglo) return "habitos: es una lista";
+  if (j.cantidad(ha) > MAX_HABITOS) return "habitos: hasta 4";
+  static const char* const CLAVES[] = {"nombre", "icono", "hora", "dias"};
+  Habitos n;
+  for (int i = 0; i < j.cantidad(ha); i++) {
+    const int o = j.elemento(ha, i);
+    if (j.tipo(o) != TipoJson::Objeto || !soloEstas(j, o, CLAVES)) return "habitos: claves válidas: nombre, icono, hora y dias";
+    Habito& x = n.lista[n.n];
+    char buf[LARGO_HABITO + 8];
+    const int no = j.buscar(o, "nombre");
+    const int l = no >= 0 && j.tipo(no) == TipoJson::Texto ? j.texto(no, buf, sizeof buf) : -1;
+    if (l < 1 || l >= LARGO_HABITO || !utf8Valido(buf)) return "habitos: nombre de 1 a 16 bytes";
+    copiarTexto(x.nombre, sizeof x.nombre, buf);
+    const int ic = j.buscar(o, "icono");
+    if (ic >= 0) {
+      int k = -1;
+      for (int c = 0; c < static_cast<int>(IconoHabito::Cantidad); c++)
+        if (j.textoIgual(ic, ICONOS_HABITO[c])) k = c;
+      if (k < 0) return "habitos: icono es gota, libro, pesa, zen, pastilla, cama, fruta o estrella";
+      x.icono = static_cast<IconoHabito>(k);
+    }
+    const int ho = j.buscar(o, "hora");
+    if (ho >= 0) {
+      char t[8];
+      if (j.tipo(ho) != TipoJson::Texto || j.texto(ho, t, sizeof t) <= 0 || !hora(t, &x.minuto)) return "habitos: hora es HH:MM";
+      x.conHora = true;
+    }
+    const int di = j.buscar(o, "dias");
+    if (di >= 0) {
+      char t[12];
+      const int k = j.tipo(di) == TipoJson::Texto ? j.texto(di, t, sizeof t) : -1;
+      if (k < 0 || k > 7 || !leerDias(t, &x.dias)) return "habitos: dias son letras de L M X J V S D, sin repetir (vacío = todos)";
+    }
+    n.n++;
+  }
+  *h = n;
+  return nullptr;
+}
+
+const char* leerPresencia(const Json& j, int raiz, Presencia* p) {
+  const int pr = j.buscar(raiz, "presencia");
+  if (pr < 0) return nullptr;
+  if (j.tipo(pr) != TipoJson::Objeto) return "presencia: no es un objeto";
+  static const char* const CLAVES[] = {"preguntar", "texto"};
+  if (!soloEstas(j, pr, CLAVES)) return "presencia: claves válidas: preguntar y texto";
+  Presencia n;
+  const int pg = j.buscar(pr, "preguntar");
+  if (pg >= 0 && !esBool(j, pg)) return "presencia: preguntar es true o false";
+  n.preguntar = j.booleano(pg, true);
+  const int te = j.buscar(pr, "texto");
+  if (te >= 0) {
+    char buf[LARGO_PRESENCIA + 8];
+    const int l = j.tipo(te) == TipoJson::Texto ? j.texto(te, buf, sizeof buf) : -1;
+    if (l < 0 || l >= LARGO_PRESENCIA || !utf8Valido(buf)) return "presencia: texto de hasta 40 bytes";
+    copiarTexto(n.texto, sizeof n.texto, buf);
+  }
+  *p = n;
+  return nullptr;
+}
+
+const char* nombreIconoHabito(IconoHabito i) {
+  return static_cast<int>(i) < static_cast<int>(IconoHabito::Cantidad) ? ICONOS_HABITO[static_cast<int>(i)] : "";
+}
+
 int buscarAviso(const Avisos& a, bool llamada, const char* app, const char* contacto) {
   for (int i = 0; i < a.n; i++) {
     const Aviso& x = a.lista[i];
@@ -315,7 +389,7 @@ int buscarAviso(const Avisos& a, bool llamada, const char* app, const char* cont
 }
 
 size_t completarFrase(const char* p, const char* dueno, const char* robot, char* salida, size_t cap, const char* clima,
-                      const char* app, const char* contacto) {
+                      const char* app, const char* contacto, Plantillas extra) {
   if (cap == 0) return 0;
   // Se arma entero y se corta al final, sin partir una letra.
   char buf[256];
@@ -331,9 +405,18 @@ size_t completarFrase(const char* p, const char* dueno, const char* robot, char*
   for (const char* c = p; *c;) {
     bool hecho = false;
     if (*c == '{') {
-      for (const Marca& k : marcas) {
-        const size_t lk = largo(k.clave);
-        if (!iguales(c, k.clave, lk)) continue;
+      // Las de la v1.9 ({de}, {titulo}…): "{" + clave + "}".
+      Marca otra = {nullptr, nullptr};
+      size_t lo = 0;
+      for (int e = 0; e < extra.n && !otra.clave; e++) {
+        const size_t l = largo(extra.lista[e].clave);
+        if (iguales(c + 1, extra.lista[e].clave, l) && c[1 + l] == '}') otra = {c, extra.lista[e].valor}, lo = l + 2;
+      }
+      constexpr int N_MARCAS = static_cast<int>(sizeof marcas / sizeof marcas[0]);
+      for (int mi = otra.clave ? -1 : 0; mi < N_MARCAS; mi++) {
+        const Marca& k = mi < 0 ? otra : marcas[mi];
+        const size_t lk = mi < 0 ? lo : largo(k.clave);
+        if (mi >= 0 && !iguales(c, k.clave, lk)) continue;
         if (k.valor && k.valor[0]) {
           agregar(k.valor, largo(k.valor));
         } else {
@@ -372,9 +455,22 @@ const char* presetCercano(const Personalidad& p) {
 }
 
 bool elegirFrase(const Habla& h, Situacion s, const char* preset, const char* dueno, const char* robot, Azar& azar,
-                 char* salida, size_t cap, const char* clima) {
+                 char* salida, size_t cap, const char* clima, Plantillas extra) {
   const bool hayDueno = dueno && dueno[0];
-  auto sirve = [&](const char* t) { return hayDueno || !iguales(t, "{dueno}", 7); };
+  // Sin dueño, las que empiezan con {dueno}; y las que usan una plantilla de
+  // la v1.9 que vino vacía ("Un mail de {de}." sin de quién).
+  auto sirve = [&](const char* t) {
+    if (!hayDueno && iguales(t, "{dueno}", 7)) return false;
+    for (const char* c = t; *c; c++) {
+      if (*c != '{') continue;
+      for (int e = 0; e < extra.n; e++) {
+        const Plantilla& x = extra.lista[e];
+        const size_t l = largo(x.clave);
+        if ((!x.valor || !x.valor[0]) && iguales(c + 1, x.clave, l) && c[1 + l] == '}') return false;
+      }
+    }
+    return true;
+  };
   // Las propias del usuario: si tiene para esta situación, solo esas (son su voz).
   int propias = 0;
   for (int i = 0; i < h.nPropias; i++)
@@ -384,7 +480,7 @@ bool elegirFrase(const Habla& h, Situacion s, const char* preset, const char* du
     for (int i = 0; i < h.nPropias; i++) {
       if (h.propias[i].situacion != s || !sirve(h.propias[i].texto)) continue;
       if (k-- == 0) {
-        completarFrase(h.propias[i].texto, dueno, robot, salida, cap, clima);
+        completarFrase(h.propias[i].texto, dueno, robot, salida, cap, clima, nullptr, nullptr, extra);
         return true;
       }
     }
@@ -405,7 +501,7 @@ bool elegirFrase(const Habla& h, Situacion s, const char* preset, const char* du
     const FraseBase& f = FRASES_BASE[b->primera + i];
     k -= peso(f);
     if (k < 0) {
-      completarFrase(f.texto, dueno, robot, salida, cap, clima);
+      completarFrase(f.texto, dueno, robot, salida, cap, clima, nullptr, nullptr, extra);
       return true;
     }
   }

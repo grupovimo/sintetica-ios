@@ -305,6 +305,129 @@
       "frases": {
         "todos": ["¡Hoy hace un año que estamos juntos!", "¡Feliz aniversario, {dueno}!"]
       }
+    },
+    "toque-recibido": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡{de} te manda un toque!", "Toc toc: {de} se acordó de vos.", "{de} te saluda."],
+        "carinoso": ["¡{de} te manda cariño!", "Un mimo de {de}. ¡Qué lindo!"],
+        "timido": ["Eh... {de} te manda un toque."],
+        "picaro": ["{de} te anda buscando...", "Ojo, que {de} te tocó."],
+        "electrico": ["¡TOQUE DE {de}!", "¡{de} te tocó! ¡Devolvéselo!"],
+        "grunon": ["{de} molesta. Tocame si querés contestar."],
+        "curioso": ["¿Qué querrá {de}? Te mandó un toque."]
+      }
+    },
+    "toque-devuelto": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Se lo devolví a {de}!", "Listo, le llegó a {de}.", "¡Toque para {de}!"],
+        "carinoso": ["Le mandé un abrazo a {de}."],
+        "electrico": ["¡Volando para {de}!"],
+        "grunon": ["Ya está. Se lo mandé."]
+      }
+    },
+    "agenda": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["{titulo} en {minutos} min.", "¡Ojo! {titulo} en {minutos} min.", "En {minutos} min: {titulo}."],
+        "electrico": ["¡Vamos! {titulo} en {minutos} min."],
+        "dormilon": ["Uf... {titulo} en {minutos} min."],
+        "grunon": ["{titulo} en {minutos}. No llegues tarde."],
+        "timido": ["Perdón... {titulo} en {minutos} min."]
+      }
+    },
+    "agenda-manana": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Mañana: {titulo} y {cantidad} en total.", "Mañana tenés {cantidad}. Arranca con {titulo}.", "Para mañana: {titulo}."],
+        "dormilon": ["Mañana {titulo}. Dormí bien."],
+        "electrico": ["¡Mañana {cantidad} cosas! Primero {titulo}."]
+      }
+    },
+    "te-vas": {
+      "probabilidad": 1, "enfriamiento": 600, "siempre": true,
+      "frases": {
+        "todos": ["¿Llevás las llaves?", "¿Tenés todo? ¿Llaves, celu?", "¡Chau! Volvé pronto."],
+        "carinoso": ["¡Chau, {dueno}! Te voy a extrañar.", "¿Llevás las llaves? Cuidate."],
+        "grunon": ["Andá nomás. ¿Las llaves?"],
+        "timido": ["Chau... ¿llevás todo?"],
+        "picaro": ["¿Seguro que llevás las llaves?"],
+        "electrico": ["¡Chau! ¡Llaves, celu, billetera!"]
+      }
+    },
+    "habito-hecho": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Bien ahí! {habito}, hecho.", "¡Muy bien, {dueno}!", "Anotado: {habito}."],
+        "electrico": ["¡ESO! ¡{habito}!"],
+        "grunon": ["Bueno. Era hora."],
+        "carinoso": ["¡Qué orgullo, {dueno}!"],
+        "timido": ["Bien... {habito}, listo."]
+      }
+    },
+    "habito-racha": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡{racha} días seguidos!", "¡Racha de {racha} días de {habito}!", "¡Van {racha} días! No aflojes."],
+        "electrico": ["¡{racha} DÍAS! ¡Imparable!"],
+        "grunon": ["{racha} días. No está mal."],
+        "carinoso": ["¡{racha} días! Te admiro, {dueno}."]
+      }
+    },
+    "habito-cortado": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Se cortó la racha. ¿{habito} hoy?", "Arranquemos de nuevo: ¿{habito}?"],
+        "grunon": ["Se cortó. ¿{habito} o no?"],
+        "carinoso": ["No pasa nada. ¿{habito} hoy?"]
+      }
+    },
+    "musica": {
+      "probabilidad": 0.5, "enfriamiento": 900,
+      "frases": {
+        "todos": ["¡Temazo! {titulo}.", "¡Esta me gusta! {artista}.", "¡Qué tema! {titulo}"],
+        "electrico": ["¡SUBILE! {titulo}."],
+        "grunon": ["¿Otra vez {artista}?"],
+        "dormilon": ["Linda para dormir..."],
+        "curioso": ["¿Quién canta? Ah, {artista}."]
+      }
+    },
+    "pago": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Te pagaron! {titulo}", "¡Plata! {titulo} de {de}.", "¡Entró {titulo}!"],
+        "electrico": ["¡CHA-CHING! {titulo}"],
+        "grunon": ["Te pagaron. Por fin."],
+        "picaro": ["¡{titulo}! ¿Me comprás algo?"]
+      }
+    },
+    "mail": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Un mail de {de}.", "Te escribió {de}: {titulo}", "Tenés un mail."],
+        "grunon": ["Otro mail. De {de}."]
+      }
+    },
+    "github": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["GitHub: {titulo}", "{de}: {titulo}", "Algo en GitHub: {titulo}"],
+        "curioso": ["¿Qué pasó en {titulo}?"]
+      }
+    },
+    "pedido": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Pedido nuevo! {titulo}", "Tu pedido: {titulo}", "¡Llegó un pedido de {de}!"],
+        "electrico": ["¡PEDIDO! {titulo}"]
+      }
+    },
+    "aviso": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Aviso: {titulo}", "{de}: {titulo}", "¡Ey! {titulo}"]
+      }
     }
   }
 }

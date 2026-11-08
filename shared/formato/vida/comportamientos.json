@@ -53,5 +53,8 @@
   "otro-bicho": {"tipo": "reaccion", "pasos": [{"cara": "sorpresa", "peso": 0.6, "mirada": "lado", "dura": 1}, {"cara": "contento", "dura": 1.5}]},
   "saludar-al-volver": {"tipo": "reaccion", "pasos": [{"cara": "sorpresa", "peso": 0.9, "particula": "exclamacion", "dura": 0.8}, {"cara": "emocionado", "dura": 1.5, "decir": "volviste"}, {"cara": "contento", "dura": 2}]},
   "saludar-con-amor": {"tipo": "reaccion", "pasos": [{"cara": "sorpresa", "peso": 0.9, "dura": 0.8}, {"cara": "emocionado", "dura": 1.5, "decir": "volviste"}, {"cara": "enamorado", "particula": "corazon", "cuantas": 3, "dura": 2}]},
-  "volver-ofendido": {"tipo": "reaccion", "pasos": [{"cara": "ofendido", "mirada": "reojo", "dura": 3}, {"cara": "ofendido", "dura": 2, "decir": "te-extrane"}, {"cara": "contento", "peso": 0.6, "dura": 1.5}]}
+  "volver-ofendido": {"tipo": "reaccion", "pasos": [{"cara": "ofendido", "mirada": "reojo", "dura": 3}, {"cara": "ofendido", "dura": 2, "decir": "te-extrane"}, {"cara": "contento", "peso": 0.6, "dura": 1.5}]},
+  "apurado": {"tipo": "reaccion", "pasos": [{"cara": "sorpresa", "peso": 0.7, "mirada": "lado", "parpadeo": "rapido", "particula": "reloj", "dura": 1.2, "sonido": "agenda"}, {"cara": "concentrado", "peso": 0.6, "mirada": "lado", "parpadeo": "rapido", "dura": 0.6, "veces": 4}]},
+  "orgulloso": {"tipo": "reaccion", "pasos": [{"cara": "orgulloso", "particula": "estrella", "cuantas": 2, "dura": 2.5, "sonido": "habito"}, {"cara": "contento", "peso": 0.7, "dura": 1.5}]},
+  "bailar-ritmo": {"tipo": "reaccion", "pasos": [{"cara": "contento", "peso": 0.8, "particula": "nota", "cuantas": 2, "dura": 4}, {"cara": "emocionado", "peso": 0.5, "particula": "nota", "dura": 3}]}
 }

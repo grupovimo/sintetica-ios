@@ -121,6 +121,12 @@ enum class Evento : uint8_t {
   CaraDetectada,  // la cámara ve una cara después de un rato sin ver ninguna (v1.8)
   Oscuridad,      // se apagó la luz del cuarto (v1.8)
   ManoCerca,      // una mano cerca de la pantalla, sin tocarla (v1.8)
+  ToqueRecibido,  // llegó un toque de un amigo (v1.9)
+  DevolverToque,  // lo devolviste con un toque o una caricia (v1.9; lo avisa solo)
+  Agenda,         // se viene un evento del calendario, en 0 a 15 min (v1.9)
+  Llegaste,       // presencia: llegaste (v1.9)
+  TeFuiste,       // presencia: te fuiste (v1.9)
+  Habito,         // se marcó un hábito (v1.9; si fue en el bicho, lo avisa solo)
   Cantidad
 };
 // El evento "padre" (sacudida-fuerte → sacudida, caricia → tacto): si no hay
@@ -277,6 +283,8 @@ struct Config {
   Despertador despertador;
   Cuidado cuidado;
   Avisos avisos;
+  Habitos habitos;     // v1.9
+  Presencia presencia;  // v1.9
 
   int indiceExpresion(const char* nombre) const;
   int indiceAnimacion(const char* nombre) const;

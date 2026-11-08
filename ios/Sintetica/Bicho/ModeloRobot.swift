@@ -33,6 +33,8 @@ final class ModeloRobot {
     /// Los sprites de las caras de imagen (QOI, por número 0 a 11) y su miniatura.
     var sprites: [Int: [UInt8]] = [:]
     var miniSprites: [Int: UIImage] = [:]
+    /// Lo que suena (Spotify o el celu).
+    var suena: Suena?
     var vida: VidaEnVivo?
     var vidaEn = Date.distantPast
     var ota: Actualizacion?
@@ -194,6 +196,11 @@ final class ModeloRobot {
     }
 
     private func recibir(_ e: EventoNube) {
+        // Lo que suena puede ser de la cuenta (Spotify, sin robot) o de este robot.
+        if e.tipo == "musica", e.bicho.isEmpty || e.bicho == id, let t = e.datos["titulo"] as? String {
+            suena = (e.datos["sonando"] as? Bool ?? false) ? Suena(sonando: true, titulo: t, artista: e.datos["artista"] as? String ?? "") : nil
+            return
+        }
         guard e.bicho == id else { return }
         switch e.tipo {
         case "estado":
@@ -219,6 +226,9 @@ final class ModeloRobot {
             }
         case "ota":
             ota = Actualizacion(e.datos)
+        case "toque":
+            let t = textoToque(de: e.datos["de"] as? String ?? "", tipo: e.datos["tipo"] as? String ?? "toque", devuelto: e.datos["devuelto"] as? Bool ?? false)
+            mostrarAviso(t.texto, icono: t.icono, segundos: 5)
         default:
             break
         }
@@ -257,7 +267,7 @@ final class ModeloRobot {
             case .despertador:
                 let t = config.despertador?.texto ?? ""
                 mostrarAviso(t.isEmpty ? "Suena el despertador" : t, icono: "alarm.fill", segundos: 120, despertador: true)
-            case .juego, .animo:
+            case .juego, .animo, .toque, .habito, .devolvioToque:
                 break
             }
         }
@@ -703,4 +713,13 @@ final class ModeloRobot {
 /// caras: la vista previa los arma sola con la misma config y hora.
 func esCara(_ e: String) -> Bool {
     !["recordatorio:", "pomodoro:", "reloj:", "imagen:", "protector:"].contains { e.hasPrefix($0) }
+}
+
+/// El aviso de un toque de un amigo (o el que te devolvió), como la web.
+func textoToque(de: String, tipo: String, devuelto: Bool) -> (texto: String, icono: String) {
+    let que: [String: String] = ["toque": "un toque", "abrazo": "un abrazo", "beso": "un beso", "carita": "una carita"]
+    let el: [String: String] = ["toque": "el toque", "abrazo": "el abrazo", "beso": "el beso", "carita": "la carita"]
+    let iconos: [String: String] = ["toque": "hand.point.right.fill", "abrazo": "figure.2.arms.open", "beso": "heart.fill", "carita": "face.smiling.inverse"]
+    let texto = devuelto ? "\(de) te devolvió \(el[tipo] ?? "el toque")" : "\(de) te mandó \(que[tipo] ?? "un toque")"
+    return (texto, iconos[tipo] ?? "hand.point.right.fill")
 }

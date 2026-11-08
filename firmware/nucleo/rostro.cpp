@@ -49,7 +49,7 @@ const InfoParametro INFO_GLOBAL[N_PARAMETROS - param::GX] = {
 };
 
 const char* const NOMBRES_PARTICULAS[static_cast<int>(TipoParticula::Cantidad)] = {
-    "zzz", "corazon", "lagrima", "gota", "chispa", "pregunta", "exclamacion", "nota", "estrella", "burbuja", "oveja"};
+    "zzz", "corazon", "lagrima", "gota", "chispa", "pregunta", "exclamacion", "nota", "estrella", "burbuja", "oveja", "reloj"};
 
 uint32_t g_finos = 0;
 
@@ -593,6 +593,12 @@ float sdParticula(TipoParticula t, V2 q, float a) {
       return sdStar5(q, a, 0.5f);
     case TipoParticula::Burbuja:
       return minf(absf(largo2(q.x, q.y) - a * 0.8f) - 0.08f * a, largo2(q.x + 0.85f * a, q.y + 0.95f * a) - 0.16f * a);
+    case TipoParticula::Reloj: {
+      // Un relojito: el aro y dos agujas (v1.9, el apuro de la agenda).
+      const float aro = absf(largo2(q.x, q.y) - 0.62f * a) - 0.1f * a;
+      const float h = sdSegmento(q, {0, 0}, {0, 0.42f * a}) - 0.08f * a;
+      return minf(aro, minf(h, sdSegmento(q, {0, 0}, {0.3f * a, 0}) - 0.08f * a));
+    }
     case TipoParticula::Oveja: {
       // Lana (cuatro bultos), la cabeza adelante y dos patitas.
       float d = largo2(q.x + 0.3f * a, q.y) - 0.38f * a;

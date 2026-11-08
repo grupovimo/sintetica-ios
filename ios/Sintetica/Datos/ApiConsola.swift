@@ -92,6 +92,8 @@ let ACCIONES_AUTO: [(tipo: String, nombre: String, icono: String)] = [
     ("robot", "Otro robot", "person.2.fill"),
 ]
 let MODOS_ACCION: [(String, String)] = [("mascota", "Compañía"), ("reloj", "Reloj"), ("pomodoro", "Pomodoro"), ("clima", "Clima")]
+/// Las que solo tienen sentido con un cuándo.
+let PLANTILLAS_CUANDO: [String: [String]] = ["juego": ["{juego}", "{resultado}"], "animo": ["{animo}"], "habito": ["{habito}", "{racha}"]]
 let PLANTILLAS_AUTO = ["{robot}", "{dueno}", "{texto}", "{hora}", "{clima}", "{temp}", "{max}", "{min}", "{ciudad}", "{bateria}", "{expresion}"]
 
 struct Automatizacion: Codable, Equatable, Identifiable {
@@ -152,7 +154,8 @@ struct EstadoTelegram: Equatable {
 
 let NOMBRES_CUANDO: [String: String] = [
     "hora": "A una hora", "despertador": "Suena el despertador", "juego": "Termina un juego", "animo": "Te pregunta cómo estás",
-    "bicho-cerca": "Otro robot cerca",
+    "bicho-cerca": "Otro robot cerca", "llegaste": "Llegás a casa", "te-fuiste": "Te vas", "habito": "Marcás un hábito",
+    "agenda": "Se viene un evento",
     "recordatorio": "Muestra un recordatorio", "pomodoro": "Termina un pomodoro", "bateria-baja": "Poca batería",
     "desconectado": "Se desconecta", "conectado": "Se conecta", "despierta": "Se despierta", "duerme": "Se duerme", "expresion": "Cambia de cara",
     "tacto": "Lo tocan", "doble-toque": "Doble toque", "caricia": "Una caricia", "muchos-toques": "Muchos toques", "levantado": "Lo levantan",
@@ -336,6 +339,8 @@ enum AvisoRobot: Equatable {
     case juego(Int, Int)
     /// Respondió el "¿cómo estás?": 0 bien, 1 más o menos, 2 mal.
     case animo(Int)
+    /// v1.9: le llegó un toque (el tipo) o se marcó un hábito (el índice); devolvió el toque.
+    case toque(Int), habito(Int), devolvioToque
 }
 
 func avisosDeMarco(car: Int, _ b: [UInt8]) -> [AvisoRobot] {
@@ -349,6 +354,9 @@ func avisosDeMarco(car: Int, _ b: [UInt8]) -> [AvisoRobot] {
         case (4, _): l.append(.recordatorio(Int(dato)))
         case (5, _): l.append(.juego(Int(dato) / 16, Int(dato) % 16))
         case (6, _): l.append(.animo(Int(dato)))
+        case (7, _): l.append(.toque(Int(dato)))
+        case (8, _): l.append(.habito(Int(dato)))
+        case (0, 40): l.append(.devolvioToque)
         case (0, 32): l.append(.pomodoro)
         case (0, 33): l.append(.despertador)
         default: break

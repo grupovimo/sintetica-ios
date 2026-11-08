@@ -99,6 +99,13 @@ class MotorVida {
   void seguir(float x, float y, uint32_t ahora);
   // De dónde vino el último estímulo (-1 a 1): la mirada lo prefiere.
   void estimulo(float x, float y) { estX_ = limitar(x, -1, 1), estY_ = limitar(y, -1, 1); }
+  // La música que suena (v1.9): mueve la cabeza a ese ritmo (bpm; 0 = deja de
+  // bailar). Entra y sale suave, por los resortes.
+  void musica(float bpm) { ritmoBpm_ = bpm < 0 ? 0 : bpm > 240 ? 240 : bpm; }
+  float ritmoMusica() const { return ritmoBpm_; }
+  float pesoRitmo() const { return ritmoPeso_; }
+  // Empuja una variable del estado interno (te fuiste: se aburre antes).
+  void empujarEstado(VarVida v, float delta) { empujar(static_cast<int>(v), delta); }
   // Interacción sin regla (el botón del broche): cuenta como atención.
   void interaccion(uint32_t ahora);
   // Fija una cara (nombre de la config; nullptr o "" vuelve a lo automático).
@@ -286,6 +293,7 @@ class MotorVida {
   float proximaPostura_ = 20, posturaTilt_ = 0, posturaEy_ = 0;
   float glitchSemilla_ = 0, proximoGlitch_ = 0;
   float seguirX_ = 0, seguirY_ = 0, seguirHasta_ = -10;
+  float ritmoBpm_ = 0, ritmoPeso_ = 0, faseRitmo_ = 0, proximaNotaRitmo_ = 0;  // la música (v1.9)
   float estX_ = 0, estY_ = 0;
   float proximaParticula_ = 0;
   uint32_t parpadeos_ = 0, dobles_ = 0;

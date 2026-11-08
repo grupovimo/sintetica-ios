@@ -7,8 +7,8 @@
     "expresionesBase": 16,
     "carasVida": 48,
     "carasVidaBase": 38,
-    "comportamientos": 64,
-    "comportamientosBase": 55,
+    "comportamientos": 67,
+    "comportamientosBase": 58,
     "carasImagen": 8,
     "sprites": 12,
     "imagenes": 8,
@@ -23,6 +23,9 @@
     "avisos": 8,
     "bytesDecirAviso": 40,
     "bytesAppAviso": 24,
+    "habitos": 4,
+    "bytesHabito": 16,
+    "bytesPresencia": 40,
     "bytesPalabra": 16,
     "bytesCiudad": 40,
     "bytesNombre": 24
@@ -585,6 +588,72 @@
       "codigo": 3,
       "detalle": "avisos: una expresion que no existe",
       "esquema": true
+    },
+    {
+      "archivo": "habitos-4.json",
+      "acepta": true
+    },
+    {
+      "archivo": "habitos-5.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habitos: hasta 4"
+    },
+    {
+      "archivo": "habito-borde.json",
+      "acepta": true
+    },
+    {
+      "archivo": "habito-nombre-17.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habitos: nombre de 1 a 16 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "habito-sin-nombre.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habitos: nombre de 1 a 16 bytes"
+    },
+    {
+      "archivo": "habito-icono-malo.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habitos: icono es gota"
+    },
+    {
+      "archivo": "habito-hora-mala.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habitos: hora es HH:MM"
+    },
+    {
+      "archivo": "habito-dias-repetidos.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habitos: dias son letras"
+    },
+    {
+      "archivo": "presencia-borde.json",
+      "acepta": true
+    },
+    {
+      "archivo": "presencia-vacia.json",
+      "acepta": true
+    },
+    {
+      "archivo": "presencia-texto-41.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "presencia: texto de hasta 40 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "presencia-clave-mala.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "presencia: claves válidas"
     },
     {
       "archivo": "voz-palabra-16.json",

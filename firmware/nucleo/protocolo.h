@@ -56,6 +56,11 @@ enum Op : uint8_t {
   CmdAviso = 0x44,       // [u8 0 notificación, 1 llamada][n][app][n][contacto] (v1.7)
   CmdAnimo = 0x45,       // [u8 0 bien, 1 más o menos, 2 mal] (v1.7)
   CmdMirar = 0x46,       // [i8 x][i8 y] (-100..100): de dónde viene un sonido (v1.7)
+  CmdToque = 0x47,       // [u8 tipo: 0 toque, 1 abrazo, 2 beso, 3 carita][n][de][n][expresión] (v1.9)
+  CmdAgenda = 0x48,      // [u16 minutos (0xFFFF = mañana)][u16 duración (o cantidad)][n][título] (v1.9)
+  CmdPresencia = 0x49,   // [u8 0 llegaste, 1 te fuiste] (v1.9)
+  CmdHabito = 0x4A,      // [u8 índice][u8 0 hecho, 1 deshacer][u8 racha] (v1.9)
+  CmdMusica = 0x4B,      // [u8 bpm][u8 flags: bit 0 sonando][n][título][n][artista] (v1.9)
   // Imagen
   ImgInicio = 0x20,      // u8 espacio (0-7 imágenes, 8-19 sprites), u32 largo, u32 crc32
   ImgBloque = 0x21,      // u32 desplazamiento, datos

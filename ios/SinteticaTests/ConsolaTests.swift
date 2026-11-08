@@ -593,3 +593,125 @@ final class AutomatizacionesNuevasTests: XCTestCase {
         XCTAssertEqual(armarFrase("Hola {dueno}, {clima}", dueno: "Nahuel", robot: "Toto"), "Hola Nahuel,")
     }
 }
+
+/// La v1.9: toques, agenda, presencia, hábitos, música y avisos de afuera.
+@MainActor
+final class ConsolaV19Tests: XCTestCase {
+    private func vector(_ nombre: String) throws -> [String: Any] {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "vectores", withExtension: "json"))
+        let v = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        return try XCTUnwrap((v["comandos"] as? [[String: Any]] ?? []).first { $0["nombre"] as? String == nombre }, nombre)
+    }
+    private func hexDe(_ n: String) throws -> String? { try vector(n)["hex"] as? String }
+
+    func testComandosContraLosVectores() throws {
+        for n in ["toque abrazo", "toque carita"] {
+            let v = try vector(n)
+            XCTAssertEqual(hex(Comando.toque(v["tipo"] as! String, de: v["de"] as! String, expresion: v["expresion"] as? String ?? "")), v["hex"] as? String, n)
+        }
+        let a = try vector("agenda")
+        XCTAssertEqual(hex(Comando.agenda(minutos: a["minutos"] as! Int, duracion: a["duracion"] as! Int, titulo: a["titulo"] as! String)), a["hex"] as? String)
+        let m = try vector("agenda manana")
+        XCTAssertEqual(hex(Comando.resumenManana(cantidad: m["cantidad"] as! Int, titulo: m["titulo"] as! String)), m["hex"] as? String)
+        XCTAssertEqual(hex(Comando.presencia(llegaste: true)), try hexDe("presencia llegaste"))
+        XCTAssertEqual(hex(Comando.presencia(llegaste: false)), try hexDe("presencia te fuiste"))
+        let h = try vector("habito hecho")
+        XCTAssertEqual(hex(Comando.habito(h["indice"] as! Int, hecho: h["hecho"] as! Bool, racha: h["racha"] as! Int)), h["hex"] as? String)
+        for n in ["musica", "musica parar"] {
+            let v = try vector(n)
+            let b = Comando.musica(bpm: v["bpm"] as! Int, sonando: v["sonando"] as! Bool, titulo: v["titulo"] as! String, artista: v["artista"] as! String)
+            XCTAssertEqual(hex(b), v["hex"] as? String, n)
+        }
+        for n in ["aviso pago", "aviso github"] {
+            let v = try vector(n)
+            XCTAssertEqual(hex(Comando.aviso(tipo: v["tipo"] as! String, app: v["app"] as! String, contacto: v["contacto"] as! String)), v["hex"] as? String, n)
+        }
+        // El aviso de siempre sigue igual.
+        let w = try vector("aviso whatsapp")
+        XCTAssertEqual(hex(Comando.aviso(tipo: "notificacion", app: w["app"] as! String, contacto: w["contacto"] as! String)), w["hex"] as? String)
+    }
+
+    func testEventosYRegistro() {
+        XCTAssertEqual(EVENTOS.firstIndex(of: "mano-cerca"), 38)
+        XCTAssertEqual(EVENTOS.firstIndex(of: "toque-recibido"), 39)
+        XCTAssertEqual(EVENTOS.firstIndex(of: "habito"), 44)
+        XCTAssertEqual(avisosDeMarco(car: 2, [0x9E, 0, 2, 0, 0, 0, 0, 0, 39, 0, 0, 0, 0, 7, 1]), [.toque(1)])
+        XCTAssertEqual(avisosDeMarco(car: 2, [0x9E, 0, 2, 0, 0, 0, 0, 0, 44, 0, 0, 0, 0, 8, 2]), [.habito(2)])
+        XCTAssertEqual(avisosDeMarco(car: 2, [0x9E, 0, 1, 0, 0, 0, 0, 0, 40]), [.devolvioToque])
+        XCTAssertEqual(textoToque(de: "Ana", tipo: "abrazo", devuelto: false).texto, "Ana te mandó un abrazo")
+        XCTAssertEqual(textoToque(de: "Ana", tipo: "carita", devuelto: true).texto, "Ana te devolvió la carita")
+    }
+
+    func testHabitos() {
+        var c = ConfigDoc()
+        c.habitos = [Habito.nuevo(usados: [])]
+        XCTAssertEqual(c.habitos.first?.icono, "gota")
+        c.habitos = c.habitos + [Habito.nuevo(usados: c.habitos)]
+        XCTAssertEqual(c.habitos.last?.icono, "libro")
+        var h = Habito(nombre: "Moverme", icono: "pesa", hora: "18:00", dias: "")
+        h.alternar("S"); h.alternar("D")
+        XCTAssertEqual(h.dias, "LMXJV")
+        h.alternar("S"); h.alternar("D")
+        XCTAssertNil(h.objeto["dias"])
+        c.habitos = c.habitos + [h, Habito(nombre: "Extra"), Habito(nombre: "De más")]
+        XCTAssertEqual(c.habitos.count, MAX_HABITOS)
+        XCTAssertNil(Nucleo.validar(c.texto))
+        XCTAssertEqual(ultimosDias(60).count, 60)
+        let v = VistaHabito(["indice": 1, "nombre": "Leer", "racha": 4, "hoy": true, "dias": ["2026-11-08": true, "2026-11-07": false]])
+        XCTAssertEqual(v.dias, ["2026-11-08"])
+    }
+
+    func testPresencia() {
+        var c = ConfigDoc()
+        XCTAssertTrue(c.presenciaPregunta)
+        c.ponerPresencia(preguntar: false, texto: "  ¿Llevás las llaves?  ")
+        XCTAssertFalse(c.presenciaPregunta)
+        XCTAssertEqual(c.presenciaTexto, "¿Llevás las llaves?")
+        c.ponerPresencia(preguntar: true, texto: "")
+        XCTAssertNil((c.raiz["presencia"] as? [String: Any])?["texto"])
+        XCTAssertNil(Nucleo.validar(c.texto))
+        // No rebota entre Bluetooth y la geocerca.
+        XCTAssertTrue(PresenciaCelu.hayQueAvisar(anterior: nil, hace: nil, llegaste: true))
+        XCTAssertFalse(PresenciaCelu.hayQueAvisar(anterior: true, hace: 120, llegaste: true))
+        XCTAssertFalse(PresenciaCelu.hayQueAvisar(anterior: true, hace: 30, llegaste: false))
+        XCTAssertTrue(PresenciaCelu.hayQueAvisar(anterior: true, hace: 600, llegaste: false))
+        let h = Horarios(["llegas": "19:10", "salis": "08:20", "seguridad": 0.62, "dias": 9])
+        XCTAssertEqual(h.segmentos, 3)
+        XCTAssertEqual(h.dormis, "")
+    }
+
+    func testAmigos() {
+        XCTAssertEqual(limpiarCodigo(" abcd-efgh "), "ABCDEFGH")
+        let a = Amigo(["id": 3, "nombre": "Ana", "robots": [String](), "todos": true])
+        XCTAssertEqual(Amigo.robotsCon(a, alternando: nil, mios: ["A", "B"]), [])
+        XCTAssertEqual(Amigo.robotsCon(a, alternando: "B", mios: ["A", "B"]), ["A"])
+        let b = Amigo(["id": 4, "nombre": "Leo", "robots": ["A"], "todos": false])
+        XCTAssertNil(Amigo.robotsCon(b, alternando: "B", mios: ["A", "B"]))  // con los dos, todos
+        XCTAssertTrue(b.recibe("a"))
+        XCTAssertEqual(Invitacion(codigo: "ABCDEFGH", link: "", telegram: "", vence: nil).codigoLindo, "ABCD-EFGH")
+    }
+
+    func testSituacionesYFichas() {
+        let enGrupos = GRUPOS_SITUACION.flatMap(\.situaciones)
+        XCTAssertEqual(Set(enGrupos), Set(SITUACIONES))
+        XCTAssertEqual(SITUACIONES.count, 53)
+        XCTAssertTrue(fichasDe("toque-recibido").contains("{de}"))
+        XCTAssertTrue(fichasDe("habito-racha").contains("{racha}"))
+        XCTAssertEqual(Array(fichasDe("saludo").prefix(3)), ["{dueno}", "{robot}", "{clima}"])
+        for k in ["llegaste", "te-fuiste", "habito", "agenda"] { XCTAssertNotNil(NOMBRES_CUANDO[k], k) }
+        XCTAssertEqual(PLANTILLAS_CUANDO["habito"], ["{habito}", "{racha}"])
+    }
+
+    func testAgendaYMusica() {
+        let a = Agenda(["conectada": true, "ics": "https://x/basic.ics", "aviso": 5,
+                        "proximos": [["uid": "1", "titulo": "Dentista", "inicio": "2026-11-09T00:00:00Z", "todoElDia": true]]])
+        XCTAssertEqual(a.aviso, 5)
+        let e = a.proximos[0]
+        XCTAssertEqual(Calendar.current.component(.day, from: e.fecha ?? Date.distantPast), 9)  // el día de la fecha, no el de antes
+        let m = Musica(["disponible": true, "conectada": true, "suena": ["sonando": true, "titulo": "Muchachos", "artista": "La Mosca"]])
+        XCTAssertEqual(m.suena?.titulo, "Muchachos")
+        XCTAssertEqual(Entrantes(["url": "https://x/v1/entrantes/abc", "token": "abc", "mercadoPago": true]).mercadoPago, true)
+        XCTAssertEqual(TIPOS_ENTRANTE.count, 5)
+        XCTAssertNotNil(ENTRANTES["pago"]?.cara)
+    }
+}

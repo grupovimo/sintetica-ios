@@ -652,6 +652,26 @@ void MotorVida::calcularObjetivos(float dt) {
   int manda = capaCara_ >= 0 && capaPeso_ >= 0.5f ? capaCara_ : reposo;
   if (manda >= 0) moverCapa(v.caras[manda].movimiento, t - (manda == capaCara_ ? capaDesde_ : 0), T, manda);
 
+  // La música (v1.9): la cabeza al ritmo del tema. El peso sube y baja de a
+  // poco (y los resortes hacen el resto: nunca un corte); la fase es continua.
+  const bool bailando = ritmoBpm_ > 0 && modo_ == Modo::Despierto;
+  if (dt > 0) {
+    ritmoPeso_ = bailando ? minf(1, ritmoPeso_ + dt * 1.5f) : maxf(0, ritmoPeso_ - dt * 1.5f);
+    if (ritmoBpm_ > 0) faseRitmo_ += dt * ritmoBpm_ / 60.0f;  // en pulsos
+    if (faseRitmo_ > 64) faseRitmo_ -= 64;
+  } else {
+    ritmoPeso_ = bailando ? 1.0f : 0.0f;
+  }
+  if (ritmoPeso_ > 0.001f) {
+    // De costado cada dos pulsos y un saltito en cada uno.
+    T[param::FTILT] += 0.09f * ritmoPeso_ * seno(faseRitmo_ * MEDIA_VUELTA);
+    T[param::EY] += 0.02f * ritmoPeso_ * absf(seno(faseRitmo_ * MEDIA_VUELTA));
+    if (bailando && ritmoPeso_ > 0.5f && t >= proximaNotaRitmo_) {
+      soltar(TipoParticula::Nota);
+      proximaNotaRitmo_ = t + entre(azar_, 1.5f, 3.5f);
+    }
+  }
+
   // Micro-vida sobre todo: postura, ruido de forma.
   T[param::FTILT] += posturaTilt_;
   T[param::EY] += posturaEy_;
@@ -817,6 +837,9 @@ void MotorVida::soltar(TipoParticula tipo, int cuantas) {
         break;
       case TipoParticula::Burbuja:
         p.x = -0.3f, p.y = 0.33f, p.vy = 0.03f, p.vida = 3.0f, p.tamano = 0.08f;
+        break;
+      case TipoParticula::Reloj:
+        p.x = 0.36f, p.y = 0.28f, p.vy = 0.04f, p.vida = 1.6f, p.tamano = 0.07f;
         break;
       default:
         break;

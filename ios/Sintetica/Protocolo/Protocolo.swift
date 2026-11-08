@@ -43,6 +43,8 @@ enum Op {
     // v1.6 y v1.7: el paquete de vida.
     static let decir: UInt8 = 0x40, clima: UInt8 = 0x41, alarma: UInt8 = 0x42, jugar: UInt8 = 0x43
     static let aviso: UInt8 = 0x44, animo: UInt8 = 0x45, mirar: UInt8 = 0x46
+    // v1.9: amigos, agenda, presencia, hábitos y música.
+    static let toque: UInt8 = 0x47, agenda: UInt8 = 0x48, presencia: UInt8 = 0x49, habito: UInt8 = 0x4A, musica: UInt8 = 0x4B
     static let imgInicio: UInt8 = 0x20, imgBloque: UInt8 = 0x21, imgFin: UInt8 = 0x22, imgBorrar: UInt8 = 0x23, imgListar: UInt8 = 0x24
     static let imgPedir: UInt8 = 0x25
     // v1.5: los sprites de las caras de imagen (espacios 8 a 19).
@@ -61,8 +63,12 @@ let EVENTOS = [
     "caricia", "muchos-toques", "sacudida-suave", "sacudida-fuerte", "inclinado", "caida", "voz", "nombre",
     "ruido", "musica", "silencio", "notificacion", "llamada", "bateria-baja", "bateria-critica", "enchufado",
     "desenchufado", "cargado", "sin-wifi", "cambio-de-cara", "bicho-cerca", "volvio", "hito", "recordatorio", "pomodoro",
-    "despertador", "juego", "animo",
+    "despertador", "juego", "animo", "cara-detectada", "oscuridad", "mano-cerca",
+    "toque-recibido", "devolver-toque", "agenda", "llegaste", "te-fuiste", "habito",
 ]
+/// Los tipos del comando Toque y del comando Aviso (v1.9), en orden.
+let TIPOS_TOQUE = ["toque", "abrazo", "beso", "carita"]
+let TIPOS_AVISO = ["notificacion", "llamada", "pago", "mail", "github", "pedido", "otro"]
 /// Los juegos del comando Jugar (v1.7), en orden; los ánimos y las acciones del despertador.
 let JUEGOS = ["ppt", "reflejos", "mirada", "dado", "moneda"]
 let ANIMOS = ["bien", "medio", "mal"]
@@ -153,6 +159,42 @@ enum Comando {
     /// Una notificación o llamada del celu con su app y su contacto (v1.7).
     static func aviso(llamada: Bool, app: String, contacto: String) -> [UInt8] {
         [Op.aviso, llamada ? 1 : 0] + campo(app, 24) + campo(contacto, 24)
+    }
+
+    /// Un aviso de cualquier tipo (v1.9: pago, mail, github, pedido, otro): app es el título corto y contacto, de quién.
+    static func aviso(tipo: String, app: String, contacto: String) -> [UInt8] {
+        [Op.aviso, UInt8(TIPOS_AVISO.firstIndex(of: tipo) ?? 0)] + campo(app, 24) + campo(contacto, 24)
+    }
+
+    private static func u16(_ v: Int) -> [UInt8] {
+        let x = UInt16(Swift.max(0, Swift.min(0xFFFF, v)))
+        return [UInt8(x & 0xFF), UInt8(x >> 8)]
+    }
+
+    /// Un toque de un amigo (v1.9): toque, abrazo, beso o carita, de quién (1 a 24 bytes) y la expresión.
+    static func toque(_ tipo: String, de: String, expresion: String = "") -> [UInt8] {
+        [Op.toque, UInt8(TIPOS_TOQUE.firstIndex(of: tipo) ?? 0)] + campo(de, 24) + campo(expresion, 24)
+    }
+
+    /// El próximo evento de la agenda (v1.9): en cuántos minutos, cuánto dura y el título (1 a 40 bytes).
+    static func agenda(minutos: Int, duracion: Int, titulo: String) -> [UInt8] {
+        [Op.agenda] + u16(Swift.min(0xFFFE, minutos)) + u16(duracion) + campo(titulo, 40)
+    }
+
+    /// El resumen de mañana: el mismo marco con minutos = 0xFFFF y la cantidad en la duración.
+    static func resumenManana(cantidad: Int, titulo: String) -> [UInt8] { [Op.agenda, 0xFF, 0xFF] + u16(cantidad) + campo(titulo, 40) }
+
+    /// Llegaste (true) o te fuiste (false).
+    static func presencia(llegaste: Bool) -> [UInt8] { [Op.presencia, llegaste ? 0 : 1] }
+
+    /// Un hábito: índice 0 a 3, hecho o deshecho y la racha en días.
+    static func habito(_ indice: Int, hecho: Bool, racha: Int) -> [UInt8] {
+        [Op.habito, UInt8(Swift.max(0, Swift.min(3, indice))), hecho ? 0 : 1, UInt8(Swift.max(0, Swift.min(255, racha)))]
+    }
+
+    /// Lo que suena: bpm (0 = no se sabe), si suena, el título (0 a 40 bytes) y el artista (0 a 24).
+    static func musica(bpm: Int = 0, sonando: Bool, titulo: String, artista: String) -> [UInt8] {
+        [Op.musica, UInt8(Swift.max(0, Swift.min(255, bpm))), sonando ? 1 : 0] + campo(titulo, 40) + campo(artista, 24)
     }
 
     /// La respuesta al "¿cómo estás?" (v1.7): bien, medio o mal.

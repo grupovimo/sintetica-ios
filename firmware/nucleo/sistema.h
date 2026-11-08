@@ -136,8 +136,9 @@ class Sistema {
   // Lo que dice (comando Decir, sus frases): un globo con la cara achicada.
   // `hablando`: mueve la boca un rato (el comando Decir sin expresión).
   void decir(const char* texto, Config::Cara cara = {}, bool hablando = false);
-  // Una situación (las pide el motor): si el Hablador quiere, dice una frase.
-  void hablar(Situacion s);
+  // Una situación (las pide el motor): si el Hablador quiere, dice una frase
+  // (con las plantillas de la v1.9: {de}, {titulo}…).
+  void hablar(Situacion s, Plantillas extra = {});
   // El texto del globo que se ve (o el del despertador).
   const char* textoGlobo() const { return globoTexto_; }
   bool globoVisible() const { return globo_; }
@@ -156,6 +157,23 @@ class Sistema {
   // doble = más o menos, mantener = mal) y la respuesta (0, 1, 2).
   bool preguntandoAnimo() const { return preguntando_; }
   void responderAnimo(uint8_t r);
+  // v1.9 (compania.cpp): los toques de los amigos, la agenda, la presencia,
+  // los hábitos, la música y los avisos de afuera (pago, mail, github…).
+  // tipo: 0 toque, 1 abrazo, 2 beso, 3 carita (con esa expresión). false si
+  // la expresión no existe.
+  bool toque(uint8_t tipo, const char* de, const char* expresion);
+  // Durante 30 s, un toque o una caricia lo devuelve.
+  bool toqueAbierto() const { return toqueHasta_ != 0; }
+  // minutos = 0xFFFF: el resumen de mañana (duracion = cuántos eventos).
+  void agenda(uint16_t minutos, uint16_t duracion, const char* titulo);
+  void presencia(bool llegaste);
+  // El hábito i (de config.habitos) hecho o deshecho, con la racha que sabe la nube. false si no existe.
+  bool habito(int i, bool hecho, uint8_t racha);
+  // El hábito que está preguntando "¿{habito}?" (-1 = ninguno): toque = hecho, mantener = todavía no.
+  int habitoPreguntando() const { return habPregunta_; }
+  void musica(uint8_t bpm, bool sonando, const char* titulo, const char* artista);
+  // Un aviso de afuera (0x44 tipos 2 a 6): pago, mail, github, pedido u otro.
+  void avisoEntrante(uint8_t tipo, const char* titulo, const char* de);
   // El clima que mandó la nube (vale 3 h).
   const DatosClima& clima() const { return clima_; }
   bool climaVigente() const { return clima_.hay && hal_.ahoraMs() - clima_.recibido < CLIMA_VALE_MS; }
@@ -285,6 +303,14 @@ class Sistema {
   void terminarJuego(int resultado);  // 0 perdió el dueño, 1 ganó, 2 empate, 3 sin resultado
   void dibujarJuego(float cx, float W, float H, float alfa);
   void avanzarAlarma(uint32_t ahora);
+  // v1.9.
+  bool decirFrase(Situacion s, Plantillas extra, Config::Cara cara = {});
+  void devolverToque(uint32_t ahora);
+  void revisarCompania(uint32_t ahora);
+  void preguntarHabito(int i, uint32_t ahora);
+  void marcarHabito(int i, uint8_t racha, bool enElRobot);
+  void todaviaNo(uint32_t ahora);
+  uint16_t diaHoy() const;
   void mostrarGlobo(uint32_t ahora);
   void dibujarClima(float cx, float W, float H, float alfa);
   void log(const char* m) {
@@ -414,6 +440,18 @@ class Sistema {
   uint32_t juegoDesde_ = 0, juegoProximo_ = 0, juegoAccion_ = 0;
   bool juegoApretado_ = false;
   char juegoTexto_[40] = {};
+  // v1.9: el toque que se puede devolver, la presencia, los hábitos y la música.
+  uint32_t toqueHasta_ = 0;
+  uint8_t toqueTipo_ = 0;
+  char toqueDe_[LARGO_APP] = {};
+  uint32_t fuisteMs_ = 0;  // cuándo te fuiste (0 = estás)
+  bool fuisteEmpujado_ = false;
+  int8_t habPregunta_ = -1, habReintentoIdx_ = -1;
+  bool habApretado_ = false;
+  uint32_t habDesde_ = 0, habToque_ = 0, habReintento_ = 0;
+  uint16_t habDiaHecho_[MAX_HABITOS] = {}, habDiaPreg_[MAX_HABITOS] = {};
+  uint8_t habRacha_[MAX_HABITOS] = {};
+  uint32_t musicaHasta_ = 0, musicaFirma_ = 0;
   // Protector de pantalla.
   uint32_t ultimaActividad_ = 0;
   float faseProtector_ = 0;

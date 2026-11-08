@@ -33,6 +33,13 @@ struct ModIntegraciones: View {
 
     private var api: ApiSintetica { Cuenta.compartida.api }
 
+    /// Las de siempre y las de los cuándos que se usan (juego, ánimo, hábito).
+    private var plantillas: [String] {
+        var l = PLANTILLAS_AUTO
+        for a in autos { for p in PLANTILLAS_CUANDO[a.cuando] ?? [] where !l.contains(p) { l.append(p) } }
+        return l
+    }
+
     var body: some View {
         if !modelo.esNube {
             Bandeja {
@@ -52,6 +59,7 @@ struct ModIntegraciones: View {
                     AvisoConsola(texto: "Todavía no en esta nube.")
                 } else {
                     tuIA
+                    BloqueSpotify()
                     bloqueTelegram
                     HStack {
                         Grabado("Automatizaciones\(guardando)", color: Color.tinta.opacity(0.66))
@@ -63,7 +71,7 @@ struct ModIntegraciones: View {
                         Bandeja { Text("Ej.: recordatorio → Telegram").font(Tipos.texto).foregroundStyle(Color.tinta.opacity(0.8)) }
                     }
                     ForEach(autos.indices, id: \.self) { i in fichaAuto(i) }
-                    Text(PLANTILLAS_AUTO.joined(separator: " ")).font(Tipos.marca(10.5, .bold)).foregroundStyle(Color.tinta.opacity(0.7))
+                    Text(plantillas.joined(separator: " ")).font(Tipos.marca(10.5, .bold)).foregroundStyle(Color.tinta.opacity(0.7))
                     desarrolladores
                     if !historial.isEmpty { ultimas }
                 }

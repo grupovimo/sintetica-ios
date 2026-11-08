@@ -53,6 +53,9 @@ let NOMBRES_EVENTO: [String: String] = [
     "cambio-de-cara": "Cambio de cara", "bicho-cerca": "Otro robot cerca", "volvio": "Volvés",
     "hito": "Un hito", "recordatorio": "Recordatorio", "pomodoro": "Fin de tanda",
     "despertador": "Despertador", "juego": "Un juego", "animo": "Su ánimo",
+    "cara-detectada": "Te ve", "oscuridad": "Se apaga la luz", "mano-cerca": "Una mano cerca",
+    "toque-recibido": "Le llega un toque", "devolver-toque": "Devolvés un toque", "agenda": "Se viene un evento",
+    "llegaste": "Llegás", "te-fuiste": "Te vas", "habito": "Marcás un hábito",
 ]
 
 let MAX_RECORDATORIOS = 12

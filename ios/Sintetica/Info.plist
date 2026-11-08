@@ -47,6 +47,14 @@
 	<false/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Para encontrar tu robot, vincularlo y cambiarle la cara.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Para marcar tu casa y que tu robot sepa cuándo llegás.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Para que tu robot te reciba cuando llegás a casa, aunque la app esté cerrada. Es opcional.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Para escanear el QR que muestra tu robot.</string>
 	<key>UIUserInterfaceStyle</key>

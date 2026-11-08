@@ -189,6 +189,80 @@
       "hex": "46 32 ec"
     },
     {
+      "nombre": "toque abrazo",
+      "tipo": "abrazo",
+      "de": "Ana",
+      "expresion": "",
+      "hex": "47 01 03 41 6e 61 00"
+    },
+    {
+      "nombre": "toque carita",
+      "tipo": "carita",
+      "de": "Martín",
+      "expresion": "contento",
+      "hex": "47 03 07 4d 61 72 74 c3 ad 6e 08 63 6f 6e 74 65 6e 74 6f"
+    },
+    {
+      "nombre": "agenda",
+      "minutos": 10,
+      "duracion": 30,
+      "titulo": "Reunión",
+      "hex": "48 0a 00 1e 00 08 52 65 75 6e 69 c3 b3 6e"
+    },
+    {
+      "nombre": "agenda manana",
+      "cantidad": 3,
+      "titulo": "Dentista",
+      "hex": "48 ff ff 03 00 08 44 65 6e 74 69 73 74 61"
+    },
+    {
+      "nombre": "presencia llegaste",
+      "llegaste": true,
+      "hex": "49 00"
+    },
+    {
+      "nombre": "presencia te fuiste",
+      "llegaste": false,
+      "hex": "49 01"
+    },
+    {
+      "nombre": "habito hecho",
+      "indice": 1,
+      "hecho": true,
+      "racha": 4,
+      "hex": "4a 01 00 04"
+    },
+    {
+      "nombre": "musica",
+      "bpm": 120,
+      "sonando": true,
+      "titulo": "Muchachos",
+      "artista": "La Mosca",
+      "hex": "4b 78 01 09 4d 75 63 68 61 63 68 6f 73 08 4c 61 20 4d 6f 73 63 61"
+    },
+    {
+      "nombre": "musica parar",
+      "bpm": 0,
+      "sonando": false,
+      "titulo": "",
+      "artista": "",
+      "hex": "4b 00 00 00 00"
+    },
+    {
+      "nombre": "aviso pago",
+      "tipo": "pago",
+      "app": "$12.000",
+      "contacto": "Ana",
+      "hex": "44 02 07 24 31 32 2e 30 30 30 03 41 6e 61"
+    },
+    {
+      "nombre": "aviso github",
+      "tipo": "github",
+      "app": "PR #12",
+      "contacto": "octocat",
+      "hex": "44 04 06 50 52 20 23 31 32 07 6f 63 74 6f 63 61 74"
+    },
+    {
       "nombre": "ota cancelar",
       "hex": "35"
     }

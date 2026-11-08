@@ -7,7 +7,7 @@ enum ErrorBicho: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .rechazo(m): m
-        case .tiempo: "El bicho no contestó a tiempo."
+        case .tiempo: "No contestó a tiempo."
         }
     }
 }
@@ -80,7 +80,7 @@ final class ClienteBicho {
         let r = try await exigir(.comando, Comando.vincular(codigo))
         await mandarHora()
         try await actualizarEstado()
-        guard case let .resultado(_, _, _, clave?) = r else { throw ErrorBicho.rechazo("El bicho no mandó la clave.") }
+        guard case let .resultado(_, _, _, clave?) = r else { throw ErrorBicho.rechazo("No mandó la clave.") }
         return clave
     }
 
@@ -121,7 +121,7 @@ final class ClienteBicho {
     /// bloques, verifica el SHA-256 y reinicia.
     func instalarFirmware(manifiesto: [UInt8], binario: [UInt8], progreso: @escaping (Double) -> Void = { _ in }) async throws {
         let ini = try await pedir(.ota, [Op.otaInicio] + manifiesto, plazo: 60)
-        guard ini.ok else { throw ErrorBicho.rechazo("El bicho no aceptó el firmware: \(ini.mensaje)") }
+        guard ini.ok else { throw ErrorBicho.rechazo("No aceptó el firmware: \(ini.mensaje)") }
         // Si un bloque falla, el bicho avisa con [0xB1][código] y aborta.
         let flujo = transporte.difusor.escuchar()
         let falla = FallaOta()
@@ -144,7 +144,7 @@ final class ClienteBicho {
             progreso(Double(off) / Double(binario.count))
         }
         let r = try await pedir(.ota, [Op.otaFin], plazo: 60)
-        guard r.ok else { throw ErrorBicho.rechazo("El bicho no instaló el firmware: \(r.mensaje)") }
+        guard r.ok else { throw ErrorBicho.rechazo("No instaló el firmware: \(r.mensaje)") }
     }
 
     /// Pide la configuración completa (JSON).
@@ -173,7 +173,7 @@ final class ClienteBicho {
             }
             throw ErrorBicho.tiempo
         }
-        guard r.ok else { throw ErrorBicho.rechazo("El bicho no aceptó la configuración: \(r.mensaje)") }
+        guard r.ok else { throw ErrorBicho.rechazo("No aceptó la configuración: \(r.mensaje)") }
         try await actualizarEstado()
     }
 
@@ -192,7 +192,7 @@ final class ClienteBicho {
             }
             throw ErrorBicho.tiempo
         }
-        guard r.ok else { throw ErrorBicho.rechazo("El bicho no aceptó la imagen: \(r.mensaje)") }
+        guard r.ok else { throw ErrorBicho.rechazo("No aceptó la imagen: \(r.mensaje)") }
     }
 
     func borrarImagen(_ espacio: Int) async throws { try await exigir(.imagen, ComandoImagen.borrar(espacio)) }

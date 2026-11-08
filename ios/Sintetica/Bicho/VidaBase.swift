@@ -11,6 +11,20 @@ enum VidaBase {
 
     static let expresiones: [String: [String: Any]] = leer("expresiones") as? [String: [String: Any]] ?? [:]
     static let comportamientos: [String: [String: Any]] = leer("comportamientos") as? [String: [String: Any]] ?? [:]
+    /// Las frases de fábrica por situación (vida/frases.json).
+    static let frases: [String: Any] = (leer("frases") as? [String: Any])?["situaciones"] as? [String: Any] ?? [:]
+
+    /// Todo el texto de las frases de una situación (para sacar sus fichas).
+    static func textoFrases(_ s: String) -> String {
+        guard let o = frases[s], let d = try? JSONSerialization.data(withJSONObject: o) else { return "" }
+        return String(decoding: d, as: UTF8.self)
+    }
+
+    /// La primera frase de fábrica (de ejemplo, si no hay una propia).
+    static func primeraFrase(_ s: String) -> String? {
+        (((frases[s] as? [String: Any])?["frases"] as? [String: Any])?["todos"] as? [String])?.first
+    }
+
     static let reglas: [Regla] = (leer("reglas") as? [[String: Any]] ?? []).compactMap { Regla($0) }
 
     /// En el orden del archivo (JSONSerialization no lo guarda): primero las de siempre.

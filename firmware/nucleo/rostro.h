@@ -51,7 +51,7 @@ struct Rostro {
 };
 
 // Partículas: formas chiquitas que nacen, flotan y se apagan.
-enum class TipoParticula : uint8_t { Zzz, Corazon, Lagrima, Gota, Chispa, Pregunta, Exclamacion, Nota, Estrella, Burbuja, Oveja, Cantidad };
+enum class TipoParticula : uint8_t { Zzz, Corazon, Lagrima, Gota, Chispa, Pregunta, Exclamacion, Nota, Estrella, Burbuja, Oveja, Reloj, Cantidad };
 const char* nombreParticula(TipoParticula t);
 bool particulaPorNombre(const char* n, TipoParticula* t);
 

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Los diez módulos de la consola.
 enum Modulo: String, CaseIterable, Identifiable {
-    case caracter, cara, imagenes, dia, cuidado, recordatorios, modos, reflejos, integraciones, habla, jugar, voz, ajustes
+    case caracter, cara, imagenes, dia, cuidado, recordatorios, habitos, agenda, modos, reflejos, integraciones, amigos, avisos, habla, jugar, voz, ajustes
     var id: String { rawValue }
 
     var nombre: String {
@@ -13,9 +13,13 @@ enum Modulo: String, CaseIterable, Identifiable {
         case .dia: "Su día"
         case .cuidado: "Cuidado"
         case .recordatorios: "Recordatorios"
+        case .habitos: "Hábitos"
+        case .agenda: "Agenda"
         case .modos: "Modos"
         case .reflejos: "Reflejos"
         case .integraciones: "Integraciones"
+        case .amigos: "Amigos"
+        case .avisos: "Avisos"
         case .habla: "Habla"
         case .jugar: "Jugar"
         case .voz: "Voz"
@@ -31,9 +35,13 @@ enum Modulo: String, CaseIterable, Identifiable {
         case .dia: "sun.horizon"
         case .cuidado: "heart.text.square"
         case .recordatorios: "alarm"
+        case .habitos: "checkmark.seal.fill"
+        case .agenda: "calendar"
         case .modos: "square.grid.2x2"
         case .reflejos: "cable.connector"
         case .integraciones: "point.3.connected.trianglepath.dotted"
+        case .amigos: "figure.2.arms.open"
+        case .avisos: "tray.and.arrow.down.fill"
         case .habla: "bubble.left.fill"
         case .jugar: "gamecontroller.fill"
         case .voz: "waveform"
@@ -189,9 +197,13 @@ struct ConsolaVista: View {
         case .dia: ModDia(modelo: modelo)
         case .cuidado: ModCuidado(modelo: modelo)
         case .recordatorios: ModRecordatorios(modelo: modelo)
+        case .habitos: ModHabitos(modelo: modelo)
+        case .agenda: ModAgenda(modelo: modelo)
         case .modos: ModModos(modelo: modelo)
         case .reflejos: ModReflejos(modelo: modelo)
         case .integraciones: ModIntegraciones(modelo: modelo)
+        case .amigos: ModAmigos(modelo: modelo)
+        case .avisos: ModAvisos(modelo: modelo)
         case .habla: ModHabla(modelo: modelo)
         case .jugar: ModJugar(modelo: modelo)
         case .voz: ModVoz(modelo: modelo)
@@ -286,6 +298,9 @@ private struct Heroe: View {
     let jugar: () -> Void
     @State private var frase = ""
     @State private var diciendo = false
+    @State private var charla: Charla?
+    @State private var charlando = false
+    @State private var respuesta: (yo: String, el: String)?
 
     var body: some View {
         let m = modelo.producto
@@ -302,6 +317,7 @@ private struct Heroe: View {
             }
             Titular(modelo.nombre)
             Text(animoTexto).font(Tipos.marca(17, .semibold)).foregroundStyle(Color.hueso)
+            if let s = modelo.suena { SuenaAhora(suena: s, claro: true) }
             capacidades(m)
             acciones(conectado)
             decile(conectado)
@@ -353,20 +369,69 @@ private struct Heroe: View {
         .disabled(!conectado)
     }
 
-    /// Decile algo: lo muestra en un globo con su cara.
+    /// Decile algo (un globo con su cara) o, si la nube la tiene, charlá: contesta él, acá y en su pantalla.
     private func decile(_ conectado: Bool) -> some View {
-        Visor(relleno: 12) {
-            Grabado("Decile algo")
+        let tope = charlando ? MAX_CHARLA : MAX_TEXTO
+        let vacio = frase.trimmingCharacters(in: .whitespaces).isEmpty
+        return Visor(relleno: 12) {
             HStack(spacing: 8) {
-                TextField("", text: $frase, prompt: Text(conectado ? "¡Hola!" : "Desconectado").foregroundColor(Color(hex: 0x5A524A)))
+                if let c = charla {
+                    Button { charlando = false } label: { Text("Decile algo") }.tecla(chica: true, hundida: !charlando)
+                    Button { charlando = true } label: { Text("Charlar") }.tecla(chica: true, hundida: charlando)
+                    Spacer(minLength: 0)
+                    if charlando { Grabado("\(c.quedan)/\(c.porDia) hoy").accessibilityLabel("Quedan \(c.quedan) de \(c.porDia) hoy") }
+                } else {
+                    Grabado("Decile algo")
+                }
+            }
+            if charlando, let r = respuesta {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(r.yo).font(Tipos.marca(13, .bold)).foregroundStyle(Color.grisClaro)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x2C2925)))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    Text(r.el).font(Tipos.marca(17, .heavy)).foregroundStyle(Color.tinta)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Color.papel))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            HStack(spacing: 8) {
+                TextField("", text: $frase, prompt: Text(charlando ? "¿Cómo andás?" : conectado ? "¡Hola!" : "Desconectado").foregroundColor(Color(hex: 0x5A524A)))
                     .font(Tipos.marca(18, .black)).foregroundStyle(Color.brasa).tint(Color.brasa)
-                    .submitLabel(.send).onSubmit(decir)
-                    .onChange(of: frase) { _, v in let x = cortarBytes(v, MAX_TEXTO); if x != v { frase = x } }
-                Button(action: decir) { Text(diciendo ? "…" : "Decir") }.tecla(.naranja, chica: true)
-                    .disabled(!conectado || diciendo || frase.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .submitLabel(.send).onSubmit(enviar)
+                    .onChange(of: frase) { _, v in let x = cortarBytes(v, tope); if x != v { frase = x } }
+                    .disabled(!conectado && !charlando)
+                Button(action: enviar) { Text(diciendo ? "…" : charlando ? "Charlar" : "Decir") }.tecla(.naranja, chica: true)
+                    .disabled((!conectado && !charlando) || diciendo || vacio || (charlando && (charla?.quedan ?? 0) <= 0))
             }
         }
-        .disabled(!conectado)
+        .task {
+            guard modelo.esNube, let c = try? await Cuenta.compartida.api.charla(), c.disponible else { return }
+            charla = c
+        }
+    }
+
+    private func enviar() { if charlando { charlar() } else { decir() } }
+
+    private func charlar() {
+        let t = frase.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty, !diciendo, charla != nil else { return }
+        diciendo = true
+        Task {
+            do {
+                let r = try await Cuenta.compartida.api.charlar(modelo.id, t)
+                respuesta = (t, r.texto)
+                charla?.quedan = r.quedan
+                frase = ""
+            } catch let e as ErrorApi {
+                mensaje = e.estado == 429 ? "Por hoy ya charlaron mucho" : e.estado == 503 ? "Sin charla en esta nube" : e.mensaje
+            } catch {
+                mensaje = "No contestó"
+            }
+            diciendo = false
+        }
     }
 
     private func decir() {

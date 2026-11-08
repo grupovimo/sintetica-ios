@@ -70,15 +70,17 @@ struct ModHabla: View {
             if !oido.isEmpty { AvisoConsola(texto: oido) }
             Visor(relleno: 12) {
                 HStack(spacing: 8) {
-                    TextField("", text: $nueva, prompt: Text(Self.ejemplo[situacion] ?? "Frase nueva").foregroundColor(Color(hex: 0x5A524A)))
+                    TextField("", text: $nueva, prompt: Text(Self.ejemplo[situacion] ?? VidaBase.primeraFrase(situacion) ?? "Frase nueva").foregroundColor(Color(hex: 0x5A524A)))
                         .font(Tipos.marca(16, .black)).foregroundStyle(Color.papel).submitLabel(.done).onSubmit(agregar)
                         .onChange(of: nueva) { _, v in let x = cortarBytes(v, MAX_TEXTO); if x != v { nueva = x } }
                     Text("\(nueva.utf8.count)/\(MAX_TEXTO)").font(Tipos.marca(10, .heavy).monospacedDigit()).foregroundStyle(Color.gris)
                 }
-                HStack(spacing: 8) {
-                    ForEach(["{dueno}", "{robot}", "{clima}"], id: \.self) { f in
+                Flujo(espacio: 6, renglon: 4) {
+                    ForEach(fichasDe(situacion), id: \.self) { f in
                         Button { nueva = cortarBytes(nueva + f, MAX_TEXTO) } label: { Text(f) }.tecla(.negra, chica: true)
                     }
+                }
+                HStack {
                     Spacer()
                     Button(action: agregar) { Label("Sumar", systemImage: "plus") }.tecla(.naranja, chica: true)
                         .disabled(nueva.trimmingCharacters(in: .whitespaces).isEmpty || total >= MAX_FRASES)

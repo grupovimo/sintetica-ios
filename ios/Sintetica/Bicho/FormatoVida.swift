@@ -15,6 +15,8 @@ let SITUACIONES = [
     "despertar", "buenas-noches", "volviste", "te-extrane", "aburrido", "sueno", "bateria-baja", "cargando", "caricia", "saludo", "hito",
     "cumple-dueno", "cumple-robot", "recordatorio-hecho", "despertador", "posponer", "clima-frio", "clima-calor", "clima-lluvia", "clima-lindo",
     "buen-dia", "comiste", "a-dormir", "tardaste", "agua", "pausa", "como-estas", "animo-bien", "animo-medio", "animo-mal", "jugar", "gane", "perdi", "empate", "anio-nuevo", "navidad", "dia-del-amigo", "dia-del-nino", "aniversario",
+    "toque-recibido", "toque-devuelto", "agenda", "agenda-manana", "te-vas", "habito-hecho", "habito-racha", "habito-cortado",
+    "musica", "pago", "mail", "github", "pedido", "aviso",
 ]
 let NOMBRES_SITUACION: [String: String] = [
     "despertar": "Al despertar", "buenas-noches": "Buenas noches", "volviste": "Volviste", "te-extrane": "Te extrañó", "aburrido": "Aburrido",
@@ -22,17 +24,88 @@ let NOMBRES_SITUACION: [String: String] = [
     "cumple-dueno": "Tu cumple", "cumple-robot": "Su cumple", "recordatorio-hecho": "Recordatorio hecho", "despertador": "Despertador",
     "posponer": "Posponer", "clima-frio": "Hace frío", "clima-calor": "Hace calor", "clima-lluvia": "Llueve", "clima-lindo": "Día lindo",
     "buen-dia": "Buen día", "comiste": "¿Comiste?", "a-dormir": "A dormir", "tardaste": "Tardaste", "agua": "Agua", "pausa": "Pausa", "como-estas": "¿Cómo estás?", "animo-bien": "Estás bien", "animo-medio": "Más o menos", "animo-mal": "Estás mal", "jugar": "Jugar", "gane": "Ganó", "perdi": "Perdió", "empate": "Empate", "anio-nuevo": "Año nuevo", "navidad": "Navidad", "dia-del-amigo": "Día del amigo", "dia-del-nino": "Día del niño", "aniversario": "Aniversario",
+    "toque-recibido": "Le llega un toque", "toque-devuelto": "Devolvés el toque", "agenda": "Se viene un evento", "agenda-manana": "Mañana",
+    "te-vas": "Te vas", "habito-hecho": "Hábito hecho", "habito-racha": "Racha", "habito-cortado": "Se cortó la racha",
+    "musica": "Música", "pago": "Te pagaron", "mail": "Un mail", "github": "GitHub", "pedido": "Un pedido", "aviso": "Un aviso",
 ]
 /// Agrupadas, como la web, así la lista se lee de un vistazo.
 let GRUPOS_SITUACION: [(titulo: String, situaciones: [String])] = [
-    ("Su día", ["despertar", "buen-dia", "comiste", "tardaste", "a-dormir", "buenas-noches", "despertador", "posponer", "sueno"]),
-    ("Con vos", ["saludo", "volviste", "te-extrane", "caricia", "aburrido", "como-estas", "animo-bien", "animo-medio", "animo-mal"]),
-    ("Cuidarte", ["agua", "pausa", "recordatorio-hecho", "bateria-baja", "cargando"]),
+    ("Su día", ["despertar", "buen-dia", "comiste", "tardaste", "a-dormir", "buenas-noches", "despertador", "posponer", "sueno", "agenda", "agenda-manana"]),
+    ("Con vos", ["saludo", "volviste", "te-vas", "te-extrane", "caricia", "aburrido", "como-estas", "animo-bien", "animo-medio", "animo-mal", "musica"]),
+    ("Amigos", ["toque-recibido", "toque-devuelto"]),
+    ("Cuidarte", ["agua", "pausa", "recordatorio-hecho", "habito-hecho", "habito-racha", "habito-cortado", "bateria-baja", "cargando"]),
+    ("Avisos", ["pago", "mail", "github", "pedido", "aviso"]),
     ("Clima", ["clima-frio", "clima-calor", "clima-lluvia", "clima-lindo"]),
     ("Jugar", ["jugar", "gane", "perdi", "empate"]),
     ("Fechas", ["cumple-dueno", "cumple-robot", "aniversario", "anio-nuevo", "navidad", "dia-del-amigo", "dia-del-nino", "hito"]),
 ]
+
+/// Las fichas de cada situación: las de siempre y las que usan sus frases de fábrica ({de}, {titulo}, {racha}…).
+func fichasDe(_ situacion: String) -> [String] {
+    let siempre = ["{dueno}", "{robot}", "{clima}"]
+    var l = siempre
+    let texto = VidaBase.textoFrases(situacion)
+    for m in texto.matches(of: #/\{[a-z]+\}/#) {
+        let f = String(m.output)
+        if !l.contains(f) { l.append(f) }
+    }
+    return l
+}
+
 let NOMBRES_JUEGO: [String: String] = ["ppt": "Piedra papel tijera", "reflejos": "Reflejos", "mirada": "Mirada", "dado": "Dado", "moneda": "Moneda"]
+
+let MAX_HABITOS = 4
+let MAX_NOMBRE_HABITO = 16
+let MAX_TEXTO_PRESENCIA = 40
+let ICONOS_HABITO = ["gota", "libro", "pesa", "zen", "pastilla", "cama", "fruta", "estrella"]
+/// El SF Symbol de cada ícono de hábito.
+let SIMBOLO_HABITO: [String: String] = [
+    "gota": "drop.fill", "libro": "book.fill", "pesa": "dumbbell.fill", "zen": "figure.mind.and.body", "pastilla": "pills.fill",
+    "cama": "bed.double.fill", "fruta": "carrot.fill", "estrella": "star.fill",
+]
+
+/// Un hábito (v1.9): a su hora pregunta "¿{habito}?" y un toque lo marca hecho.
+struct Habito: Equatable {
+    var nombre: String
+    var icono = "estrella"
+    var hora = ""   // vacío = no pregunta
+    var dias = ""   // vacío = todos
+
+    init(nombre: String, icono: String = "estrella", hora: String = "", dias: String = "") {
+        self.nombre = nombre; self.icono = icono; self.hora = hora; self.dias = dias
+    }
+
+    init(_ o: [String: Any]) {
+        nombre = o["nombre"] as? String ?? "Hábito"
+        icono = o["icono"] as? String ?? "estrella"
+        hora = o["hora"] as? String ?? ""
+        dias = o["dias"] as? String ?? ""
+    }
+
+    var objeto: [String: Any] {
+        var o: [String: Any] = ["nombre": cortarBytes(nombre, MAX_NOMBRE_HABITO), "icono": icono]
+        if !hora.isEmpty { o["hora"] = hora }
+        if !dias.isEmpty, dias.count < 7 { o["dias"] = dias }
+        return o
+    }
+
+    var todosLosDias: String { dias.isEmpty ? "LMXJVSD" : dias }
+    mutating func alternar(_ l: String) {
+        let ya = todosLosDias
+        let nuevo = DIAS_SEMANA.map(\.letra).filter { $0 == l ? !ya.contains($0) : ya.contains($0) }.joined()
+        if !nuevo.isEmpty { dias = nuevo.count == 7 ? "" : nuevo }
+    }
+
+    /// Los de ejemplo, para sumar uno nuevo (el primero con un ícono que no esté).
+    static let ejemplos: [Habito] = [
+        Habito(nombre: "Agua", icono: "gota"), Habito(nombre: "Leer", icono: "libro", hora: "22:00"),
+        Habito(nombre: "Moverme", icono: "pesa", hora: "18:00", dias: "LMXJV"), Habito(nombre: "Meditar", icono: "zen", hora: "08:00"),
+    ]
+    static func nuevo(usados: [Habito]) -> Habito {
+        let iconos = Set(usados.map(\.icono))
+        return ejemplos.first { !iconos.contains($0.icono) } ?? Habito(nombre: "Hábito", icono: "estrella")
+    }
+}
 
 /// Un solo despertador por robot: suena creciente y se pospone.
 struct Despertador: Equatable {
@@ -160,6 +233,25 @@ struct Ubicacion: Equatable {
 }
 
 extension ConfigDoc {
+    // --- Hábitos (v1.9) ---
+    var habitos: [Habito] {
+        get { (raiz["habitos"] as? [[String: Any]] ?? []).map { Habito($0) } }
+        set {
+            let l = Array(newValue.prefix(MAX_HABITOS))
+            if l.isEmpty { raiz.removeValue(forKey: "habitos") } else { raiz["habitos"] = l.map(\.objeto) }
+        }
+    }
+
+    // --- Presencia (v1.9): si pregunta al irte y qué (vacío = las frases de te-vas) ---
+    var presenciaPregunta: Bool { (raiz["presencia"] as? [String: Any])?["preguntar"] as? Bool ?? true }
+    var presenciaTexto: String { (raiz["presencia"] as? [String: Any])?["texto"] as? String ?? "" }
+    mutating func ponerPresencia(preguntar: Bool, texto: String) {
+        var o: [String: Any] = ["preguntar": preguntar]
+        let t = cortarBytes(texto.trimmingCharacters(in: .whitespaces), MAX_TEXTO_PRESENCIA)
+        if !t.isEmpty { o["texto"] = t }
+        raiz["presencia"] = o
+    }
+
     // --- Habla ---
     var frecuenciaHabla: Double { ((raiz["habla"] as? [String: Any])?["frecuencia"] as? NSNumber)?.doubleValue ?? 0.5 }
     var frasesPropias: [String: [String]] { ((raiz["habla"] as? [String: Any])?["propias"] as? [String: [String]]) ?? [:] }
