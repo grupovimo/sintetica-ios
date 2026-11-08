@@ -18,7 +18,7 @@ struct Vinculando: View {
             } else {
                 ProgressView().tint(Color.brasa)
             }
-            Button { ruta = [] } label: { Text("Volver") }.tecla(.negra, chica: true)
+            Button { Navegacion.alInicio(&ruta) } label: { Text("Volver") }.tecla(.negra, chica: true)
             Spacer()
         }
         .padding(16)

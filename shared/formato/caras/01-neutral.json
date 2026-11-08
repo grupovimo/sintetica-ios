@@ -1,0 +1,21 @@
+{
+  "nombre": "neutral",
+  "numero": 1,
+  "disparador": "En reposo",
+  "formas": [
+    {
+      "forma": "pildora",
+      "x": -0.3125,
+      "y": 0.0,
+      "w": 0.225,
+      "h": 0.45
+    },
+    {
+      "forma": "pildora",
+      "x": 0.3125,
+      "y": 0.0,
+      "w": 0.225,
+      "h": 0.45
+    }
+  ]
+}

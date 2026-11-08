@@ -1,0 +1,21 @@
+{
+  "nombre": "curioso",
+  "numero": 13,
+  "disparador": "Gira la cabeza (servo)",
+  "formas": [
+    {
+      "forma": "pildora",
+      "x": -0.3125,
+      "y": 0.0,
+      "w": 0.225,
+      "h": 0.5
+    },
+    {
+      "forma": "pildora",
+      "x": 0.3125,
+      "y": 0.0,
+      "w": 0.175,
+      "h": 0.275
+    }
+  ]
+}

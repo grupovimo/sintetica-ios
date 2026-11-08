@@ -49,8 +49,10 @@ struct ConsolaVista: View {
     @State private var actual: Modulo = .caracter
     @State private var mensaje = ""
     @State private var laboratorio = false
+    @State private var rackLab: LaboratorioVista.Rack = .expresiones
     @State private var encender = false
     @State private var cerca = false
+    @Environment(\.dismiss) private var cerrar
 
     init(id: String, ruta: Binding<[Ruta]>) {
         _ruta = ruta
@@ -74,13 +76,19 @@ struct ConsolaVista: View {
             if modelo.fase == .lista, modelo.debeEncender { encender = true }
         }
         .onDisappear { modelo.cerrar() }
-        .fullScreenCover(isPresented: $laboratorio) { LaboratorioVista(modelo: modelo) }
+        .fullScreenCover(isPresented: $laboratorio) { LaboratorioVista(modelo: modelo, rack: rackLab) }
         .fullScreenCover(isPresented: $encender) { EncenderVista(modelo: modelo) }
         .sheet(isPresented: $cerca) { CercaVista(modelo: modelo) }
     }
 
+    /// Vuelve a Mis robots: saca esta pantalla de la pila (y si por algo no
+    /// está en la ruta, la cierra igual).
+    private func volverAtras() {
+        if !Navegacion.volver(&ruta) { cerrar() }
+    }
+
     private var volver: some View {
-        Button { ruta = [] } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
+        Button { volverAtras() } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
     }
 
     private var cargando: some View {
@@ -170,7 +178,7 @@ struct ConsolaVista: View {
         case .reflejos: ModReflejos(modelo: modelo)
         case .integraciones: ModIntegraciones(modelo: modelo)
         case .voz: ModVoz(modelo: modelo)
-        case .ajustes: ModAjustes(modelo: modelo, laboratorio: { laboratorio = true }, cerca: { cerca = true }, volver: { ruta = [] })
+        case .ajustes: ModAjustes(modelo: modelo, laboratorio: { r in rackLab = r; laboratorio = true }, cerca: { cerca = true }, volver: { volverAtras() })
         }
     }
 }

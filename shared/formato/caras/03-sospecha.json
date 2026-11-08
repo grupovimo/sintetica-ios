@@ -1,0 +1,23 @@
+{
+  "nombre": "sospecha",
+  "numero": 3,
+  "disparador": "Doble toque",
+  "formas": [
+    {
+      "forma": "pildora",
+      "x": -0.3125,
+      "y": 0.0625,
+      "w": 0.225,
+      "h": 0.325
+    },
+    {
+      "forma": "corte",
+      "x": 0.3125,
+      "y": 0.00625,
+      "w": 0.225,
+      "h": 0.4375,
+      "izq": 0.0,
+      "der": 0.1125
+    }
+  ]
+}

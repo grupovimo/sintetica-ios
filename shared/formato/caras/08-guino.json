@@ -1,0 +1,32 @@
+{
+  "nombre": "guino",
+  "numero": 8,
+  "disparador": "Vínculo exitoso con la app",
+  "formas": [
+    {
+      "forma": "pildora",
+      "x": -0.3125,
+      "y": 0.0,
+      "w": 0.225,
+      "h": 0.45
+    },
+    {
+      "forma": "arco",
+      "puntos": [
+        [
+          0.2125,
+          0.0625
+        ],
+        [
+          0.3125,
+          -0.125
+        ],
+        [
+          0.4125,
+          0.0625
+        ]
+      ],
+      "trazo": 0.0875
+    }
+  ]
+}

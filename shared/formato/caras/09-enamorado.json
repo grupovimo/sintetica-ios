@@ -1,0 +1,19 @@
+{
+  "nombre": "enamorado",
+  "numero": 9,
+  "disparador": "Su dueño abre la app",
+  "formas": [
+    {
+      "forma": "corazon",
+      "x": -0.3125,
+      "y": 0.0,
+      "tamano": 1.0
+    },
+    {
+      "forma": "corazon",
+      "x": 0.3125,
+      "y": 0.0,
+      "tamano": 1.0
+    }
+  ]
+}

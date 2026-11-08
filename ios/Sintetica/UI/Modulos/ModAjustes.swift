@@ -4,7 +4,7 @@ import SwiftUI
 /// Bluetooth, sacarlo de la cuenta). Como web/src/lib/consola/modulos/Ajustes.svelte.
 struct ModAjustes: View {
     let modelo: ModeloRobot
-    let laboratorio: () -> Void
+    let laboratorio: (LaboratorioVista.Rack) -> Void
     let cerca: () -> Void
     let volver: () -> Void
     @State private var nombre = ""
@@ -38,7 +38,12 @@ struct ModAjustes: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             Flujo(espacio: 10, renglon: 6) {
-                Button(action: laboratorio) { Label("Laboratorio", systemImage: "flask.fill") }.tecla(.negra)
+                Button { laboratorio(.expresiones) } label: { Label("Laboratorio", systemImage: "flask.fill") }.tecla(.negra)
+                Button { laboratorio(.vida) } label: { Label("Su diario", systemImage: "book.closed.fill") }.tecla()
+                if modelo.esNube {
+                    Button { laboratorio(.firmware) } label: { Label("Firmware", systemImage: "arrow.down.circle.fill") }.tecla()
+                    Button { laboratorio(.historial) } label: { Label("Historial", systemImage: "clock.arrow.circlepath") }.tecla()
+                }
                 if modelo.vinculado || modelo.esBle {
                     Button(action: cerca) { Label("Cerca", systemImage: "dot.radiowaves.left.and.right") }.tecla()
                 }

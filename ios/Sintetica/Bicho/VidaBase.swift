@@ -19,6 +19,35 @@ enum VidaBase {
                              "confundido", "curioso", "aburrido", "orgulloso", "concentrado", "bateria-baja", "cargando", "actualizando",
                              "sin-conexion", "ko", "glitch", "cansado", "ofendido", "estornudo", "espiar", "estirarse", "sonando", "pesadilla"]
 
+    /// Los JSON sueltos del bundle (los dibujos del manual y las animaciones de ejemplo).
+    private static let sueltos: [[String: Any]] = {
+        let urls = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? []
+        return urls.compactMap { u in
+            guard let d = try? Data(contentsOf: u) else { return nil }
+            return (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
+        }
+    }()
+
+    /// Los 16 dibujos del manual, en su orden: nombre y documento (formas).
+    static let dibujos: [(nombre: String, doc: [String: Any])] = {
+        let l = sueltos.filter { $0["formas"] != nil && $0["nombre"] is String }
+        let orden = l.sorted { (($0["numero"] as? NSNumber)?.intValue ?? 99) < (($1["numero"] as? NSNumber)?.intValue ?? 99) }
+        return orden.map { o in
+            var doc: [String: Any] = ["formas": o["formas"] ?? []]
+            if let p = o["parpadea"] { doc["parpadea"] = p }
+            return (o["nombre"] as? String ?? "", doc)
+        }
+    }()
+
+    /// Las animaciones de ejemplo.
+    static let animaciones: [(nombre: String, doc: [String: Any])] = {
+        sueltos.filter { $0["pistas"] != nil && $0["nombre"] is String }.map { o in
+            var doc = o
+            doc.removeValue(forKey: "nombre")
+            return (o["nombre"] as? String ?? "", doc)
+        }.sorted { $0.nombre < $1.nombre }
+    }()
+
     static var nombresCaras: [String] {
         ordenCaras.filter { expresiones[$0] != nil } + expresiones.keys.filter { !ordenCaras.contains($0) }.sorted()
     }

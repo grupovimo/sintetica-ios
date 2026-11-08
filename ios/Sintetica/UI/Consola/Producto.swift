@@ -15,6 +15,8 @@ struct Producto<Contenido: View>: View {
         }
         .aspectRatio(4 / 5, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: radio, style: .continuous))
+        // La foto desborda la ventana (está corrida y agrandada): que no tape los toques de arriba.
+        .contentShape(RoundedRectangle(cornerRadius: radio, style: .continuous))
         .shadow(color: Color.black.opacity(0.8), radius: 24, y: 24)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(modelo.encuadre.alt)
@@ -34,22 +36,26 @@ struct Producto<Contenido: View>: View {
                 .offset(x: w * e.foto.izq / 100, y: h * e.foto.arriba / 100)
                 .saturation(apagado ? 0.3 : 1)
                 .brightness(apagado ? -0.32 : 0)
+                .allowsHitTesting(false)
                 .accessibilityHidden(true)
             encastre(caja.size)
                 .frame(width: caja.width, height: caja.height)
+                .clipped()
+                .contentShape(Rectangle())
                 .background(Color.black)
                 .clipShape(modelo.redonda ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 10)))
                 .opacity(apagado ? 0.25 : 1)
                 .offset(x: caja.minX, y: caja.minY)
             if !etiqueta.isEmpty {
-                cartel.frame(width: w - 32).offset(x: 16, y: h - 56)
+                cartel.frame(width: w - 32).offset(x: 16, y: h - 56).allowsHitTesting(false)
             }
         }
         .frame(width: w, height: h, alignment: .topLeading)
         .clipped()
+        .contentShape(Rectangle())
     }
 
-    /// Una pantalla apaisada en una caja de pie se agranda al 220 % (los
+    /// Una pantalla apaisada en una caja de pie se agranda al 185 % (los
     /// costados, que suelen estar vacíos, quedan afuera).
     private func encastre(_ t: CGSize) -> some View {
         let agrandar = modelo.encuadre.apaisada(redonda: modelo.redonda)

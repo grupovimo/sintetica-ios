@@ -21,6 +21,10 @@ struct ModIntegraciones: View {
     @State private var clientes: [ClienteMCP] = []
     @State private var urlMCP = ""
     @State private var copiado = false
+    @State private var tokens: [TokenIA] = []
+    @State private var tokenNuevo = ""
+    @State private var urlToken = ""
+    @State private var comandoCopiado = false
     @State private var secreto = ""
     @State private var error = ""
     @State private var sinNube = false
@@ -97,6 +101,7 @@ struct ModIntegraciones: View {
         }
         if let l = try? await api.robots() { otros = l.filter { $0.id != modelo.id } }
         if let m = try? await api.clientesMCP() { clientes = m.clientes; urlMCP = m.url }
+        if let t = try? await api.tokensIA() { tokens = t }
     }
 
     // MARK: Tu IA (MCP)
@@ -131,6 +136,24 @@ struct ModIntegraciones: View {
                 .sensoryFeedback(.success, trigger: copiado)
                 Text("Agregala como conector.").font(Tipos.chico).foregroundStyle(Color.tinta.opacity(0.8))
             }
+            HStack {
+                Spacer()
+                Button { crearToken() } label: { Label("Token", systemImage: "plus") }.tecla(.negra, chica: true)
+                    .accessibilityHint("Para Claude Code")
+            }
+            if !tokenNuevo.isEmpty { tokenUnaVez }
+            ForEach(tokens) { t in
+                HStack(spacing: 10) {
+                    Led(estado: .on)
+                    Text(t.nombre).font(Tipos.marca(13, .bold)).foregroundStyle(Color.papel).lineLimit(1)
+                    Text(t.usado.map { "usó \(hace($0))" } ?? "sin usar").font(Tipos.chico).foregroundStyle(Color.gris).lineLimit(1)
+                    Spacer()
+                    Button { Task { try? await api.borrarTokenIA(t.id); await cargar() } } label: { Image(systemName: "trash") }
+                        .tecla(.negra, cuadrada: true).accessibilityLabel("Borrar el token")
+                }
+                .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.hundido))
+            }
             ForEach(clientes) { c in
                 HStack(spacing: 10) {
                     Led(estado: .verde)
@@ -143,6 +166,43 @@ struct ModIntegraciones: View {
                 }
                 .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 4)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color.hundido))
+            }
+        }
+    }
+
+    /// El token nuevo se ve una sola vez: el comando entero, para copiar.
+    private var tokenUnaVez: some View {
+        let cmd = comandoClaude(url: urlToken.isEmpty ? urlMCP : urlToken, token: tokenNuevo)
+        return VStack(alignment: .leading, spacing: 8) {
+            Grabado("Se ve una sola vez", color: Color.tinta.opacity(0.66))
+            Button {
+                UIPasteboard.general.string = cmd
+                comandoCopiado = true
+                Task { try? await Task.sleep(for: .seconds(1.8)); comandoCopiado = false }
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(cmd).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundStyle(Color.brasa)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                    Grabado(comandoCopiado ? "Copiado" : "Copiar")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.hundido))
+            }
+            .buttonStyle(.plain)
+            .sensoryFeedback(.success, trigger: comandoCopiado)
+        }
+    }
+
+    private func crearToken() {
+        Task {
+            do {
+                let r = try await api.crearTokenIA()
+                tokenNuevo = r.token
+                urlToken = r.url
+                if let t = try? await api.tokensIA() { tokens = t }
+            } catch {
+                self.error = texto(error)
             }
         }
     }

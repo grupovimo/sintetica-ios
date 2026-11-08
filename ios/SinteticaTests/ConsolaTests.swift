@@ -198,7 +198,8 @@ final class ProductoTests: XCTestCase {
         XCTAssertEqual(u.encuadre, .rectangular)
         XCTAssertEqual(u.encuadre.foto.ancho, 155.56, accuracy: 0.001)
         XCTAssertEqual(u.encuadre.pantalla.alto, 42.78, accuracy: 0.001)
-        XCTAssertTrue(u.encuadre.apaisada(redonda: u.redonda))  // se agranda al 220 %
+        XCTAssertTrue(u.encuadre.apaisada(redonda: u.redonda))  // se agranda al 185 %
+        XCTAssertEqual(Encuadre.agrandado, 1.85, accuracy: 0.0001)
         XCTAssertFalse(u.tiene(.microfono))
         XCTAssertTrue(Modulo.voz.bloqueado(u))
         let b = ModeloProducto.de(perfil: "broche-c3", virtual: false, pantalla: nil)
@@ -246,5 +247,88 @@ final class ProductoTests: XCTestCase {
         XCTAssertEqual(d?.ancho, 16)
         XCTAssertEqual(d?.alto, 9)
         XCTAssertEqual(d?.rgb, rgb)
+    }
+}
+
+@MainActor
+final class LaboratorioTests: XCTestCase {
+    func testLeerVida() throws {
+        var b: [UInt8] = [0x9B, 0]
+        b += [255, 128, 0, 51, 0, 0, 255]  // los 7 estados
+        b += [128, 128, 128, 128, 128, 128]  // los 6 rasgos
+        b += [1 | 2]  // dormido y soñando
+        b += [5] + Array("jugar".utf8)
+        b += [8] + Array("contento".utf8)
+        b += [1, 4] + Array("dormir".utf8.prefix(4)) + [75]
+        b += [60]
+        let v = try XCTUnwrap(leerVida(b))
+        XCTAssertEqual(v.estado["energia"] ?? 0, 1, accuracy: 0.001)
+        XCTAssertEqual(v.estado["aburrimiento"] ?? 0, 0.2, accuracy: 0.001)
+        XCTAssertEqual(v.estado["estres"] ?? 0, 1, accuracy: 0.001)
+        XCTAssertTrue(v.dormido)
+        XCTAssertTrue(v.sonando)
+        XCTAssertFalse(v.superposicion)
+        XCTAssertEqual(v.comportamiento, "jugar")
+        XCTAssertEqual(v.visible, "contento")
+        XCTAssertEqual(v.candidatos.first?.nombre, "dorm")
+        XCTAssertEqual(v.candidatos.first?.puntaje ?? 0, 0.75, accuracy: 0.001)
+        XCTAssertNil(leerVida([0x9B, 1]))
+        XCTAssertNil(leerVida([0x9E, 0, 0]))
+    }
+
+    func testMemoria() {
+        var horas = Array(repeating: 0, count: 24)
+        horas[8] = 2
+        horas[19] = 7
+        horas[21] = 4
+        let o: [String: Any] = ["dias": 12, "racha": 3, "caricias": 140, "toques": 9, "horas": horas,
+                                "gustos": ["caricia": 3, "musica": 1, "tacto": -2, "voz": 5, "nombre": 2],
+                                "hitos": ["primer-dia", "siete-dias"], "deriva": ["picardia": 0.1]]
+        let m = Memoria(o)
+        XCTAssertEqual(m.dias, 12)
+        XCTAssertEqual(m.caricias, 140)
+        XCTAssertEqual(m.horaPreferida, 19)
+        XCTAssertEqual(m.mejoresGustos, ["voz", "caricia", "nombre"])
+        XCTAssertEqual(m.hitos.count, 2)
+        XCTAssertNil(Memoria().horaPreferida)  // nunca aparece 3 veces a la misma hora
+    }
+
+    func testAutoresYEstados() {
+        XCTAssertEqual(VersionConfig(version: 3, autor: "mcp:Claude", creada: nil).nombreAutor, "IA · Claude")
+        XCTAssertEqual(VersionConfig(version: 2, autor: "app", creada: nil).nombreAutor, "App")
+        XCTAssertEqual(VersionConfig(version: 1, autor: "bicho", creada: nil).nombreAutor, "En el robot")
+        XCTAssertEqual(Actualizacion(["id": 1, "version": "1.4.0", "estado": "descargando", "progreso": 40]).nombreEstado, "Bajando")
+        XCTAssertEqual(Actualizacion(["estado": "confirmada"]).nombreEstado, "Lista")
+    }
+
+    func testComandoClaude() {
+        XCTAssertEqual(comandoClaude(url: "https://api.x/mcp", token: "abc"),
+                       #"claude mcp add --transport http sintetica https://api.x/mcp --header "Authorization: Bearer abc""#)
+    }
+
+    func testDibujosYAnimacionesDeFabrica() {
+        XCTAssertEqual(VidaBase.dibujos.count, 16)
+        XCTAssertEqual(VidaBase.dibujos.first?.nombre, "neutral")
+        XCTAssertNotNil(VidaBase.dibujos.first?.doc["formas"])
+        XCTAssertNil(VidaBase.dibujos.first?.doc["numero"])
+        XCTAssertEqual(VidaBase.animaciones.map(\.nombre), ["chispas", "latido", "mareo"])
+        // Un dibujo del manual copiado como propio y una animación de ejemplo: el núcleo los acepta.
+        var c = ConfigDoc()
+        if let d = VidaBase.dibujos.first(where: { $0.nombre == "contento" }) { c.ponerExpresion("mi-contento", d.doc) }
+        if let a = VidaBase.animaciones.first { c.raiz["animaciones"] = [a.nombre: a.doc] }
+        XCTAssertNil(Nucleo.validar(c.texto))
+    }
+
+    func testNavegacion() {
+        var r: [Ruta] = [.robot("A1B2C3D4E5F6")]
+        XCTAssertTrue(Navegacion.volver(&r))
+        XCTAssertEqual(r, [])
+        XCTAssertFalse(Navegacion.volver(&r))  // ya en Mis robots
+        r = [.escanear, .vinculando(DatosQr(id: "A1B2C3D4E5F6", codigo: "K7Q2XM"))]
+        Navegacion.volver(&r)
+        XCTAssertEqual(r, [.escanear])
+        r.append(.cuenta)
+        Navegacion.alInicio(&r)
+        XCTAssertTrue(r.isEmpty)
     }
 }

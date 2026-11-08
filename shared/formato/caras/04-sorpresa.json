@@ -1,0 +1,33 @@
+{
+  "nombre": "sorpresa",
+  "numero": 4,
+  "disparador": "Lo levantan (IMU)",
+  "formas": [
+    {
+      "forma": "circulo",
+      "x": -0.3125,
+      "y": 0.0,
+      "r": 0.1875
+    },
+    {
+      "forma": "circulo",
+      "x": 0.3125,
+      "y": 0.0,
+      "r": 0.1875
+    },
+    {
+      "forma": "circulo",
+      "x": -0.25,
+      "y": -0.075,
+      "r": 0.05,
+      "color": "pantalla"
+    },
+    {
+      "forma": "circulo",
+      "x": 0.375,
+      "y": -0.075,
+      "r": 0.05,
+      "color": "pantalla"
+    }
+  ]
+}

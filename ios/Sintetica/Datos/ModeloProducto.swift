@@ -49,9 +49,9 @@ struct Encuadre: Equatable, Sendable {
                                   pantalla: Caja(izq: 26.8, arriba: 36.9, ancho: 46.2, alto: 37), fondo: 0xF3EEEA)
 
     /// Una pantalla apaisada en una caja de pie (en la ventana 4:5): se agranda
-    /// al 220 % para que la cara llene el ancho, como en la web.
+    /// al 185 % para que la cara llene el ancho sin cortar las anchas, como en la web.
     func apaisada(redonda: Bool) -> Bool { !redonda && pantalla.alto * 5 > pantalla.ancho * 4 }
-    static let agrandado = 2.2
+    static let agrandado = 1.85
 }
 
 struct ModeloProducto: Equatable, Sendable {

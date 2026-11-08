@@ -6,16 +6,27 @@ import SwiftUI
 struct LaboratorioVista: View {
     let modelo: ModeloRobot
     @Environment(\.dismiss) private var cerrar
-    @State private var rack: Rack = .expresiones
+    @State private var rack: Rack
+    @State private var cerca = false
+
+    init(modelo: ModeloRobot, rack: Rack = .expresiones) {
+        self.modelo = modelo
+        _rack = State(initialValue: rack)
+    }
 
     enum Rack: String, CaseIterable, Identifiable {
-        case expresiones, comportamientos, reglas
+        case expresiones, comportamientos, reglas, vida, dibujos, animaciones, firmware, historial
         var id: String { rawValue }
         var nombre: String {
             switch self {
             case .expresiones: "Expresiones"
             case .comportamientos: "Comportamientos"
             case .reglas: "Reglas"
+            case .vida: "Vida"
+            case .dibujos: "Dibujos"
+            case .animaciones: "Animaciones"
+            case .firmware: "Firmware"
+            case .historial: "Historial"
             }
         }
 
@@ -24,6 +35,11 @@ struct LaboratorioVista: View {
             case .expresiones: "eye"
             case .comportamientos: "flag.fill"
             case .reglas: "arrow.triangle.branch"
+            case .vida: "waveform.path.ecg"
+            case .dibujos: "pencil.and.outline"
+            case .animaciones: "play.rectangle.fill"
+            case .firmware: "arrow.down.circle.fill"
+            case .historial: "clock.arrow.circlepath"
             }
         }
     }
@@ -37,7 +53,7 @@ struct LaboratorioVista: View {
                     Grabado("Laboratorio · \(modelo.nombre)", color: .brasa)
                 }
                 .padding(.top, 8)
-                HStack(spacing: 8) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                     ForEach(Rack.allCases) { r in
                         Button { rack = r } label: {
                             VStack(spacing: 8) {
@@ -56,6 +72,11 @@ struct LaboratorioVista: View {
                 case .expresiones: LabExpresiones(modelo: modelo)
                 case .comportamientos: LabComportamientos(modelo: modelo)
                 case .reglas: LabReglas(modelo: modelo)
+                case .vida: LabVida(modelo: modelo)
+                case .dibujos: LabDibujos(modelo: modelo)
+                case .animaciones: LabAnimaciones(modelo: modelo)
+                case .firmware: LabFirmware(modelo: modelo) { cerca = true }
+                case .historial: LabHistorial(modelo: modelo)
                 }
             }
             .padding(.horizontal, 16)
@@ -63,6 +84,7 @@ struct LaboratorioVista: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(FondoConsola())
+        .sheet(isPresented: $cerca) { CercaVista(modelo: modelo) }
     }
 }
 

@@ -1,0 +1,21 @@
+{
+  "nombre": "mareo",
+  "duracion": 1600,
+  "repetir": true,
+  "pistas": [
+    {
+      "forma": { "forma": "espiral", "x": -0.3125, "y": 0, "r0": 0.01, "paso": 0.012, "giro": 15, "trazo": 0.04 },
+      "claves": [
+        { "t": 0, "rotacion": 0, "curva": "lineal" },
+        { "t": 1600, "rotacion": 360 }
+      ]
+    },
+    {
+      "forma": { "forma": "espiral", "x": 0.3125, "y": 0, "r0": 0.01, "paso": 0.012, "giro": 15, "trazo": 0.04 },
+      "claves": [
+        { "t": 0, "rotacion": 0, "curva": "lineal" },
+        { "t": 1600, "rotacion": -360 }
+      ]
+    }
+  ]
+}

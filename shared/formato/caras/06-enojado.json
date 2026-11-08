@@ -1,0 +1,25 @@
+{
+  "nombre": "enojado",
+  "numero": 6,
+  "disparador": "Lo despiertan de la siesta",
+  "formas": [
+    {
+      "forma": "corte",
+      "x": -0.3125,
+      "y": 0.0,
+      "w": 0.225,
+      "h": 0.45,
+      "izq": 0.0,
+      "der": 0.1375
+    },
+    {
+      "forma": "corte",
+      "x": 0.3125,
+      "y": 0.0,
+      "w": 0.225,
+      "h": 0.45,
+      "izq": 0.1375,
+      "der": 0.0
+    }
+  ]
+}

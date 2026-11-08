@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 struct CuentaVista: View {
     @Binding var ruta: [Ruta]
+    @Environment(\.dismiss) private var cerrar
     private var cuenta = Cuenta.compartida
     @State private var servidor = Cuenta.compartida.servidor
     @State private var email = Cuenta.compartida.email
@@ -17,7 +18,7 @@ struct CuentaVista: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Button { ruta = [] } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
+                Button { if !Navegacion.volver(&ruta) { cerrar() } } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
                 Grabado("Tu cuenta", color: .brasa)
                 if cuenta.activa {
                     Titular(cuenta.email.isEmpty ? "Adentro" : cuenta.email, tamano: 30)
@@ -27,17 +28,29 @@ struct CuentaVista: View {
                     }
                     Button { Task { await cuenta.api.salir(); cuenta.salir(); EnVivo.compartido.reiniciar() } } label: { Text("Salir") }.tecla(.negra)
                 } else {
-                    Titular("Entrá", tamano: 40)
-                    CampoVisor(rotulo: "Servidor", texto: $servidor, ayuda: "https://…", claro: true, teclado: .URL)
-                    CampoVisor(rotulo: "Email", texto: $email, ayuda: "vos@mail.com", claro: true, teclado: .emailAddress)
-                    Button { Task { await pedirLink() } } label: { Label("Mandame el link", systemImage: "envelope.fill") }
-                        .tecla(.naranja, ancha: true)
-                        .disabled(ocupado || !email.contains("@") || !servidor.hasPrefix("http"))
-                    if pedido {
-                        CampoVisor(rotulo: "Código del mail", texto: $codigo, ayuda: "XXXX-XXXX", teclado: .asciiCapable)
-                        Button { Task { await entrar() } } label: { Text("Entrar") }.tecla(ancha: true)
-                            .disabled(ocupado || codigo.replacingOccurrences(of: "-", with: "").count != 8)
+                    Producto(modelo: ModeloProducto.de(perfil: "unidad", virtual: false, pantalla: nil), radio: 28) {
+                        PantallaDibujada(config: nil, expresion: pedido ? "enamorado" : "contento", pantalla: Pantalla(), fps: 20)
                     }
+                    .frame(maxWidth: 260)
+                    .frame(maxWidth: .infinity)
+                    Titular(pedido ? "Fijate tu mail." : "Entrá.", tamano: 40)
+                    if !pedido {
+                        CampoVisor(rotulo: "Tu email", texto: $email, ayuda: "vos@ejemplo.com", claro: true, teclado: .emailAddress)
+                        Button { Task { await pedirLink() } } label: { Text(ocupado ? "Mandando…" : "Mandame el link") }
+                            .tecla(.naranja, ancha: true)
+                            .disabled(ocupado || !email.contains("@") || !servidor.hasPrefix("http"))
+                        Label("Sin contraseñas", systemImage: "key.slash").font(Tipos.chico).foregroundStyle(Color.gris)
+                    } else {
+                        CampoVisor(rotulo: "O el código", texto: $codigo, ayuda: "XXXX-XXXX", teclado: .asciiCapable)
+                        Button { Task { await entrar() } } label: { Text(ocupado ? "Entrando…" : "Entrar") }.tecla(.naranja, ancha: true)
+                            .disabled(ocupado || codigo.replacingOccurrences(of: "-", with: "").count != 8)
+                        Button { pedido = false; codigo = ""; mensaje = nil } label: { Text("Otro mail") }.tecla(.negra, chica: true)
+                    }
+                    DisclosureGroup {
+                        CampoVisor(rotulo: "Servidor", texto: $servidor, ayuda: "https://…", claro: true, teclado: .URL)
+                            .padding(.top, 8)
+                    } label: { Grabado("Servidor") }
+                    .tint(Color.gris)
                 }
                 if let mensaje { AvisoConsola(texto: mensaje) }
             }
@@ -55,7 +68,7 @@ struct CuentaVista: View {
         do {
             try await cuenta.api.pedirEnlace(cuenta.email)
             pedido = true
-            mensaje = "Abrí el link o poné el código."
+            mensaje = nil
         } catch { mensaje = error.localizedDescription }
     }
 

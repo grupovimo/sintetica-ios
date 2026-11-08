@@ -1,0 +1,26 @@
+{
+  "nombre": "mareado",
+  "numero": 10,
+  "disparador": "Sacudida fuerte (IMU)",
+  "parpadea": false,
+  "formas": [
+    {
+      "forma": "espiral",
+      "x": -0.3125,
+      "y": 0.0,
+      "r0": 0.01875,
+      "paso": 0.00881,
+      "giro": 16.34,
+      "trazo": 0.04375
+    },
+    {
+      "forma": "espiral",
+      "x": 0.3125,
+      "y": 0.0,
+      "r0": 0.01875,
+      "paso": 0.00881,
+      "giro": 16.34,
+      "trazo": 0.04375
+    }
+  ]
+}

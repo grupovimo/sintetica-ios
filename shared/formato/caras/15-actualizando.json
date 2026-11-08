@@ -1,0 +1,39 @@
+{
+  "nombre": "actualizando",
+  "numero": 15,
+  "disparador": "Firmware OTA en curso",
+  "formas": [
+    {
+      "forma": "pildora",
+      "x": -0.3125,
+      "y": -0.06875,
+      "w": 0.225,
+      "h": 0.0625
+    },
+    {
+      "forma": "pildora",
+      "x": 0.3125,
+      "y": -0.06875,
+      "w": 0.225,
+      "h": 0.0625
+    },
+    {
+      "forma": "pildora",
+      "x": 0.0,
+      "y": 0.1875,
+      "w": 0.85,
+      "h": 0.05,
+      "color": "linea",
+      "fijo": true
+    },
+    {
+      "forma": "pildora",
+      "x": 0.0,
+      "y": 0.1875,
+      "w": 0.85,
+      "h": 0.05,
+      "fijo": true,
+      "progreso": true
+    }
+  ]
+}

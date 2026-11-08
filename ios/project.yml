@@ -31,11 +31,18 @@ targets:
       - path: ../shared/formato/vida
         group: Vida
         buildPhase: resources
+      # Los dibujos del manual y las animaciones de ejemplo.
+      - path: ../shared/formato/caras
+        group: Caras
+        buildPhase: resources
+      - path: ../shared/formato/animaciones
+        group: Animaciones
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sinteticalabs.app
         PRODUCT_NAME: Sintetica
-        MARKETING_VERSION: "0.2.0"
+        MARKETING_VERSION: "0.3.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_OBJC_BRIDGING_HEADER: Sintetica/Nucleo/Puente.h
         HEADER_SEARCH_PATHS: ["$(SRCROOT)/../firmware/api", "$(SRCROOT)/../firmware/nucleo"]

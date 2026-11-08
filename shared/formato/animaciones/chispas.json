@@ -1,0 +1,32 @@
+{
+  "nombre": "chispas",
+  "duracion": 1800,
+  "repetir": true,
+  "sobre": "contento",
+  "pistas": [
+    {
+      "forma": { "forma": "circulo", "x": -0.55, "y": 0.1, "r": 0.025, "color": "tinta" },
+      "claves": [
+        { "t": 0, "opacidad": 0, "curva": "salida" },
+        { "t": 300, "opacidad": 1, "curva": "lineal" },
+        { "t": 1200, "y": -0.3, "escala": 0.4, "opacidad": 0 }
+      ]
+    },
+    {
+      "forma": { "forma": "circulo", "x": 0.55, "y": 0.15, "r": 0.03, "color": "naranja-profundo" },
+      "claves": [
+        { "t": 400, "opacidad": 0, "curva": "salida" },
+        { "t": 700, "opacidad": 1, "curva": "lineal" },
+        { "t": 1600, "y": -0.32, "escala": 0.4, "opacidad": 0 }
+      ]
+    },
+    {
+      "forma": { "forma": "poligono", "puntos": [[0, -0.42], [0.025, -0.36], [0, -0.3], [-0.025, -0.36]], "color": "tinta" },
+      "claves": [
+        { "t": 0, "opacidad": 0, "rotacion": 0, "curva": "rebote" },
+        { "t": 600, "opacidad": 1, "rotacion": 45, "escala": 1.4, "curva": "entrada" },
+        { "t": 1800, "opacidad": 0, "rotacion": 90, "escala": 0.6 }
+      ]
+    }
+  ]
+}

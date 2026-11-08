@@ -1,0 +1,45 @@
+{
+  "nombre": "pensando",
+  "numero": 12,
+  "disparador": "Esperando la respuesta de la IA",
+  "formas": [
+    {
+      "forma": "pildora",
+      "x": -0.2375,
+      "y": -0.15625,
+      "w": 0.2,
+      "h": 0.3375
+    },
+    {
+      "forma": "pildora",
+      "x": 0.3875,
+      "y": -0.15625,
+      "w": 0.2,
+      "h": 0.3375
+    },
+    {
+      "forma": "circulo",
+      "x": 0.5,
+      "y": 0.3375,
+      "r": 0.025,
+      "color": "tinta-suave",
+      "fijo": true
+    },
+    {
+      "forma": "circulo",
+      "x": 0.5875,
+      "y": 0.3375,
+      "r": 0.025,
+      "color": "tinta-suave",
+      "fijo": true
+    },
+    {
+      "forma": "circulo",
+      "x": 0.675,
+      "y": 0.3375,
+      "r": 0.025,
+      "color": "tinta-suave",
+      "fijo": true
+    }
+  ]
+}

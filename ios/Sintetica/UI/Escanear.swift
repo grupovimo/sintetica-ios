@@ -4,12 +4,13 @@ import SwiftUI
 @MainActor
 struct Escanear: View {
     @Binding var ruta: [Ruta]
+    @Environment(\.dismiss) private var cerrar
     @State private var aviso: String?
     @State private var permiso = AVCaptureDevice.authorizationStatus(for: .video)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Button { ruta = [] } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
+            Button { if !Navegacion.volver(&ruta) { cerrar() } } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
             Grabado("Vincular", color: .brasa)
             Titular("Escaneá su QR", tamano: 38)
             ZStack {

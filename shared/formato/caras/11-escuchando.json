@@ -1,0 +1,66 @@
+{
+  "nombre": "escuchando",
+  "numero": 11,
+  "disparador": "Palabra de activación",
+  "formas": [
+    {
+      "forma": "pildora",
+      "x": -0.3125,
+      "y": -0.1375,
+      "w": 0.225,
+      "h": 0.35
+    },
+    {
+      "forma": "pildora",
+      "x": 0.3125,
+      "y": -0.1375,
+      "w": 0.225,
+      "h": 0.35
+    },
+    {
+      "forma": "pildora",
+      "x": -0.10938,
+      "y": 0.2875,
+      "w": 0.03125,
+      "h": 0.05,
+      "fijo": true,
+      "audio": 0
+    },
+    {
+      "forma": "pildora",
+      "x": -0.05312,
+      "y": 0.2875,
+      "w": 0.03125,
+      "h": 0.1125,
+      "fijo": true,
+      "audio": 1
+    },
+    {
+      "forma": "pildora",
+      "x": 0.00313,
+      "y": 0.2875,
+      "w": 0.03125,
+      "h": 0.175,
+      "fijo": true,
+      "audio": 2
+    },
+    {
+      "forma": "pildora",
+      "x": 0.05937,
+      "y": 0.2875,
+      "w": 0.03125,
+      "h": 0.1,
+      "fijo": true,
+      "audio": 3
+    },
+    {
+      "forma": "pildora",
+      "x": 0.11563,
+      "y": 0.2875,
+      "w": 0.03125,
+      "h": 0.0625,
+      "fijo": true,
+      "audio": 4
+    }
+  ]
+}

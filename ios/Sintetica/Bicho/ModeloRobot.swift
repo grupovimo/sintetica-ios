@@ -30,6 +30,9 @@ final class ModeloRobot {
     var progreso: Double?
     var errorImagenes = ""
     var aviso: Aviso?
+    var vida: VidaEnVivo?
+    var vidaEn = Date.distantPast
+    var ota: Actualizacion?
     var guardado: Guardado = .listo
     var errorGuardado = ""
     private(set) var cliente: ClienteBicho?
@@ -178,7 +181,7 @@ final class ModeloRobot {
             for await (car, b) in flujo {
                 guard let self else { return }
                 if car == .estado, let e = try? leerEstado(b) { self.estado = e }
-                self.avisar(avisosDeMarco(car: car.rawValue, b))
+                self.recibirMarco(car.rawValue, b)
             }
         }
     }
@@ -203,10 +206,34 @@ final class ModeloRobot {
             mostrarAviso("\(cliente): \(h)", icono: "sparkles", segundos: 5)
         case "marco":
             if let c = (e.datos["car"] as? NSNumber)?.intValue, let s = e.datos["datos"] as? String, let d = Data(base64Encoded: s) {
-                avisar(avisosDeMarco(car: c, [UInt8](d)))
+                recibirMarco(c, [UInt8](d))
             }
+        case "ota":
+            ota = Actualizacion(e.datos)
         default:
             break
+        }
+    }
+
+    /// Un marco del robot: la respuesta de Vida o un aviso suyo.
+    private func recibirMarco(_ car: Int, _ b: [UInt8]) {
+        if car == Car.comando.rawValue, b.count >= 2, b[0] == (Op.vida | Op.respuesta), let v = leerVida(b) {
+            vida = v
+            vidaEn = Date()
+            return
+        }
+        avisar(avisosDeMarco(car: car, b))
+    }
+
+    /// Pide el estado del motor de vida (y prende o apaga sus datos en la pantalla).
+    func pedirVida(superposicion: Bool? = nil) async {
+        let m = Comando.vida(superposicion: superposicion)
+        switch via {
+        case .nube:
+            guard conectado, let r = try? await api.marco(id, car: Car.comando.rawValue, datos: m, conexion: conexion) else { return }
+            for (c, b) in r { recibirMarco(c, b) }
+        case .ble, .demo:
+            try? await cliente?.transporte.escribir(.comando, m)
         }
     }
 

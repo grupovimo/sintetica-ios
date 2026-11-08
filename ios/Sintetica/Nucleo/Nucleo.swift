@@ -35,7 +35,10 @@ enum Nucleo {
         free(identificador)
         identificador = strdup(id)
         var h = sintetica_hal()
-        h.ahora_ms = { _ in UInt32(truncatingIfNeeded: Int(Date().timeIntervalSince(Nucleo.inicioSinAislar) * 1000)) }
+        h.ahora_ms = { _ in
+            let ms: Int = Int(Date().timeIntervalSince(Nucleo.inicioSinAislar) * 1000) + Nucleo.adelantoMs
+            return UInt32(truncatingIfNeeded: ms)
+        }
         h.semilla = { _ in UInt32.random(in: .min ... .max) }
         h.minuto_del_dia = { _ in
             let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
@@ -68,6 +71,27 @@ enum Nucleo {
     }
 
     nonisolated static let inicioSinAislar = Date()
+    /// Cuánto se adelantó el reloj del núcleo (para sacar fotos de caras sin
+    /// esperar los fundidos). Solo crece: el tiempo del núcleo nunca vuelve atrás.
+    nonisolated(unsafe) static var adelantoMs = 0
+
+    /// Fotos de caras (también los dibujos con formas) con la instancia: fija
+    /// cada una, adelanta el reloj hasta que termina el fundido y saca el cuadro.
+    /// Después hay que volver a pasarle su config.
+    static func fotografiar(config: String, nombres: [String]) -> [String: CGImage] {
+        for e in escriturasDeConfig(config, tamanoBloque: 512) { bleEscribir(Car.config.rawValue, Data(e)) }
+        var fotos: [String: CGImage] = [:]
+        for n in nombres {
+            bleEscribir(Car.comando.rawValue, Data(Comando.expresion(n)))
+            for _ in 0 ..< 6 {
+                adelantoMs += 200
+                tick()
+            }
+            if let i = imagen() { fotos[n] = i }
+        }
+        bleEscribir(Car.comando.rawValue, Data(Comando.expresion("")))
+        return fotos
+    }
 
     static func vistaPrevia() { sintetica_vista_previa() }
     static func tick() { sintetica_tick() }

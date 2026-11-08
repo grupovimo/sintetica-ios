@@ -1,0 +1,56 @@
+{
+  "nombre": "bateria-baja",
+  "numero": 14,
+  "disparador": "Menos de 15% de batería",
+  "formas": [
+    {
+      "forma": "corte",
+      "x": -0.3125,
+      "y": 0.1,
+      "w": 0.225,
+      "h": 0.25,
+      "izq": 0.0,
+      "der": 0.0
+    },
+    {
+      "forma": "corte",
+      "x": 0.3125,
+      "y": 0.1,
+      "w": 0.225,
+      "h": 0.25,
+      "izq": 0.0,
+      "der": 0.0
+    },
+    {
+      "forma": "pildora",
+      "x": 0.75,
+      "y": -0.36875,
+      "w": 0.175,
+      "h": 0.0875,
+      "r": 0.01875,
+      "color": "tinta-suave",
+      "fijo": true,
+      "relleno": false,
+      "trazo": 0.0125
+    },
+    {
+      "forma": "pildora",
+      "x": 0.85313,
+      "y": -0.36875,
+      "w": 0.01875,
+      "h": 0.0375,
+      "r": 0.00625,
+      "color": "tinta-suave",
+      "fijo": true
+    },
+    {
+      "forma": "pildora",
+      "x": 0.69688,
+      "y": -0.36875,
+      "w": 0.03125,
+      "h": 0.05,
+      "r": 0.00625,
+      "fijo": true
+    }
+  ]
+}

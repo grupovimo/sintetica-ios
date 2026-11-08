@@ -1,0 +1,18 @@
+{
+  "nombre": "latido",
+  "duracion": 1200,
+  "repetir": true,
+  "sobre": "enamorado",
+  "pistas": [
+    {
+      "forma": { "forma": "corazon", "x": 0, "y": -0.36, "tamano": 0.55, "fijo": true },
+      "claves": [
+        { "t": 0, "escala": 0.7, "opacidad": 0.6, "curva": "salida" },
+        { "t": 180, "escala": 1.15, "opacidad": 1, "curva": "suave" },
+        { "t": 420, "escala": 0.85, "curva": "salida" },
+        { "t": 560, "escala": 1.05, "curva": "suave" },
+        { "t": 1200, "escala": 0.7, "opacidad": 0.6 }
+      ]
+    }
+  ]
+}

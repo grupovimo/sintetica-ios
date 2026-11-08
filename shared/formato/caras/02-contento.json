@@ -1,0 +1,43 @@
+{
+  "nombre": "contento",
+  "numero": 2,
+  "disparador": "Caricia en el sensor táctil",
+  "formas": [
+    {
+      "forma": "arco",
+      "puntos": [
+        [
+          -0.4125,
+          0.1125
+        ],
+        [
+          -0.3125,
+          -0.175
+        ],
+        [
+          -0.2125,
+          0.1125
+        ]
+      ],
+      "trazo": 0.1
+    },
+    {
+      "forma": "arco",
+      "puntos": [
+        [
+          0.2125,
+          0.1125
+        ],
+        [
+          0.3125,
+          -0.175
+        ],
+        [
+          0.4125,
+          0.1125
+        ]
+      ],
+      "trazo": 0.1
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "nombre": "triste",
+  "numero": 7,
+  "disparador": "Boca abajo o 24 h sin uso",
+  "formas": [
+    {
+      "forma": "corte",
+      "x": -0.3125,
+      "y": 0.0125,
+      "w": 0.225,
+      "h": 0.425,
+      "izq": 0.1125,
+      "der": 0.0
+    },
+    {
+      "forma": "corte",
+      "x": 0.3125,
+      "y": 0.0125,
+      "w": 0.225,
+      "h": 0.425,
+      "izq": 0.0,
+      "der": 0.1125
+    }
+  ]
+}
