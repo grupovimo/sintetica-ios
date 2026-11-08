@@ -36,6 +36,7 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: Sintetica/Nucleo/Puente.h
         HEADER_SEARCH_PATHS: ["$(SRCROOT)/../firmware/api", "$(SRCROOT)/../firmware/nucleo"]
         INFOPLIST_FILE: Sintetica/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
       configs:
