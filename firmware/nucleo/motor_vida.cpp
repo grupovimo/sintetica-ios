@@ -1616,7 +1616,7 @@ void MotorVida::aplicarRegla(const Regla& r) {
         comportamiento(acc.indice, ahora_);
         break;
       case Accion::Tipo::Estado:
-        empujar(acc.variable, acc.delta);
+        empujar(acc.variable, acc.delta());
         break;
       case Accion::Tipo::Particula:
         soltar(static_cast<TipoParticula>(acc.indice));

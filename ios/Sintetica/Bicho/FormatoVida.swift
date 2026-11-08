@@ -13,12 +13,23 @@ let MAX_NOMBRE_AVISO = 24
 let SITUACIONES = [
     "despertar", "buenas-noches", "volviste", "te-extrane", "aburrido", "sueno", "bateria-baja", "cargando", "caricia", "saludo", "hito",
     "cumple-dueno", "cumple-robot", "recordatorio-hecho", "despertador", "posponer", "clima-frio", "clima-calor", "clima-lluvia", "clima-lindo",
+    "buen-dia", "comiste", "a-dormir", "tardaste", "agua", "pausa", "como-estas", "animo-bien", "animo-medio", "animo-mal", "jugar", "gane", "perdi", "empate", "anio-nuevo", "navidad", "dia-del-amigo", "dia-del-nino", "aniversario",
 ]
 let NOMBRES_SITUACION: [String: String] = [
     "despertar": "Al despertar", "buenas-noches": "Buenas noches", "volviste": "Volviste", "te-extrane": "Te extrañó", "aburrido": "Aburrido",
     "sueno": "Con sueño", "bateria-baja": "Sin pila", "cargando": "Cargando", "caricia": "Caricia", "saludo": "Saludo", "hito": "Un hito",
     "cumple-dueno": "Tu cumple", "cumple-robot": "Su cumple", "recordatorio-hecho": "Recordatorio hecho", "despertador": "Despertador",
     "posponer": "Posponer", "clima-frio": "Hace frío", "clima-calor": "Hace calor", "clima-lluvia": "Llueve", "clima-lindo": "Día lindo",
+    "buen-dia": "Buen día", "comiste": "¿Comiste?", "a-dormir": "A dormir", "tardaste": "Tardaste", "agua": "Agua", "pausa": "Pausa", "como-estas": "¿Cómo estás?", "animo-bien": "Estás bien", "animo-medio": "Más o menos", "animo-mal": "Estás mal", "jugar": "Jugar", "gane": "Ganó", "perdi": "Perdió", "empate": "Empate", "anio-nuevo": "Año nuevo", "navidad": "Navidad", "dia-del-amigo": "Día del amigo", "dia-del-nino": "Día del niño", "aniversario": "Aniversario",
+]
+/// Agrupadas, como la web, así la lista se lee de un vistazo.
+let GRUPOS_SITUACION: [(titulo: String, situaciones: [String])] = [
+    ("Su día", ["despertar", "buen-dia", "comiste", "tardaste", "a-dormir", "buenas-noches", "despertador", "posponer", "sueno"]),
+    ("Con vos", ["saludo", "volviste", "te-extrane", "caricia", "aburrido", "como-estas", "animo-bien", "animo-medio", "animo-mal"]),
+    ("Cuidarte", ["agua", "pausa", "recordatorio-hecho", "bateria-baja", "cargando"]),
+    ("Clima", ["clima-frio", "clima-calor", "clima-lluvia", "clima-lindo"]),
+    ("Jugar", ["jugar", "gane", "perdi", "empate"]),
+    ("Fechas", ["cumple-dueno", "cumple-robot", "aniversario", "anio-nuevo", "navidad", "dia-del-amigo", "dia-del-nino", "hito"]),
 ]
 let NOMBRES_JUEGO: [String: String] = ["ppt": "Piedra papel tijera", "reflejos": "Reflejos", "mirada": "Mirada", "dado": "Dado", "moneda": "Moneda"]
 
@@ -219,6 +230,7 @@ extension ConfigDoc {
 /// Las frases con {dueno} y {robot} ya puestos (para probarlas).
 func armarFrase(_ f: String, dueno: String, robot: String) -> String {
     let t = f.replacingOccurrences(of: "{dueno}", with: dueno).replacingOccurrences(of: "{robot}", with: robot)
+        .replacingOccurrences(of: "{clima}", with: "")
     let limpio = t.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     return cortarBytes(limpio, MAX_TEXTO)
 }

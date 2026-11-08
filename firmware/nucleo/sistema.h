@@ -27,6 +27,9 @@ struct Perfil {
   // Mascota (1.47B): toque = caricia, doble toque, mantener 5 s = QR.
   // Broche: toque = lo siguiente de la lista, mantener 2 s = dormir, 8 s = QR.
   enum class Boton : uint8_t { Mascota, Broche } boton = Boton::Mascota;
+  // false = mantener apretado no muestra el QR (el bicho-celu lo muestra
+  // desde su menú y el toque largo queda para la cara).
+  bool qrPorMantener = true;
   // Lo que va en el estado y en los manifiestos de OTA: una OTA solo se
   // acepta si es de este mismo perfil.
   const char* nombre = "sim";
@@ -183,6 +186,9 @@ class Sistema {
   bool quiereDormir() const { return apagado_; }
   void dormir();
   const Perfil& perfil() const { return perfil_; }
+  void qrPorMantener(bool si) { perfil_.qrPorMantener = si; }
+  // Muestra el QR para vincular otro celu un rato (lo mismo que mantener el botón).
+  void mostrarQr();
   // Imágenes guardadas: largo 0 = espacio vacío.
   uint32_t largoImagen(int espacio) const { return (espacio >= 0 && espacio < MAX_IMAGENES) ? imagenes_[espacio].largo : 0; }
   // La imagen que se ve ahora (-1 = una cara).

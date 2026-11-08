@@ -60,6 +60,11 @@ typedef struct sintetica_hal {
   /* Segundos desde 1970 en hora local (0 = no se sabe): la memoria del motor de vida
    * (ausencias, días juntos, cumpleaños). NULL = solo el minuto del día. */
   uint32_t (*epoch)(void* contexto);
+  /* v1.8 (el bicho-celu): los sonidos del núcleo por nombre ("despertador:3",
+   * "ronquido", "dado"… ver docs/protocolo-ble.md, "Voz") y si está cargando
+   * (1 sí, 0 no, -1 no se sabe; NULL = no se sabe). */
+  void (*sonido)(void* contexto, const char* nombre);
+  int (*cargando)(void* contexto);
 } sintetica_hal;
 
 /* Arranca el núcleo. ancho ≤ 640, alto ≤ 640. Cualquier función de la tabla puede ser NULL.
@@ -139,6 +144,27 @@ const char* sintetica_qr(void);
 /* La imagen que se ve (-1 = una cara). */
 int sintetica_imagen_visible(void);
 const char* sintetica_version(void);
+
+/* v1.8, para un anfitrión que es el bicho (el bicho-celu). */
+/* El comportamiento que corre ("" = ninguno). Vale hasta el próximo tick. */
+const char* sintetica_comportamiento(void);
+/* El estado interno del motor de vida (energía, ánimo, afecto, aburrimiento,
+ * curiosidad, sueño, estrés; de 0 a 1). Devuelve cuántos hay y copia hasta cap. */
+int sintetica_estado_interno(float* salida, int cap);
+/* La voz de la config: volumen y micrófono en centésimos, tipo (0 grave,
+ * 1 media, 2 aguda, 3 robot) y la palabra que lo llama (su nombre si no hay).
+ * Devuelve 1 si conversa (voz.conversar). Cualquier puntero puede ser NULL. */
+int sintetica_voz(int* volumen, int* microfono, int* tipo, const char** palabra);
+/* Cuántos cuadros por segundo hacen falta ahora (dormido, menos). */
+int sintetica_fps_sugerido(void);
+/* 0 = mantener apretado no muestra el QR (por defecto sí). */
+void sintetica_qr_por_mantener(int si);
+/* Muestra el QR para vincular otro celu un rato (como mantener el botón). */
+void sintetica_mostrar_qr(void);
+/* Algo que mirar (una cara que ve la cámara), de -1 a 1; y hacia arriba es +. */
+void sintetica_seguir(float x, float y);
+/* La superposición de depuración del núcleo (comportamiento, estado, fps). */
+void sintetica_depurar(int si);
 
 #ifdef __cplusplus
 }

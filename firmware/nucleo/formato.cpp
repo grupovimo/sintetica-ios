@@ -14,7 +14,7 @@ const char* const NOMBRES_EVENTO[] = {
     "caricia", "muchos-toques", "sacudida-suave", "sacudida-fuerte", "inclinado", "caida", "voz", "nombre",
     "ruido", "musica", "silencio", "notificacion", "llamada", "bateria-baja", "bateria-critica", "enchufado",
     "desenchufado", "cargado", "sin-wifi", "cambio-de-cara", "bicho-cerca", "volvio", "hito",
-    "recordatorio", "pomodoro", "despertador", "juego", "animo"};
+    "recordatorio", "pomodoro", "despertador", "juego", "animo", "cara-detectada", "oscuridad", "mano-cerca"};
 static_assert(sizeof NOMBRES_EVENTO / sizeof NOMBRES_EVENTO[0] == static_cast<int>(Evento::Cantidad), "eventos");
 
 // Memoria de trabajo compartida (no reentrante: el núcleo corre en un solo hilo).
@@ -234,7 +234,8 @@ bool leerAccion(const char* s, Accion* a) {
     if (d < 0 || d > 1) return false;
     a->tipo = Accion::Tipo::Estado;
     a->variable = static_cast<int8_t>(v);
-    a->delta = *op == '-' ? -d : d;
+    const float delta = *op == '-' ? -d : d;
+    a->cent = static_cast<int8_t>(delta * 100 + (delta < 0 ? -0.5f : 0.5f));
     copiarTexto(a->argumento, sizeof a->argumento, s + 7);
     return true;
   }

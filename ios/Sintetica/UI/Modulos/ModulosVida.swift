@@ -36,9 +36,13 @@ struct ModHabla: View {
                         Text("\(total)/\(MAX_FRASES)").font(Tipos.marca(11, .heavy).monospacedDigit()).foregroundStyle(total >= MAX_FRASES ? Color.rojo : Color.gris)
                     }
                     Menu {
-                        ForEach(SITUACIONES, id: \.self) { s in
-                            let n = c.frasesPropias[s]?.count ?? 0
-                            Button((NOMBRES_SITUACION[s] ?? s) + (n > 0 ? " · \(n)" : "")) { situacion = s }
+                        ForEach(GRUPOS_SITUACION, id: \.titulo) { g in
+                            Section(g.titulo) {
+                                ForEach(g.situaciones, id: \.self) { s in
+                                    let n = c.frasesPropias[s]?.count ?? 0
+                                    Button((NOMBRES_SITUACION[s] ?? s) + (n > 0 ? " · \(n)" : "")) { situacion = s }
+                                }
+                            }
                         }
                     } label: {
                         HStack {
@@ -72,7 +76,7 @@ struct ModHabla: View {
                     Text("\(nueva.utf8.count)/\(MAX_TEXTO)").font(Tipos.marca(10, .heavy).monospacedDigit()).foregroundStyle(Color.gris)
                 }
                 HStack(spacing: 8) {
-                    ForEach(["{dueno}", "{robot}"], id: \.self) { f in
+                    ForEach(["{dueno}", "{robot}", "{clima}"], id: \.self) { f in
                         Button { nueva = cortarBytes(nueva + f, MAX_TEXTO) } label: { Text(f) }.tecla(.negra, chica: true)
                     }
                     Spacer()

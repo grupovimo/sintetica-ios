@@ -63,27 +63,66 @@ func estadoDeJSON(_ o: [String: Any]) -> Estado? {
 // --- Integraciones (web/src/lib/consola/modulos/Integraciones.svelte) ---
 
 struct AccionAuto: Codable, Equatable {
-    var tipo: String          // "telegram", "webhook" o "robot"
-    var texto: String? = nil  // telegram (con plantillas)
+    var tipo: String          // decir, cara, modo, despertar, telegram, webhook o robot
+    var texto: String? = nil  // telegram y decir (con plantillas)
     var url: String? = nil    // webhook
     var bicho: String? = nil  // robot: otro del mismo dueño
-    var expresion: String? = nil
+    var expresion: String? = nil  // cara, robot y (opcional) decir
+    var modo: String? = nil   // modo
 
     static func nueva(_ tipo: String, otro: String?) -> AccionAuto {
         switch tipo {
         case "telegram": AccionAuto(tipo: tipo, texto: "{robot}: {evento}")
         case "webhook": AccionAuto(tipo: tipo, url: "https://")
+        case "decir": AccionAuto(tipo: tipo, texto: "Buen día, {dueno}: {clima}")
+        case "cara": AccionAuto(tipo: tipo, expresion: "contento")
+        case "modo": AccionAuto(tipo: tipo, modo: "reloj")
+        case "despertar": AccionAuto(tipo: tipo)
         default: AccionAuto(tipo: "robot", bicho: otro ?? "", expresion: "contento")
         }
     }
 }
+
+/// Las acciones, en el orden de la web.
+let ACCIONES_AUTO: [(tipo: String, nombre: String, icono: String)] = [
+    ("decir", "Decir", "bubble.left.fill"), ("cara", "Cara", "face.smiling"), ("modo", "Modo", "square.grid.2x2"),
+    ("despertar", "Despertar", "sunrise.fill"), ("telegram", "Telegram", "paperplane.fill"), ("webhook", "URL", "link"),
+    ("robot", "Otro robot", "person.2.fill"),
+]
+let MODOS_ACCION: [(String, String)] = [("mascota", "Compañía"), ("reloj", "Reloj"), ("pomodoro", "Pomodoro"), ("clima", "Clima")]
+let PLANTILLAS_AUTO = ["{robot}", "{dueno}", "{texto}", "{hora}", "{clima}", "{temp}", "{max}", "{min}", "{ciudad}", "{bateria}", "{expresion}"]
 
 struct Automatizacion: Codable, Equatable, Identifiable {
     var id: String
     var activa: Bool
     var cuando: String
     var valor: String? = nil
+    /// cuando "hora": a esa hora (HH:MM) los días que diga (vacío = todos).
+    var hora: String? = nil
+    var dias: String? = nil
     var hacer: [AccionAuto]
+
+    /// Cambia el cuándo y deja solo lo que ese cuándo usa (como la web).
+    mutating func ponerCuando(_ k: String) {
+        cuando = k
+        if k != "expresion" { valor = nil }
+        if k == "hora" { hora = hora ?? "08:00" } else { hora = nil; dias = nil }
+    }
+
+    /// Prende o apaga un día de "a una hora" (nunca deja ninguno; los 7 = todos).
+    mutating func alternarDia(_ l: String) {
+        let ya = dias ?? "LMXJVSD"
+        let nuevo = DIAS_SEMANA.map(\.letra).filter { $0 == l ? !ya.contains($0) : ya.contains($0) }.joined()
+        if nuevo.isEmpty { return }
+        dias = nuevo.count == 7 ? nil : nuevo
+    }
+
+    /// Las opciones de "cuándo": las de la API, con "a una hora" y el despertador primero.
+    static func cuandos(_ api: [String]) -> [String] {
+        var l = ["hora", "despertador"]
+        for k in api where !l.contains(k) { l.append(k) }
+        return l
+    }
 
     static func nueva(ahora: Date = Date()) -> Automatizacion {
         Automatizacion(id: "a" + String(Int(ahora.timeIntervalSince1970 * 1000), radix: 36), activa: true, cuando: "recordatorio",
@@ -110,6 +149,8 @@ struct EstadoTelegram: Equatable {
 }
 
 let NOMBRES_CUANDO: [String: String] = [
+    "hora": "A una hora", "despertador": "Suena el despertador", "juego": "Termina un juego", "animo": "Te pregunta cómo estás",
+    "bicho-cerca": "Otro robot cerca",
     "recordatorio": "Muestra un recordatorio", "pomodoro": "Termina un pomodoro", "bateria-baja": "Poca batería",
     "desconectado": "Se desconecta", "conectado": "Se conecta", "despierta": "Se despierta", "duerme": "Se duerme", "expresion": "Cambia de cara",
     "tacto": "Lo tocan", "doble-toque": "Doble toque", "caricia": "Una caricia", "muchos-toques": "Muchos toques", "levantado": "Lo levantan",

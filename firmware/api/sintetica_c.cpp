@@ -99,6 +99,8 @@ void sintetica_iniciar_perfil(const sintetica_hal* hal, int ancho, int alto, int
   h.minutoDelDia = [] { return g_hal.minuto_del_dia ? g_hal.minuto_del_dia(g_hal.contexto) : -1; };
   h.bateria = [] { return g_hal.bateria ? g_hal.bateria(g_hal.contexto) : -1; };
   if (g_hal.epoch) h.epoch = [] { return g_hal.epoch(g_hal.contexto); };
+  if (g_hal.sonido) h.sonido = [](const char* nombre) { g_hal.sonido(g_hal.contexto, nombre); };
+  if (g_hal.cargando) h.cargando = [] { return g_hal.cargando(g_hal.contexto); };
   h.guardar = [](const char* c, const uint8_t* d, size_t n) {
     if (g_hal.guardar) return g_hal.guardar(g_hal.contexto, c, d, n) != 0;
     Guardado* g = buscarGuardado(c, true);
@@ -345,4 +347,24 @@ int sintetica_vida_base(int tipo, int indice, const char** nombre, const char** 
 const char* sintetica_qr(void) { return g_sistema.contenidoQr(); }
 int sintetica_imagen_visible(void) { return g_sistema.imagenVisible(); }
 const char* sintetica_version(void) { return VERSION_SINTETICAOS; }
+
+const char* sintetica_comportamiento(void) { return g_sistema.motor().nombreComportamiento(); }
+int sintetica_estado_interno(float* s, int cap) {
+  const float* e = g_sistema.motor().estadoInterno();
+  for (int i = 0; s && i < cap && i < N_ESTADO; i++) s[i] = e[i];
+  return N_ESTADO;
+}
+int sintetica_voz(int* volumen, int* microfono, int* tipo, const char** palabra) {
+  const Voz& v = g_sistema.config().voz;
+  if (volumen) *volumen = v.volumen;
+  if (microfono) *microfono = v.microfono;
+  if (tipo) *tipo = static_cast<int>(v.tipo);
+  if (palabra) *palabra = v.palabra[0] ? v.palabra : g_sistema.nombre();
+  return v.conversar ? 1 : 0;
+}
+int sintetica_fps_sugerido(void) { return g_sistema.fpsSugerido(); }
+void sintetica_qr_por_mantener(int si) { g_sistema.qrPorMantener(si != 0); }
+void sintetica_mostrar_qr(void) { g_sistema.mostrarQr(); }
+void sintetica_seguir(float x, float y) { g_sistema.seguir(x, y); }
+void sintetica_depurar(int si) { g_sistema.depurar(si != 0); }
 }

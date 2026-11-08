@@ -773,6 +773,11 @@ void Sistema::siguiente() {
   guardarAjustes();
 }
 
+void Sistema::mostrarQr() {
+  emparejando_ = true;
+  emparejarHasta_ = hal_.ahoraMs() + QR_POR_BOTON_MS;
+}
+
 void Sistema::dormir() {
   apagado_ = true;
   guardarAjustes();
@@ -991,7 +996,7 @@ void Sistema::tick() {
       ahora - botonDesde_ >= tiemposBroche::DORMIR_MS && !qrPorBoton_)
     motor_.reaccionar(config_.resolverCara("dormido"), ahora, 150);
   // Mantener el botón (5 s la mascota, 8 s el broche) muestra el QR para vincular otro celu.
-  bool qr = gestos_.sacarMantenido();
+  bool qr = gestos_.sacarMantenido() && perfil_.qrPorMantener;
   if (perfil_.boton == Perfil::Boton::Broche && botonApretado_ && !ignorarSoltar_ && !qrPorBoton_ &&
       ahora - botonDesde_ >= tiemposBroche::QR_MS) {
     qrPorBoton_ = true;

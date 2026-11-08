@@ -14,7 +14,7 @@ constexpr int MAX_PUNTOS = 12;
 constexpr int MAX_BANDAS = 6;
 constexpr int MAX_FORMAS = 12;
 constexpr int MAX_EXPRESIONES = 24;
-constexpr int MAX_REGLAS = 64;         // las del usuario (hasta 24) más las base
+constexpr int MAX_REGLAS = 68;         // las del usuario (hasta 24) más las base (44)
 constexpr int MAX_REGLAS_USUARIO = 24;
 constexpr int MAX_ACCIONES = 6;
 constexpr int MAX_Y = 2;               // condiciones extra de una regla ("y")
@@ -118,6 +118,9 @@ enum class Evento : uint8_t {
   Despertador,   // empezó a sonar el despertador (lo genera el sistema; v1.6)
   Juego,         // terminó una partida de un juego (v1.7)
   Animo,         // respondió el "¿cómo estás?" (v1.7)
+  CaraDetectada,  // la cámara ve una cara después de un rato sin ver ninguna (v1.8)
+  Oscuridad,      // se apagó la luz del cuarto (v1.8)
+  ManoCerca,      // una mano cerca de la pantalla, sin tocarla (v1.8)
   Cantidad
 };
 // El evento "padre" (sacudida-fuerte → sacudida, caricia → tacto): si no hay
@@ -186,13 +189,14 @@ struct Accion {
   char argumento[LARGO_NOMBRE] = {};
   int8_t indice = -1;     // la cara, el comportamiento, la partícula o la situación ya resueltos
   int8_t variable = -1;   // Estado: la VarVida
-  float delta = 0;        // Estado: cuánto
+  int8_t cent = 0;        // Estado: cuánto, en centésimos (como los pasos; sin float, entra en el broche)
+  float delta() const { return cent / 100.0f; }
 };
 
 struct Regla {
   Condicion si;
-  uint8_t nY = 0;
   CondVida y[MAX_Y];      // condiciones extra ("y": "afecto>0.6,noche")
+  uint8_t nY = 0;
   uint8_t nAcciones = 0;
   Accion entonces[MAX_ACCIONES];
 };

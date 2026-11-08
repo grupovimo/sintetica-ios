@@ -2,9 +2,6 @@ import SwiftUI
 import UIKit
 
 private let CARAS_AUTO = ["contento", "sorpresa", "enamorado", "guino", "triste", "pensando", "dormido"]
-private let ACCIONES_AUTO: [(String, String, String)] = [
-    ("telegram", "Telegram", "paperplane.fill"), ("webhook", "URL", "link"), ("robot", "Otro robot", "person.2.fill"),
-]
 
 /// Integraciones: el robot conectado al mundo desde la nube. Tu IA (MCP),
 /// Telegram (le escribís y te avisa), webhooks y automatizaciones: cuando
@@ -66,7 +63,7 @@ struct ModIntegraciones: View {
                         Bandeja { Text("Ej.: recordatorio → Telegram").font(Tipos.texto).foregroundStyle(Color.tinta.opacity(0.8)) }
                     }
                     ForEach(autos.indices, id: \.self) { i in fichaAuto(i) }
-                    Text("{robot} {bateria} {expresion} {texto} {hora}").font(Tipos.marca(10.5, .bold)).foregroundStyle(Color.tinta.opacity(0.7))
+                    Text(PLANTILLAS_AUTO.joined(separator: " ")).font(Tipos.marca(10.5, .bold)).foregroundStyle(Color.tinta.opacity(0.7))
                     desarrolladores
                     if !historial.isEmpty { ultimas }
                 }
@@ -297,14 +294,14 @@ struct ModIntegraciones: View {
                 Llave(texto: a.activa ? "Activa" : "Apagada", prendida: a.activa) { autos[i].activa.toggle(); guardar() }
             }
             Menu {
-                ForEach(cuandos, id: \.self) { k in
+                ForEach(Automatizacion.cuandos(cuandos), id: \.self) { k in
                     Button(NOMBRES_CUANDO[k] ?? k) {
-                        autos[i].cuando = k
-                        if k != "expresion" { autos[i].valor = nil }
+                        autos[i].ponerCuando(k)
                         guardar()
                     }
                 }
             } label: { selector(NOMBRES_CUANDO[a.cuando] ?? a.cuando) }
+            if a.cuando == "hora" { aUnaHora(i, a) }
             if a.cuando == "expresion" {
                 Menu {
                     Button("a cualquiera") { autos[i].valor = nil; guardar() }
@@ -313,7 +310,7 @@ struct ModIntegraciones: View {
             }
             ForEach(a.hacer.indices, id: \.self) { j in accion(i, j) }
             Flujo(espacio: 8, renglon: 4) {
-                ForEach(ACCIONES_AUTO, id: \.0) { t, n, icono in
+                ForEach(ACCIONES_AUTO, id: \.tipo) { t, n, icono in
                     Button { autos[i].hacer.append(AccionAuto.nueva(t, otro: otros.first?.id)); guardar() } label: { Label(n, systemImage: icono) }
                         .tecla(chica: true)
                         .disabled(a.hacer.count >= 4 || (t == "robot" && otros.isEmpty))
@@ -326,6 +323,35 @@ struct ModIntegraciones: View {
             }
         }
         .opacity(a.activa ? 1 : 0.6)
+    }
+
+    /// "A una hora": la hora y los días.
+    private func aUnaHora(_ i: Int, _ a: Automatizacion) -> some View {
+        let hora = Binding<Date>(get: {
+            let m = aMinutos(a.hora ?? "08:00")
+            return Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: Date()) ?? Date()
+        }, set: { d in
+            let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+            autos[i].hora = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+            guardar()
+        })
+        let dias = a.dias ?? "LMXJVSD"
+        return VStack(alignment: .leading, spacing: 8) {
+            DatePicker("", selection: hora, displayedComponents: .hourAndMinute)
+                .labelsHidden().datePickerStyle(.compact).tint(Color.brasa).colorScheme(.dark)
+            HStack(spacing: 5) {
+                ForEach(DIAS_SEMANA, id: \.letra) { d in
+                    Button { autos[i].alternarDia(d.letra); guardar() } label: { Text(d.letra) }
+                        .buttonStyle(EstiloDia(prendido: dias.contains(d.letra)))
+                        .accessibilityLabel(d.nombre)
+                }
+            }
+        }
+    }
+
+    private func nombreModo(_ m: String?) -> String {
+        for (k, t) in MODOS_ACCION where k == m { return t }
+        return "Reloj"
     }
 
     private func selector(_ t: String) -> some View {
@@ -348,6 +374,31 @@ struct ModIntegraciones: View {
             case "webhook":
                 CampoAccion(rotulo: "POST firmado", valor: h.url ?? "", ayuda: "https://tu-api.com/gancho", url: true) { v in
                     autos[i].hacer[j].url = v.trimmingCharacters(in: .whitespaces); guardar()
+                }
+            case "decir":
+                VStack(spacing: 6) {
+                    CampoAccion(rotulo: "Dice", valor: h.texto ?? "", ayuda: "¡Hola!") { v in
+                        let t = cortarBytes(v.trimmingCharacters(in: .whitespaces), MAX_TEXTO)
+                        autos[i].hacer[j].texto = t.isEmpty ? "¡Hola!" : t
+                        guardar()
+                    }
+                    Menu {
+                        Button("su cara") { autos[i].hacer[j].expresion = nil; guardar() }
+                        ForEach(CARAS_AUTO, id: \.self) { c in Button(c) { autos[i].hacer[j].expresion = c; guardar() } }
+                    } label: { selector(h.expresion ?? "su cara") }
+                }
+            case "cara":
+                Menu {
+                    ForEach(CARAS_AUTO, id: \.self) { c in Button(c) { autos[i].hacer[j].expresion = c; guardar() } }
+                } label: { selector("Cara · " + (h.expresion ?? "contento")) }
+            case "modo":
+                Menu {
+                    ForEach(MODOS_ACCION, id: \.0) { k, t in Button(t) { autos[i].hacer[j].modo = k; guardar() } }
+                } label: { selector("Pasa a · " + nombreModo(h.modo)) }
+            case "despertar":
+                Visor(relleno: 10) {
+                    Grabado("Lo despierta")
+                    Text("¡BUEN DÍA!").font(Tipos.marca(15, .black)).foregroundStyle(Color.papel)
                 }
             default:
                 VStack(spacing: 6) {

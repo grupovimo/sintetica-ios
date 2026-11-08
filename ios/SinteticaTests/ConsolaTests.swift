@@ -536,3 +536,55 @@ final class PaqueteDeVidaTests: XCTestCase {
         XCTAssertEqual(l.detalle, "Santa Fe · Argentina")
     }
 }
+
+/// Las automatizaciones nuevas (a una hora, decir, cara, modo, despertar), como la web.
+@MainActor
+final class AutomatizacionesNuevasTests: XCTestCase {
+    func testAUnaHora() throws {
+        var a = Automatizacion.nueva(ahora: Date(timeIntervalSince1970: 1_793_000_000))
+        a.ponerCuando("hora")
+        XCTAssertEqual(a.hora, "08:00")
+        XCTAssertNil(a.dias)
+        a.alternarDia("S")
+        a.alternarDia("D")
+        XCTAssertEqual(a.dias, "LMXJV")
+        a.alternarDia("S"); a.alternarDia("D")
+        XCTAssertNil(a.dias)  // los 7 = todos
+        let o = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(a)) as? [String: Any])
+        XCTAssertEqual(o["hora"] as? String, "08:00")
+        XCTAssertNil(o["dias"])
+        a.ponerCuando("expresion")
+        XCTAssertNil(a.hora)
+        XCTAssertNil(a.dias)
+    }
+
+    func testAccionesNuevas() throws {
+        XCTAssertEqual(AccionAuto.nueva("decir", otro: nil), AccionAuto(tipo: "decir", texto: "Buen día, {dueno}: {clima}"))
+        XCTAssertEqual(AccionAuto.nueva("cara", otro: nil), AccionAuto(tipo: "cara", expresion: "contento"))
+        XCTAssertEqual(AccionAuto.nueva("modo", otro: nil), AccionAuto(tipo: "modo", modo: "reloj"))
+        let d = AccionAuto.nueva("despertar", otro: nil)
+        let o = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(d)) as? [String: Any])
+        XCTAssertEqual(Set(o.keys), ["tipo"])
+        XCTAssertEqual(ACCIONES_AUTO.map(\.tipo), ["decir", "cara", "modo", "despertar", "telegram", "webhook", "robot"])
+        XCTAssertTrue(PLANTILLAS_AUTO.contains("{clima}"))
+        XCTAssertTrue(PLANTILLAS_AUTO.contains("{dueno}"))
+    }
+
+    func testCuandos() {
+        XCTAssertEqual(Automatizacion.cuandos(["recordatorio", "despertador", "juego"]), ["hora", "despertador", "recordatorio", "juego"])
+        for k in ["hora", "despertador", "juego", "animo", "bicho-cerca"] { XCTAssertNotNil(NOMBRES_CUANDO[k], k) }
+        let json = #"{"automatizaciones":[{"id":"h","activa":true,"cuando":"hora","hora":"07:15","dias":"LMXJV","hacer":[{"tipo":"modo","modo":"clima"},{"tipo":"despertar"}]}]}"#
+        let r = ApiSintetica.leerAutomatizaciones(Data(json.utf8))
+        XCTAssertEqual(r.lista.first?.hora, "07:15")
+        XCTAssertEqual(r.lista.first?.dias, "LMXJV")
+        XCTAssertEqual(r.lista.first?.hacer.first?.modo, "clima")
+        XCTAssertEqual(r.lista.first?.hacer.last?.tipo, "despertar")
+    }
+
+    func testSituacionesAgrupadas() {
+        let enGrupos = GRUPOS_SITUACION.flatMap(\.situaciones)
+        XCTAssertEqual(Set(enGrupos), Set(SITUACIONES))
+        XCTAssertEqual(enGrupos.count, Set(enGrupos).count)  // ninguna repetida
+        XCTAssertEqual(armarFrase("Hola {dueno}, {clima}", dueno: "Nahuel", robot: "Toto"), "Hola Nahuel,")
+    }
+}
