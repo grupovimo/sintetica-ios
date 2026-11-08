@@ -40,6 +40,8 @@ struct SalidasVida {
   void (*led)(void* ctx, uint32_t rgb) = nullptr;
   void (*animacion)(void* ctx, int indice) = nullptr;
   void (*guardar)(void* ctx, const uint8_t* datos, size_t n) = nullptr;
+  // Una situación para hablar (Situacion de habla.h): el sistema decide si dice algo.
+  void (*decir)(void* ctx, uint8_t situacion) = nullptr;
 };
 
 // Lo que recuerda (se guarda en flash y se sincroniza con la cuenta).
@@ -60,7 +62,17 @@ struct Memoria {
   uint32_t epochEstado = 0;
   uint16_t ausenciaMaxima = 0;      // horas
   uint8_t afectoHoy = 0;            // cuánto afecto ganó hoy (tope diario)
+  // v1.7 (en los bytes que eran ceros): juegos, el día de hoy y las fechas.
+  uint16_t juegosGanados = 0, juegosJugados = 0, mejorReflejo = 0;  // ms (0 = nunca)
+  uint8_t hoyJuegos = 0, hoySuenos = 0, hoySonoCon = 0;  // bits: corazón, estrella, nota, oveja, pesadilla
+  uint8_t hoyAnimo = 0;             // 0 sin respuesta, 1 bien, 2 más o menos, 3 mal
+  uint8_t hoyEspero = 0;            // a qué hora te esperó (hora + 1; 0 = no)
+  uint8_t hoyDia = 0;               // el día de los contadores de hoy (epoch/86400 % 251 + 1)
+  uint8_t anioFechas = 0, fechas = 0;  // año % 256 y bits: año nuevo, navidad, amigo, niño, aniversario
+  uint8_t hoyAgua = 0;              // vasos de agua recordados hoy
 };
+// Qué cuenta el día (MotorVida::anotarHoy).
+enum class Hoy : uint8_t { Juego, JuegoGanado, Sueno, SonoCon, Animo, Espero, Agua };
 constexpr size_t LARGO_MEMORIA = 112;
 size_t codificarMemoria(const Memoria& m, uint8_t* salida, size_t cap);
 bool decodificarMemoria(const uint8_t* d, size_t n, Memoria* m);
@@ -146,14 +158,21 @@ class MotorVida {
   // Los tres mejores del último sorteo del selector (nombre, puntaje).
   int candidatos(const char** nombres, float* puntajes, int max) const;
   int registro(EntradaRegistro* salida, int max) const;
-  // Anota algo que pasó fuera del motor (el sistema: 4 = recordatorio, con su índice).
+  // Anota algo que pasó fuera del motor (el sistema: 4 = recordatorio, con su
+  // índice; 5 = juego; 6 = ánimo).
   void anotarRegistro(uint8_t tipo, uint8_t dato) { anotar(tipo, dato); }
+  // Los contadores del día en la memoria (se vuelven a cero cada día).
+  void anotarHoy(Hoy que, uint8_t dato = 0);
+  // Un juego: cuánto tardó en tocar (reflejos), para el récord.
+  void anotarReflejo(uint16_t ms);
   // El broche: de noche, después de dormirse, puede apagar la pantalla hasta
   // la mañana. segundosHastaDespertar: -1 si no se sabe la hora.
   bool quiereSuenoProfundo() const;
   int segundosHastaDespertar() const;
   // El brillo de la pantalla que pide el ritmo diario (0 a 1).
   float brillo() const { return cuadro_.brillo; }
+  // Dormido: hacia dónde está ladeado (-1, 0, 1) y si sonríe en sueños (tests).
+  int ladoDormido() const { return ladoSueno_; }
   // Para los tests.
   uint32_t parpadeos() const { return parpadeos_; }
   uint32_t parpadeosDobles() const { return dobles_; }
@@ -186,6 +205,12 @@ class MotorVida {
   void empujar(int var, float delta);
   void soltar(TipoParticula t, int cuantas = 1);
   void ritmo();
+  void rutinaConVos(bool volvio);
+  void vidaDormido();
+  void revolverseEnSuenos(bool murmurar);
+  void decir(Situacion s) {
+    if (salidas_.decir) salidas_.decir(salidas_.ctx, static_cast<uint8_t>(s));
+  }
   void anotar(uint8_t tipo, uint8_t dato);
   void memoriaInteraccion(Evento e);
   void revisarHitos();
@@ -282,7 +307,18 @@ class MotorVida {
   int caraEstado_ = -1;
   float guardadoEn_ = 0;
   bool hayVolvio_ = false;
+  bool primeroDelDia_ = false;   // la primera interacción del día (el "buen día")
+  uint32_t aDormirDia_ = 0;      // el día en que ya le dijo "¿nos vamos a dormir?"
   bool hitoPendiente_ = false;
+  int8_t hitoSituacion_ = -1;    // qué se dice al festejar el hito (el cumple gana)
+  // La batería baja va como una capa del ánimo (no gana sobre todo).
+  bool capaBateria_ = false;
+  float proximaBateria_ = 0;
+  // Dormido: zzz, postura, sonrisas y murmullos, ronquidos; lo que lo despierta de noche.
+  float proximoZzz_ = 0, proximaPosturaSueno_ = 0, proximoGestoSueno_ = 0, proximoRonquido_ = 0;
+  float sonrisaSuenoHasta_ = -10, murmulloHasta_ = -10;
+  int8_t ladoSueno_ = 0;
+  uint8_t vocesDormido_ = 0;
   float ausenciaHoras_ = 0;
 
   Memoria mem_;

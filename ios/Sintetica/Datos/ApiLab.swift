@@ -58,6 +58,7 @@ struct Memoria: Equatable {
     var gustos: [String: Double] = [:]
     var hitos: [String] = []
     var deriva: [String: Double] = [:]
+    var juegosJugados = 0, juegosGanados = 0, mejorReflejo = 0, juegosHoy = 0
 
     init() {}
 
@@ -70,6 +71,7 @@ struct Memoria: Equatable {
         for (k, v) in o["gustos"] as? [String: Any] ?? [:] { gustos[k] = (v as? NSNumber)?.doubleValue ?? 0 }
         for (k, v) in o["deriva"] as? [String: Any] ?? [:] { deriva[k] = (v as? NSNumber)?.doubleValue ?? 0 }
         hitos = o["hitos"] as? [String] ?? []
+        juegosJugados = n("juegosJugados"); juegosGanados = n("juegosGanados"); mejorReflejo = n("mejorReflejo"); juegosHoy = n("juegosHoy")
     }
 
     /// La hora a la que más aparecés (si aparecés seguido), o nil.
@@ -136,6 +138,41 @@ struct Actualizacion: Identifiable, Equatable {
 
     var nombreEstado: String {
         ["enviada": "Enviada", "descargando": "Bajando", "instalada": "Probando", "confirmada": "Lista", "fallida": "Falló"][estado] ?? estado
+    }
+}
+
+/// Una ciudad que encontró la nube.
+struct Lugar: Identifiable, Equatable {
+    let nombre: String, region: String, pais: String, lat: Double, lon: Double, ciudad: String
+    var id: String { "\(lat),\(lon)" }
+    /// "Provincia · País" (sin repetir el nombre).
+    var detalle: String { [region, pais].filter { !$0.isEmpty && $0 != nombre }.joined(separator: " · ") }
+}
+
+/// El clima de ahora, como lo trae la nube.
+struct ClimaAhora: Equatable {
+    let temp: Double, codigo: Int, descripcion: String, max: Int, min: Int, dia: Bool
+}
+
+/// Lo de hoy, contado (GET /resumen). Lo que falte queda en nil.
+struct ResumenDia: Equatable {
+    var juegos = 0, ganados = 0, suenos = 0
+    var sonoCon: [String] = []
+    var animo: String?   // bien, medio, mal
+    var espero = ""
+
+    init(_ o: [String: Any]) {
+        juegos = (o["juegos"] as? NSNumber)?.intValue ?? 0
+        ganados = (o["ganados"] as? NSNumber)?.intValue ?? 0
+        suenos = (o["suenos"] as? NSNumber)?.intValue ?? 0
+        sonoCon = o["sonoCon"] as? [String] ?? []
+        if let n = (o["animo"] as? NSNumber)?.intValue {
+            animo = n >= 1 && n <= 3 ? ANIMOS[n - 1] : nil
+        } else if let t = o["animo"] as? String {
+            let k = t.folding(options: .diacriticInsensitive, locale: nil).lowercased()
+            if k.hasPrefix("bien") { animo = "bien" } else if k.hasPrefix("medio") || k.hasPrefix("mas") { animo = "medio" } else if k.hasPrefix("mal") { animo = "mal" }
+        }
+        if let n = (o["espero"] as? NSNumber)?.intValue { espero = n > 0 ? "\(n):00" : "" } else { espero = o["espero"] as? String ?? "" }
     }
 }
 
@@ -215,6 +252,29 @@ extension ApiSintetica {
     }
 
     func borrarSprite(_ id: String, _ n: Int) async throws { _ = try await pedirCrudo("/v1/bichos/\(id)/sprites/\(n)", "DELETE") }
+
+    func buscarLugar(_ q: String) async throws -> [Lugar] {
+        let t = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+        let l: [[String: Any]] = (try await pedir("/v1/clima/buscar?q=\(t)"))["lugares"] as? [[String: Any]] ?? []
+        return l.compactMap { o in
+            guard let lat = (o["lat"] as? NSNumber)?.doubleValue, let lon = (o["lon"] as? NSNumber)?.doubleValue else { return nil }
+            let n = o["nombre"] as? String ?? ""
+            return Lugar(nombre: n, region: o["region"] as? String ?? "", pais: o["pais"] as? String ?? "", lat: lat, lon: lon,
+                         ciudad: o["ciudad"] as? String ?? n)
+        }
+    }
+
+    func clima(_ id: String) async throws -> ClimaAhora? {
+        guard let c = (try await pedir("/v1/bichos/\(id)/clima"))["clima"] as? [String: Any] else { return nil }
+        let temp: Double = (c["temp"] as? NSNumber)?.doubleValue ?? 0
+        let codigo: Int = (c["codigo"] as? NSNumber)?.intValue ?? 0
+        let alto: Int = (c["max"] as? NSNumber)?.intValue ?? 0
+        let bajo: Int = (c["min"] as? NSNumber)?.intValue ?? 0
+        let desc: String = c["descripcion"] as? String ?? ""
+        return ClimaAhora(temp: temp, codigo: codigo, descripcion: desc, max: alto, min: bajo, dia: c["dia"] as? Bool ?? true)
+    }
+
+    func resumen(_ id: String) async throws -> ResumenDia { ResumenDia(try await pedir("/v1/bichos/\(id)/resumen")) }
 
     func borrarTokenIA(_ id: String) async throws { _ = try await pedirCrudo("/v1/mcp/tokens/\(id)", "DELETE") }
 }

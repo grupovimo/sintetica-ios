@@ -59,6 +59,7 @@ struct ModReflejos: View {
             .padding(.vertical, 14).padding(.horizontal, 6)
             .background(RoundedRectangle(cornerRadius: 22).fill(Color(hex: 0x1C1A17).shadow(.inner(color: .black.opacity(0.8), radius: 6, y: 3))))
             if sinMovimiento { Label("No siente el movimiento", systemImage: "move.3d").font(Tipos.chico).foregroundStyle(Color.tinta.opacity(0.8)) }
+            AvisosDelCelu(modelo: modelo)
         }
     }
 

@@ -13,7 +13,7 @@ final class ModeloRobot {
     enum Fase: Equatable { case conectando, lista, error(String, revincular: Bool) }
     enum Via: Equatable { case demo, ble, nube }
     enum Guardado: Equatable { case listo, guardando, guardado, error }
-    struct Aviso: Equatable { let texto: String; let icono: String; let cuando: Date }
+    struct Aviso: Equatable { let texto: String; let icono: String; let cuando: Date; var despertador = false }
     enum Fuente { case datos(Data), video(URL) }
 
     let id: String
@@ -254,12 +254,17 @@ final class ModeloRobot {
                 mostrarAviso(i < r.count ? r[i].texto : "Recordatorio", icono: "alarm.fill", segundos: 120)
             case .pomodoro:
                 mostrarAviso(estado?.expresion == "pomodoro:trabajo" ? "A trabajar" : "Tanda terminada", icono: "timer", segundos: 15)
+            case .despertador:
+                let t = config.despertador?.texto ?? ""
+                mostrarAviso(t.isEmpty ? "Suena el despertador" : t, icono: "alarm.fill", segundos: 120, despertador: true)
+            case .juego, .animo:
+                break
             }
         }
     }
 
-    func mostrarAviso(_ texto: String, icono: String, segundos: Double) {
-        let a = Aviso(texto: texto, icono: icono, cuando: Date())
+    func mostrarAviso(_ texto: String, icono: String, segundos: Double, despertador: Bool = false) {
+        let a = Aviso(texto: texto, icono: icono, cuando: Date(), despertador: despertador)
         aviso = a
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(segundos))
@@ -415,6 +420,50 @@ final class ModeloRobot {
         } catch {
             return error.localizedDescription
         }
+    }
+
+    /// Un comando del paquete de vida: por la nube con su ruta, cerca con sus bytes.
+    private func mandarVida(ruta: String, cuerpo: [String: Any], bytes: [UInt8]) async -> String? {
+        do {
+            switch via {
+            case .nube: _ = try await api.pedir("/v1/bichos/\(id)/\(ruta)", "POST", cuerpo)
+            case .ble, .demo:
+                guard let cliente else { return "Sin conexión." }
+                try await cliente.comandoCrudo(bytes)
+            }
+            return nil
+        } catch let e as ErrorApi {
+            if e.estado == 409 { return "Desconectado" }
+            if e.estado == 404 { return "Todavía no sabe" }
+            return e.detalle.isEmpty ? e.mensaje : e.detalle
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Lo dice en un globo en su pantalla (hasta 60 bytes).
+    func decir(_ texto: String, expresion: String = "") async -> String? {
+        let t = cortarBytes(texto.trimmingCharacters(in: .whitespacesAndNewlines), 60)
+        guard !t.isEmpty else { return nil }
+        var c: [String: Any] = ["texto": t]
+        if !expresion.isEmpty { c["expresion"] = expresion }
+        return await mandarVida(ruta: "decir", cuerpo: c, bytes: Comando.decir(t, expresion: expresion))
+    }
+
+    /// El despertador: apagar, posponer, probar o despertar.
+    func alarma(_ accion: String) async -> String? {
+        await mandarVida(ruta: "alarma", cuerpo: ["accion": accion], bytes: Comando.alarma(accion))
+    }
+
+    /// Empieza un juego en su pantalla.
+    func jugar(_ juego: String) async -> String? {
+        await mandarVida(ruta: "jugar", cuerpo: ["juego": juego], bytes: Comando.jugar(juego))
+    }
+
+    /// Una notificación o llamada del celu (para probar los avisos).
+    func avisoCelu(llamada: Bool, app: String, contacto: String) async -> String? {
+        await mandarVida(ruta: "aviso", cuerpo: ["tipo": llamada ? "llamada" : "notificacion", "app": app, "contacto": contacto],
+                   bytes: Comando.aviso(llamada: llamada, app: app, contacto: contacto))
     }
 
     /// Prueba un comportamiento en el robot.

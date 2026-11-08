@@ -22,6 +22,7 @@ struct ModAjustes: View {
                 if n != modelo.nombre { Task { error = await modelo.ponerApodo(n) ?? "" } }
             }
             .onChange(of: nombre) { _, v in let x = cortarBytes(v, 24); if x != v { nombre = x } }
+            BloqueUbicacion(modelo: modelo)
             Bandeja {
                 Perilla(nombre: "Brillo", valor: c.brilloMax, min: 0.2, max: 1, mostrar: { "\(Int(($0 * 100).rounded()))%" }, tamano: 64) { v in
                     modelo.cambiar { $0.ponerBrillo(v) }

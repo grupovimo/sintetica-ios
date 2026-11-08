@@ -197,6 +197,17 @@ ResultadoConfig leerPaso(const Json& j, int obj, const Config& c, Paso* p) {
   }
   if ((r = leerTextoEn(j, obj, "sonido", p->sonido, sizeof p->sonido)) < 0) return falla("paso: sonido de hasta 8 letras");
   char e[32];
+  if ((r = leerTextoEn(j, obj, "decir", e, sizeof e)) != 0) {
+    Situacion s;
+    if (r < 0 || !situacionPorNombre(e, largo(e), &s)) return falla("paso: decir es una situación de frases.json");
+    p->decir = static_cast<int8_t>(s);
+  }
+  if ((r = leerTextoEn(j, obj, "dentro", e, sizeof e)) != 0) {
+    TipoParticula tp;
+    if (r > 0 && iguales(e, "sueno")) p->dentro = DENTRO_SUENO;
+    else if (r < 0 || !particulaPorNombre(e, &tp)) return falla("paso: dentro es una partícula o \"sueno\"");
+    else p->dentro = static_cast<int8_t>(tp);
+  }
   if ((r = leerTextoEn(j, obj, "estado", e, sizeof e)) != 0) {
     float delta = 0;
     if (r < 0 || !leerEmpujon(e, &p->estadoVar, &delta)) return falla("paso: estado es \"animo+0.1\"");

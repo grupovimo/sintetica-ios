@@ -1,6 +1,7 @@
 #include "sistema.h"
 
 #include "emparejamiento.h"
+#include "globo.h"
 #include "fuentes.h"
 #include "texto.h"
 
@@ -91,6 +92,19 @@ void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
   caraHasta_ = 0;
   reiniciarPomodoro();
   faseProtector_ = 0;
+  globo_ = hayPendiente_ = false;
+  globoTexto_[0] = 0;
+  hablador_ = Hablador();
+  alarma_ = alarmaApretado_ = tragarAlarma_ = false;
+  pospuestaHasta_ = 0;
+  alarmaMinuto_ = -1;
+  alarmaDia_ = 0;
+  clima_ = DatosClima();
+  proximaCaraClima_ = 0;
+  proximaAgua_ = 0;
+  pausaDicha_ = preguntando_ = pregApretado_ = tragarPregunta_ = false;
+  animoDia_ = 0;
+  juego_ = Juego::Ninguno;
 
   canal_ = Canal::Ble;
   wifi_ = nube_ = false;
@@ -112,6 +126,9 @@ void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
     if (s->hal_.led) s->hal_.led(rgb);
   };
   sv.animacion = [](void* c, int i) { static_cast<Sistema*>(c)->reproducir(i, true); };
+  sv.decir = [](void* c, uint8_t s) {
+    if (s < N_SITUACIONES) static_cast<Sistema*>(c)->hablar(static_cast<Situacion>(s));
+  };
   sv.guardar = [](void* c, const uint8_t* d, size_t n) {
     auto* s = static_cast<Sistema*>(c);
     if (s->hal_.guardar) s->hal_.guardar(CLAVE_VIDA, d, n);
@@ -266,6 +283,14 @@ void Sistema::leerMemoria() {
 
 void Sistema::evento(Evento e) {
   actividad();  // cualquier evento saca el protector de pantalla
+  // Levantarlo apaga el despertador.
+  if (alarma_ && (e == Evento::Levantado || e == Evento::SacudidaFuerte)) apagarAlarma();
+  // Sacudirlo tira el dado o la moneda.
+  if ((juego_ == Juego::Dado || juego_ == Juego::Moneda) && juegoFase_ == 0 &&
+      (e == Evento::Sacudida || e == Evento::SacudidaSuave || e == Evento::SacudidaFuerte || e == Evento::Levantado)) {
+    juegoFase_ = 1;
+    juegoDesde_ = juegoProximo_ = juegoAccion_ = hal_.ahoraMs();
+  }
   motor_.evento(e, hal_.ahoraMs());
 }
 
@@ -555,7 +580,8 @@ int Sistema::imagenParaMostrar(uint32_t ahora) {
   // El protector de pantalla (mientras entra, está o sale).
   if (faseProtector_ > 0 && !apagado_ && !emparejando_) return config_.protector.imagen;
   if (apagado_ || emparejando_ || motor_.hayFija() || animPedida_ >= 0 || largoLista() == 0 ||
-      panel_ != Panel::Ninguno || recVisible_ >= 0 || config_.modo == Modo::Reloj || config_.modo == Modo::Pomodoro)
+      panel_ != Panel::Ninguno || recVisible_ >= 0 || config_.modo == Modo::Reloj || config_.modo == Modo::Pomodoro ||
+      config_.modo == Modo::Clima || alarma_ || globo_)
     return -1;
   const ElementoLista e = elementoLista(posLista_);
   if (e.tipo != ElementoLista::Tipo::Imagen || imagenes_[e.indice].largo == 0 || subiendo_ == e.indice) return -1;
@@ -756,9 +782,54 @@ void Sistema::dormir() {
 void Sistema::tacto(bool apretado) {
   const uint32_t ahora = hal_.ahoraMs();
   actividad();
+  // Sonando el despertador: un toque lo pospone; mantenerlo apretado, lo apaga
+  // (en tick, a los 1,5 s). Ni el toque ni el soltar hacen nada más.
+  if (alarma_) {
+    if (apretado) {
+      alarmaApretado_ = true;
+      alarmaToque_ = ahora;
+    } else if (alarmaApretado_) {
+      alarmaApretado_ = false;
+      if (ahora - alarmaToque_ < tiemposPanel::ALARMA_APAGAR_MS) posponerAlarma();
+      else apagarAlarma();
+    }
+    return;
+  }
+  if (tragarAlarma_) {
+    if (!apretado) tragarAlarma_ = false;
+    return;
+  }
+  // Jugando, los toques son del juego.
+  if (juego_ != Juego::Ninguno) {
+    tactoJuego(apretado, ahora);
+    return;
+  }
+  // Esperando el "¿cómo estás?": toque = bien, doble = más o menos, mantener = mal.
+  if (preguntando_) {
+    if (apretado) {
+      pregApretado_ = true;
+      pregToque_ = ahora;
+      pregToques_++;
+    } else if (pregApretado_) {
+      pregApretado_ = false;
+      if (ahora - pregToque_ >= 800) responderAnimo(2);  // mantener: mal
+      else if (pregToques_ >= 2) responderAnimo(1);
+      else pregToque_ = ahora;  // espera el segundo toque (Sistema::cuidar)
+    }
+    return;
+  }
   // Un toque cierra el recordatorio, y ese toque no hace nada más.
   if (apretado && recVisible_ >= 0) {
     cerrarRecordatorio();
+    motor_.interaccion(ahora);
+    tragarSoltar_ = true;
+    hablar(Situacion::RecordatorioHecho);
+    return;
+  }
+  // Un toque cierra el globo (y tampoco hace nada más).
+  if (apretado && globo_) {
+    globoHasta_ = ahora;
+    hayPendiente_ = false;
     motor_.interaccion(ahora);
     tragarSoltar_ = true;
     return;
@@ -768,7 +839,8 @@ void Sistema::tacto(bool apretado) {
     return;
   }
   // En modo reloj, tocarlo muestra la cara un rato.
-  if (apretado && config_.modo == Modo::Reloj) caraHasta_ = ahora + tiemposPanel::CARA_EN_RELOJ_MS;
+  if (apretado && (config_.modo == Modo::Reloj || config_.modo == Modo::Clima))
+    caraHasta_ = ahora + tiemposPanel::CARA_EN_RELOJ_MS;
   if (perfil_.boton == Perfil::Boton::Mascota) {
     gestos_.tacto(apretado, ahora);
     return;
@@ -894,6 +966,15 @@ void Sistema::tick() {
   if (gestos_.inclinacion(&gx, &gy)) motor_.seguir(-gx / 0.7f, -gy / 0.7f, ahora);
   vigilar(ahora);
   revisarRecordatorios(ahora);
+  revisarDespertador(ahora);
+  avanzarAlarma(ahora);
+  cuidar(ahora);
+  avanzarJuego(ahora);
+  // Mantenerlo apretado mientras pregunta "¿cómo estás?" ya es "mal".
+  if (preguntando_ && pregApretado_ && ahora - pregToque_ >= 800) {
+    pregApretado_ = false;
+    responderAnimo(2);
+  }
   avanzarPomodoro(ahora, dtCuadro);
   motor_.tick(ahora, contexto());
   avanzarSprites(dtCuadro);
@@ -902,11 +983,11 @@ void Sistema::tick() {
   // El broche, de noche y ya dormido, apaga la pantalla hasta la mañana (no
   // con un recordatorio en pantalla ni un pomodoro andando).
   if (perfil_.boton == Perfil::Boton::Broche && !apagado_ && !vistaPrevia_ && motor_.quiereSuenoProfundo() &&
-      recVisible_ < 0 && !pomoCorriendo_)
+      recVisible_ < 0 && !pomoCorriendo_ && !alarma_)
     dormir();
 
   // Manteniendo el botón del broche para dormirlo: se le cierran los ojos.
-  if (perfil_.boton == Perfil::Boton::Broche && botonApretado_ && !ignorarSoltar_ &&
+  if (perfil_.boton == Perfil::Boton::Broche && botonApretado_ && !ignorarSoltar_ && !alarma_ &&
       ahora - botonDesde_ >= tiemposBroche::DORMIR_MS && !qrPorBoton_)
     motor_.reaccionar(config_.resolverCara("dormido"), ahora, 150);
   // Mantener el botón (5 s la mascota, 8 s el broche) muestra el QR para vincular otro celu.
@@ -1047,8 +1128,9 @@ void Sistema::sonar(const char* nombre) {
 
 // Un evento que genera el sistema (recordatorio, pomodoro): además del
 // registro, se avisa ya, como una respuesta de Registro, por BLE y por la
-// nube: [evento] o, un recordatorio, [evento 31][tipo 4 con su índice].
-void Sistema::notificarEvento(Evento e, int recordatorio) {
+// nube: [evento] o, con un tipo (un recordatorio, un juego, el ánimo),
+// [evento][tipo con su dato].
+void Sistema::notificarEvento(Evento e, int tipo, uint8_t dato) {
   using namespace protocolo;
   EntradaRegistro r[1];
   const uint32_t seg = motor_.registro(r, 1) == 1 ? r[0].segundos : 0;
@@ -1056,15 +1138,15 @@ void Sistema::notificarEvento(Evento e, int recordatorio) {
   size_t n = 3;
   b[0] = static_cast<uint8_t>(CmdRegistro | Respuesta);
   b[1] = Ok;
-  b[2] = recordatorio >= 0 ? 2 : 1;
+  b[2] = tipo >= 0 ? 2 : 1;
   escribir32(b + n, seg);
   b[n + 4] = 0;
   b[n + 5] = static_cast<uint8_t>(e);
   n += 6;
-  if (recordatorio >= 0) {
+  if (tipo >= 0) {
     escribir32(b + n, seg);
-    b[n + 4] = 4;
-    b[n + 5] = static_cast<uint8_t>(recordatorio);
+    b[n + 4] = static_cast<uint8_t>(tipo);
+    b[n + 5] = dato;
     n += 6;
   }
   if (hal_.notificar) hal_.notificar(CarComando, b, n);
@@ -1085,7 +1167,172 @@ int Sistema::segundosHastaDespertar() const {
     const int x = maxi(1, d * 60 - seg);
     if (s < 0 || x < s) s = x;
   }
+  // El despertador (y uno pospuesto) también lo despiertan.
+  if (config_.despertador.hay && config_.despertador.activo) {
+    int d = minutosEntre(m, config_.despertador.minuto);
+    if (d == 0) d = 1440;
+    const int x = maxi(1, d * 60 - seg);
+    if (s < 0 || x < s) s = x;
+  }
+  if (pospuestaHasta_) {
+    const int x = maxi(1, static_cast<int>((pospuestaHasta_ - hal_.ahoraMs()) / 1000u));
+    if (s < 0 || x < s) s = x;
+  }
   return s;
+}
+
+// ---------------------------------------------------------------- lo que dice, el despertador y el clima
+
+void Sistema::decir(const char* texto, Config::Cara cara, bool hablando) {
+  copiarTexto(globoPendiente_, sizeof globoPendiente_, texto);
+  caraPendiente_ = cara;
+  pendienteHablando_ = hablando;
+  hayPendiente_ = true;
+  // Si ya hay uno, primero se va (con su fundido) y después entra este.
+  if (globo_) globoHasta_ = hal_.ahoraMs();
+  actividad();
+}
+
+void Sistema::mostrarGlobo(uint32_t ahora) {
+  hayPendiente_ = false;
+  copiarTexto(globoTexto_, sizeof globoTexto_, globoPendiente_);
+  globo_ = true;
+  const uint32_t dura = duracionGlobo(globoTexto_);
+  globoHasta_ = ahora + dura + tiemposPanel::FUNDIDO_MS;
+  if (motor_.dormido()) motor_.despertar(ahora, false);
+  if (caraPendiente_.existe()) {
+    motor_.reaccionar(caraPendiente_, ahora, dura);
+  } else if (pendienteHablando_) {
+    const Config::Cara h = config_.resolverCara("hablando");
+    if (h.existe()) motor_.reaccionar(h, ahora, dura < 2500 ? dura : 2500);
+  }
+  actividad();
+}
+
+void Sistema::hablar(Situacion s) {
+  if (apagado_ || emparejando_) return;
+  const bool siempre = situacionSiempre(s);
+  // Las espontáneas no esperan: si ya está mostrando algo, no dice nada.
+  if (!siempre && (globo_ || hayPendiente_ || recVisible_ >= 0 || alarma_ || juego_ != Juego::Ninguno)) return;
+  // El buen día con el tiempo: si llueve o hace frío, mejor el consejo.
+  char c[40] = {};
+  if (climaVigente()) {
+    textoClima(clima_, c, sizeof c);
+    const Situacion sc = situacionClima(clima_);
+    if (s == Situacion::BuenDia && (sc == Situacion::ClimaLluvia || sc == Situacion::ClimaFrio)) s = sc;
+  }
+  const uint32_t e = epoch();
+  if (!hablador_.quiere(s, hal_.ahoraMs() / 1000u, e ? e / 86400u : 0, config_.habla.frecuencia, azar_)) return;
+  char t[LARGO_FRASE];
+  if (!elegirFrase(config_.habla, s, presetCercano(motor_.rasgos()), config_.vida.dueno, nombre(), azar_, t, sizeof t, c))
+    return;
+  decir(t);
+}
+
+void Sistema::revisarDespertador(uint32_t ahora) {
+  if (pospuestaHasta_ && !alarma_ && static_cast<int32_t>(ahora - pospuestaHasta_) >= 0) {
+    pospuestaHasta_ = 0;
+    sonarAlarma(false);
+    return;
+  }
+  const Despertador& d = config_.despertador;
+  if (vistaPrevia_ || !d.hay || !d.activo || alarma_) return;
+  const int m = minutoDelDia();
+  if (m < 0 || m == alarmaMinuto_) return;
+  alarmaMinuto_ = static_cast<int16_t>(m);
+  // Hasta un minuto tarde (el broche se despierta del sueño profundo justo a la hora).
+  const int tarde = minutosEntre(d.minuto, m);
+  if (tarde > 1) return;
+  const uint32_t e = epoch();
+  if (e) {
+    const uint32_t dia = (e - static_cast<uint32_t>(tarde) * 60u) / 86400u;
+    const int semana = static_cast<int>((dia + 3) % 7);  // 0 = lunes
+    if (!(d.dias & (1u << semana))) return;
+    const uint16_t clave = static_cast<uint16_t>(dia + 1);
+    if (alarmaDia_ == clave) return;
+    alarmaDia_ = clave;
+  } else if (d.dias != 0x7F || tarde != 0) {
+    return;
+  }
+  sonarAlarma(true);
+}
+
+void Sistema::sonarAlarma(bool porHora) {
+  const uint32_t ahora = hal_.ahoraMs();
+  alarma_ = true;
+  alarmaDesde_ = alarmaTono_ = ahora;
+  alarmaApretado_ = false;
+  pospuestaHasta_ = 0;
+  globo_ = hayPendiente_ = false;
+  // La cara de despertar (si dormía, la rutina "despertar", sin mal humor).
+  if (motor_.dormido()) {
+    motor_.despertar(ahora, false);
+  } else {
+    const int i = config_.vida.indiceComportamiento("despertar");
+    if (i >= 0) motor_.comportamiento(i, ahora);
+  }
+  char t[LARGO_FRASE];
+  if (config_.despertador.texto[0]) completarFrase(config_.despertador.texto, config_.vida.dueno, nombre(), t, sizeof t);
+  else if (!elegirFrase(config_.habla, Situacion::Despertador, presetCercano(motor_.rasgos()), config_.vida.dueno, nombre(),
+                        azar_, t, sizeof t))
+    copiarTexto(t, sizeof t, "\xC2\xA1" "Buen d\xC3\xAD" "a!");
+  size_t n = copiarTexto(globoTexto_, sizeof globoTexto_, t);
+  // Y el clima, si hay (y entra).
+  if (climaVigente()) {
+    char c[40];
+    const size_t k = textoClima(clima_, c, sizeof c);
+    if (n + 1 + k < sizeof globoTexto_) {
+      globoTexto_[n++] = ' ';
+      copiarTexto(globoTexto_ + n, sizeof globoTexto_ - n, c);
+    }
+  }
+  if (porHora) {
+    evento(Evento::Despertador);
+    notificarEvento(Evento::Despertador);
+  }
+  actividad();
+  log("despertador");
+}
+
+void Sistema::avanzarAlarma(uint32_t ahora) {
+  if (!alarma_) return;
+  if (alarmaApretado_ && ahora - alarmaToque_ >= tiemposPanel::ALARMA_APAGAR_MS) {
+    // Mantenerlo apretado lo apaga (y el soltar no hace nada más).
+    alarmaApretado_ = false;
+    tragarAlarma_ = true;
+    apagarAlarma();
+    return;
+  }
+  if (ahora - alarmaDesde_ >= tiemposPanel::ALARMA_MAX_MS) {
+    apagarAlarma();
+    return;
+  }
+  if (config_.despertador.sonido && static_cast<int32_t>(ahora - alarmaTono_) >= 0) {
+    // Cada vez más fuerte: despertador:1 … despertador:5 (el perfil elige el volumen).
+    const int nivel = mini(5, 1 + static_cast<int>((ahora - alarmaDesde_) / tiemposPanel::ALARMA_SUBE_MS));
+    char s[16] = "despertador:1";
+    s[12] = static_cast<char>('0' + nivel);
+    sonar(s);
+    alarmaTono_ = ahora + tiemposPanel::ALARMA_TONO_MS;
+  }
+}
+
+void Sistema::posponerAlarma() {
+  if (!alarma_) return;
+  const uint32_t ahora = hal_.ahoraMs();
+  alarma_ = false;
+  pospuestaHasta_ = ahora + config_.despertador.posponer * 60000u;
+  motor_.interaccion(ahora);
+  hablar(Situacion::Posponer);
+}
+
+void Sistema::apagarAlarma() {
+  if (!alarma_ && !pospuestaHasta_) return;
+  const uint32_t ahora = hal_.ahoraMs();
+  alarma_ = false;
+  pospuestaHasta_ = 0;
+  motor_.interaccion(ahora);
+  motor_.reaccionar(config_.resolverCara("contento"), ahora);
 }
 
 void Sistema::revisarRecordatorios(uint32_t ahora) {
@@ -1134,7 +1381,7 @@ void Sistema::mostrarRecordatorio(int i, uint32_t ahora) {
   if (r.sonido) sonar("recordatorio");
   evento(Evento::Recordatorio);
   motor_.anotarRegistro(4, static_cast<uint8_t>(i));
-  notificarEvento(Evento::Recordatorio, i);
+  notificarEvento(Evento::Recordatorio, 4, static_cast<uint8_t>(i));
   log("recordatorio");
 }
 
@@ -1183,10 +1430,25 @@ void Sistema::avanzarPanel(uint32_t ahora, uint32_t dt) {
     recPendientes_ = static_cast<uint16_t>(recPendientes_ & ~(1u << i));
     if (i < config_.nRecordatorios) mostrarRecordatorio(i, ahora);
   }
+  // El globo se va solo a su tiempo; el que espera entra cuando el anterior ya salió.
+  if (globo_ && static_cast<int32_t>(ahora - globoHasta_) >= 0) globo_ = false;
+  if (!globo_ && hayPendiente_ && recVisible_ < 0 && !alarma_ &&
+      (panel_ != Panel::Globo || fasePanel_ <= 0))
+    mostrarGlobo(ahora);
+  const bool caraPorToque = static_cast<int32_t>(ahora - caraHasta_) < 0;
   Panel deseado = Panel::Ninguno;
   if (recVisible_ >= 0) deseado = Panel::Recordatorio;
-  else if (config_.modo == Modo::Reloj && static_cast<int32_t>(ahora - caraHasta_) >= 0) deseado = Panel::Reloj;
+  else if (alarma_) deseado = Panel::Despertador;
+  else if (juego_ != Juego::Ninguno) deseado = Panel::Juego;
+  else if (globo_) deseado = Panel::Globo;
+  else if (config_.modo == Modo::Reloj && !caraPorToque) deseado = Panel::Reloj;
   else if (config_.modo == Modo::Pomodoro) deseado = Panel::Pomodoro;
+  else if (config_.modo == Modo::Clima && !caraPorToque) deseado = Panel::Clima;
+  // En modo clima, la cara reacciona al tiempo cada tanto.
+  if (panel_ == Panel::Clima && deseado == Panel::Clima && climaVigente() && static_cast<int32_t>(ahora - proximaCaraClima_) >= 0) {
+    proximaCaraClima_ = ahora + tiemposPanel::CARA_CLIMA_MS;
+    if (const char* cara = caraClima(clima_)) motor_.reaccionar(config_.resolverCara(cara), ahora, 6000);
+  }
   // Nunca un corte: si cambia lo que se muestra, primero se va lo que había.
   const float paso = static_cast<float>(dt < 200 ? dt : 200) / tiemposPanel::FUNDIDO_MS;
   if (deseado != panel_) {
@@ -1211,7 +1473,8 @@ void Sistema::avanzarProtector(uint32_t ahora, uint32_t dt) {
     faseProtector_ = 0;  // sin imagen (o se está subiendo otra): no hay protector
     return;
   }
-  const bool quiere = !apagado_ && !emparejando_ && !motor_.dormido() && recVisible_ < 0 && animPedida_ < 0 &&
+  const bool quiere = !apagado_ && !emparejando_ && !motor_.dormido() && recVisible_ < 0 && animPedida_ < 0 && !alarma_ &&
+                      !globo_ &&
                       ahora - ultimaActividad_ >= config_.protector.espera * 1000u;
   const float paso = static_cast<float>(dt < 200 ? dt : 200) / tiemposPanel::FUNDIDO_MS;
   const float antes = faseProtector_;
@@ -1316,8 +1579,61 @@ void Sistema::dibujarPanel() {
     const char* etiqueta = !pomoCorriendo_ ? "PAUSA" : (pomoDescanso_ ? "DESCANSO" : "TRABAJO");
     dibujarTexto(lienzo_, fuentes::MONO_9, etiqueta, cx - anchoTexto(fuentes::MONO_9, etiqueta) / 2, by + 18,
                  paleta::TINTA_SUAVE);
+  } else if (panel_ == Panel::Globo || panel_ == Panel::Despertador) {
+    // Lo que dice, en un globo claro que sale de la boca.
+    const float cy = H * (redonda ? 0.68f : 0.71f);
+    const float anchoMax = redonda ? W * 0.84f : W - 28;
+    const float boca = v.origenY + v.unidad * 0.32f;
+    dibujarGlobo(lienzo_, textoGlobo(), cx, cy, anchoMax, redonda ? 3 : 2, redonda, W, H, cx, boca, f);
+    if (panel_ == Panel::Despertador) {
+      // Cuánto suena: unos puntitos que laten, cada vez más.
+      const int nivel = alarma_ ? mini(5, 1 + static_cast<int>((hal_.ahoraMs() - alarmaDesde_) / tiemposPanel::ALARMA_SUBE_MS)) : 1;
+      const float late = 0.55f + 0.45f * seno(hal_.ahoraMs() / 1000.0f * 6.0f);
+      const float y = H * (redonda ? 0.86f : 0.95f);
+      for (int i = 0; i < 5; i++) {
+        lienzo_.opacidad(f * (i < nivel ? late : 0.25f));
+        lienzo_.pildora(cx + (i - 2) * 12.0f, y, 6, 6, 3, paleta::NARANJA);
+      }
+      lienzo_.opacidad(f);
+    }
+  } else if (panel_ == Panel::Clima) {
+    dibujarClima(cx, W, H, f);
+  } else if (panel_ == Panel::Juego) {
+    dibujarJuego(cx, W, H, f);
   }
   lienzo_.opacidad(1);
+}
+
+// El modo clima: el ícono, la temperatura grande y la máxima y la mínima.
+void Sistema::dibujarClima(float cx, float W, float H, float alfa) {
+  const bool redonda = perfil_.redonda;
+  const bool hay = climaVigente();
+  const float t = hal_.ahoraMs() / 1000.0f;
+  const float tam = redonda ? H * 0.22f : H * 0.36f;
+  const float iy = H * (redonda ? 0.64f : 0.70f);
+  const float ix = redonda ? W * 0.36f : W * 0.31f;
+  dibujarIconoClima(lienzo_, hay ? cieloDe(clima_.codigo) : Cielo::Nublado, !hay || clima_.dia, ix, iy, tam, t,
+                    alfa * (hay ? 1 : 0.35f));
+  lienzo_.opacidad(alfa);
+  char g[12] = "--\xC2\xB0";
+  if (hay) textoTemperatura(clima_.temperatura(), g, sizeof g);
+  const Fuente& fu = fuentes::VOZ_20;
+  const float esc = redonda ? 1.9f : 2.3f;
+  const float alto = fu.ascenso * 0.72f * esc;
+  const float x = redonda ? W * 0.5f : W * 0.49f;
+  const float base = iy + alto / 2 - (hay ? 6 : 0);
+  dibujarTextoEscalado(lienzo_, fu, g, x, base, esc, paleta::TINTA);
+  if (!hay) return;
+  char m[40], a[12], b[12];
+  textoTemperatura(clima_.maxima, a, sizeof a);
+  textoTemperatura(clima_.minima, b, sizeof b);
+  size_t n = copiarTexto(m, sizeof m, "M\xC3\x81X ");
+  n += copiarTexto(m + n, sizeof m - n, a);
+  n += copiarTexto(m + n, sizeof m - n, " \xC2\xB7 M\xC3\x8DN ");
+  copiarTexto(m + n, sizeof m - n, b);
+  const Fuente& mo = fuentes::MONO_9;
+  const float mx = redonda ? cx - anchoTexto(mo, m) / 2 : x;
+  dibujarTexto(lienzo_, mo, m, mx, redonda ? H * 0.80f : base + 15, paleta::TINTA_SUAVE);
 }
 
 size_t Sistema::estadoBle(uint8_t* salida, size_t cap) const {
@@ -1333,6 +1649,10 @@ size_t Sistema::estadoBle(uint8_t* salida, size_t cap) const {
   // Un recordatorio en pantalla es "recordatorio:<n>"; el pomodoro,
   // "pomodoro:trabajo", "pomodoro:descanso" o "pomodoro:pausa".
   if (recVisible_ >= 0) p.expresion = recNombre_;
+  else if (alarma_) p.expresion = "despertador";
+  else if (juego_ != Juego::Ninguno) p.expresion = visibleJuego_;
+  else if (globo_) p.expresion = "globo";
+  else if (config_.modo == Modo::Clima && panel_ == Panel::Clima) p.expresion = "clima";
   else if (config_.modo == Modo::Pomodoro) p.expresion = nombrePomodoro();
   else p.expresion = animVisible_ >= 0 ? visible_ : motor_.nombreVisible();
   p.nombre = nombre();
@@ -1816,6 +2136,8 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
         recVisible_ = -1;
         recPendientes_ = 0;
         recMinuto_ = -1;
+        alarmaMinuto_ = -1;
+        proximaAgua_ = 0;
         if (config_.modo != modoAntes || config_.pomodoro.trabajo != tramosAntes.trabajo ||
             config_.pomodoro.descanso != tramosAntes.descanso)
           reiniciarPomodoro();
@@ -1911,6 +2233,112 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
         if (i < 0) return responder(car, op, NoExiste);
         if (motor_.dormido()) motor_.despertar(ahora, true);
         return responder(car, op, motor_.comportamiento(i, ahora) ? Ok : Ocupado);
+      }
+      case CmdDecir: {
+        // [n][expresión][texto]
+        if (n < 3 || 2u + d[1] >= n) return responder(car, op, Malformado, "[n][expresión][texto de 1 a 60 bytes]");
+        const size_t ne = d[1], nt = n - 2 - ne;
+        if (nt < 1 || nt >= static_cast<size_t>(LARGO_FRASE) || !textoUtf8Valido(reinterpret_cast<const char*>(d + 2 + ne), nt))
+          return responder(car, op, Malformado, "texto de 1 a 60 bytes UTF-8");
+        Config::Cara cara;
+        if (ne) {
+          char e[LARGO_NOMBRE];
+          if (ne >= LARGO_NOMBRE) return responder(car, op, NoExiste);
+          copiarTexto(e, sizeof e, reinterpret_cast<const char*>(d + 2), ne);
+          cara = config_.resolverCara(e);
+          if (!cara.existe()) return responder(car, op, NoExiste);
+        }
+        char t[LARGO_FRASE];
+        copiarTexto(t, sizeof t, reinterpret_cast<const char*>(d + 2 + ne), nt);
+        decir(t, cara, !cara.existe());
+        return responder(car, op, Ok);
+      }
+      case CmdClima: {
+        DatosClima c;
+        if (!leerClima(d + 1, n - 1, &c)) return responder(car, op, Malformado, "[i16 décimas][u8 código][i8 máx][i8 mín][u8 flags][n][ciudad]");
+        c.recibido = ahora;
+        clima_ = c;
+        if (config_.modo == Modo::Clima) {
+          // La cara reacciona ya (y después cada tanto) y, quizás, lo comenta.
+          if (const char* cara = caraClima(clima_)) motor_.reaccionar(config_.resolverCara(cara), ahora, 6000);
+          proximaCaraClima_ = ahora + tiemposPanel::CARA_CLIMA_MS;
+          const Situacion s = situacionClima(clima_);
+          if (s != Situacion::Cantidad) hablar(s);
+        }
+        return responder(car, op, Ok);
+      }
+      case CmdAlarma: {
+        if (n != 2 || d[1] > 3) return responder(car, op, Malformado, "0 apagar, 1 posponer, 2 sonar, 3 despertar");
+        switch (d[1]) {
+          case 0:
+            if (!alarma_ && !pospuestaHasta_) return responder(car, op, NoExiste, "no está sonando");
+            apagarAlarma();
+            break;
+          case 1:
+            if (!alarma_) return responder(car, op, NoExiste, "no está sonando");
+            posponerAlarma();
+            break;
+          case 2: sonarAlarma(false); break;
+          default:
+            if (motor_.dormido()) motor_.despertar(ahora, false);
+            hablar(Situacion::Despertar);
+            break;
+        }
+        return responder(car, op, Ok);
+      }
+      case CmdJugar: {
+        if (n != 2 || (d[1] > 4 && d[1] != 255)) return responder(car, op, n != 2 ? Malformado : NoExiste);
+        jugar(static_cast<Juego>(d[1]));
+        if (d[1] != 255) {
+          const size_t k = copiarTexto(visibleJuego_, sizeof visibleJuego_, "juego:");
+          copiarTexto(visibleJuego_ + k, sizeof visibleJuego_ - k, nombreJuego(d[1]));
+        }
+        return responder(car, op, Ok);
+      }
+      case CmdAviso: {
+        // [tipo][n][app][n][contacto]
+        char app[LARGO_APP] = {}, contacto[LARGO_APP] = {};
+        size_t i = 2;
+        if (n < 2 || d[1] > 1) return responder(car, op, Malformado, "[u8 tipo][n][app][n][contacto]");
+        if (i < n) {
+          const size_t k = leerTextoCorto(d + i, n - i, app, sizeof app);
+          if (!k) return responder(car, op, Malformado, "app de hasta 24 bytes");
+          i += k;
+        }
+        if (i < n) {
+          const size_t k = leerTextoCorto(d + i, n - i, contacto, sizeof contacto);
+          if (!k) return responder(car, op, Malformado, "contacto de hasta 24 bytes");
+          i += k;
+        }
+        const bool llamada = d[1] == 1;
+        evento(llamada ? Evento::Llamada : Evento::Notificacion);
+        const int a = buscarAviso(config_.avisos, llamada, app, contacto);
+        if (a >= 0) {
+          const Aviso& x = config_.avisos.lista[a];
+          Config::Cara c;
+          c.vida = x.caraVida, c.dibujo = x.caraDibujo;
+          if (x.comportamiento >= 0) motor_.comportamiento(x.comportamiento, ahora);
+          if (c.existe()) motor_.reaccionar(c, ahora, 4000);
+          if (x.sonido) sonar(llamada ? "llamada" : "notificacion");
+          if (x.decir[0]) {
+            char t[LARGO_FRASE];
+            completarFrase(x.decir, config_.vida.dueno, nombre(), t, sizeof t, nullptr, app, contacto);
+            decir(t, c);
+          }
+        }
+        return responder(car, op, Ok);
+      }
+      case CmdAnimo: {
+        if (n != 2 || d[1] > 2) return responder(car, op, Malformado, "0 bien, 1 más o menos, 2 mal");
+        responderAnimo(d[1]);
+        return responder(car, op, Ok);
+      }
+      case CmdMirar: {
+        if (n != 3) return responder(car, op, Malformado, "[i8 x][i8 y]");
+        const float x = limitar(static_cast<int8_t>(d[1]) / 100.0f, -1, 1), y = limitar(static_cast<int8_t>(d[2]) / 100.0f, -1, 1);
+        motor_.estimulo(x, y);
+        motor_.seguir(x, y, ahora);
+        return responder(car, op, Ok);
       }
       case CmdReproducir: {
         if (n == 1) {

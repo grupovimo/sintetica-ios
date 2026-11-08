@@ -35,6 +35,7 @@
   { "si": "cambio-de-cara", "entonces": ["comportamiento:espejo", "estado.curiosidad+0.1"] },
   { "si": "bicho-cerca", "entonces": ["comportamiento:otro-bicho", "estado.curiosidad+0.2", "estado.animo+0.05"] },
   { "si": "volvio", "y": "ausencia>72", "entonces": ["comportamiento:volver-ofendido"] },
+  { "si": "volvio", "y": "ausencia>24", "entonces": ["reflejo:sorpresa", "comportamiento:festejar", "decir:te-extrane", "estado.animo+0.25", "estado.afecto+0.05"] },
   { "si": "volvio", "y": "afecto>0.6", "entonces": ["comportamiento:saludar-con-amor", "estado.animo+0.15"] },
   { "si": "volvio", "entonces": ["comportamiento:saludar-al-volver", "estado.animo+0.1"] },
   { "si": "hito", "entonces": ["comportamiento:festejar", "estado.animo+0.2"] },

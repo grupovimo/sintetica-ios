@@ -16,6 +16,7 @@ constexpr int MAX_COMPORTAMIENTOS = 64;
 constexpr int MAX_PASOS = 6;
 constexpr int MAX_CUANDO = 3;
 constexpr int LARGO_VIDA = 25;  // nombres: 24 bytes + terminador
+constexpr int8_t DENTRO_SUENO = 100;  // "dentro": "sueno": un corazón, una estrella, una nota o una oveja
 
 // Caras de imagen (docs/motor-de-vida.md, "Caras de imagen"): una expresión
 // v2 que arma los ojos y la boca con sprites (QOI con transparencia, hasta
@@ -138,6 +139,8 @@ struct Paso {
   char sonido[9] = {};
   int8_t estadoVar = -1;          // empujón al estado al empezar
   int8_t estadoCent = 0;          // en centésimos
+  int8_t decir = -1;              // al empezar, pide una frase de esa Situacion (habla.h)
+  int8_t dentro = -1;             // con "particula": "burbuja", lo que se sueña adentro (DENTRO_SUENO = al azar)
   float peso() const { return pesoQ / 255.0f; }
   float estadoDelta() const { return estadoCent / 100.0f; }
 };

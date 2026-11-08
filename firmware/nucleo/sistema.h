@@ -4,6 +4,8 @@
 #pragma once
 
 #include "cara.h"
+#include "clima.h"
+#include "globo.h"
 #include "formato.h"
 #include "gestos.h"
 #include "hal.h"
@@ -41,6 +43,11 @@ namespace tiemposPanel {
 constexpr uint32_t FUNDIDO_MS = 400;              // entrar y salir del panel (nunca un corte)
 constexpr uint32_t RECORDATORIO_MS = 120000;      // un recordatorio queda 2 min si no lo tocan
 constexpr uint32_t CARA_EN_RELOJ_MS = 15000;      // en modo reloj, un toque muestra la cara un rato
+constexpr uint32_t ALARMA_MAX_MS = 10u * 60000u;  // el despertador suena como mucho 10 min
+constexpr uint32_t ALARMA_TONO_MS = 4000;         // un tono cada 4 s,
+constexpr uint32_t ALARMA_SUBE_MS = 10000;        // cada 10 s más fuerte (despertador:1 a despertador:5)
+constexpr uint32_t ALARMA_APAGAR_MS = 1500;       // mantener apretado: apagar
+constexpr uint32_t CARA_CLIMA_MS = 40000;         // en modo clima, la cara reacciona al tiempo cada 40 s
 }  // namespace tiemposPanel
 
 namespace tiemposBroche {
@@ -48,6 +55,9 @@ constexpr uint32_t TOQUE_MS = 600;
 constexpr uint32_t DORMIR_MS = 2000;
 constexpr uint32_t QR_MS = 8000;
 }  // namespace tiemposBroche
+
+// "ppt", "reflejos", "mirada", "dado", "moneda" (comando Jugar, v1.7).
+const char* nombreJuego(int j);
 
 class Sistema {
  public:
@@ -113,13 +123,38 @@ class Sistema {
   int recordatorioVisible() const { return recVisible_; }
   // El panel (recordatorio, reloj o pomodoro): la cara se achica arriba y
   // abajo va el texto. 0 = solo la cara, 1 = el panel entero.
-  enum class Panel : uint8_t { Ninguno, Recordatorio, Reloj, Pomodoro };
+  enum class Panel : uint8_t { Ninguno, Recordatorio, Reloj, Pomodoro, Globo, Despertador, Clima, Juego };
   Panel panel() const { return panel_; }
   float fasePanel() const { return fasePanel_; }
   // Pomodoro: si corre, en qué tramo está y cuánto le falta.
   bool pomodoroCorriendo() const { return pomoCorriendo_; }
   bool pomodoroDescanso() const { return pomoDescanso_; }
   uint32_t pomodoroRestanteMs() const { return pomoRestanteMs_; }
+  // Lo que dice (comando Decir, sus frases): un globo con la cara achicada.
+  // `hablando`: mueve la boca un rato (el comando Decir sin expresión).
+  void decir(const char* texto, Config::Cara cara = {}, bool hablando = false);
+  // Una situación (las pide el motor): si el Hablador quiere, dice una frase.
+  void hablar(Situacion s);
+  // El texto del globo que se ve (o el del despertador).
+  const char* textoGlobo() const { return globoTexto_; }
+  // El despertador.
+  bool alarmaSonando() const { return alarma_; }
+  void sonarAlarma(bool porHora);
+  void posponerAlarma();
+  void apagarAlarma();
+  // Juegos (v1.7): 0 piedra-papel-tijera, 1 reflejos, 2 seguí la mirada, 3 dado, 4 moneda.
+  enum class Juego : uint8_t { Ppt, Reflejos, Mirada, Dado, Moneda, Ninguno = 255 };
+  char visibleJuego_[16] = {};
+  bool jugar(Juego j);
+  Juego juego() const { return juego_; }
+  const char* textoJuego() const { return juegoTexto_; }
+  // El "¿cómo estás?" del día: si está esperando la respuesta (toque = bien,
+  // doble = más o menos, mantener = mal) y la respuesta (0, 1, 2).
+  bool preguntandoAnimo() const { return preguntando_; }
+  void responderAnimo(uint8_t r);
+  // El clima que mandó la nube (vale 3 h).
+  const DatosClima& clima() const { return clima_; }
+  bool climaVigente() const { return clima_.hay && hal_.ahoraMs() - clima_.recibido < CLIMA_VALE_MS; }
   // El protector de pantalla: 0 = la cara, 1 = la imagen entera.
   float faseProtector() const { return faseProtector_; }
 
@@ -223,7 +258,9 @@ class Sistema {
   bool bloqueado(uint32_t ahora) const;
   void sonar(const char* nombre);
   // dato >= 0: además, una entrada de tipo 4 (recordatorio) con ese índice.
-  void notificarEvento(Evento e, int recordatorio = -1);
+  // Con tipo >= 0, además una entrada de registro de ese tipo y dato (4
+  // recordatorio con su índice, 5 juego, 6 ánimo).
+  void notificarEvento(Evento e, int tipo = -1, uint8_t dato = 0);
   void revisarRecordatorios(uint32_t ahora);
   void mostrarRecordatorio(int i, uint32_t ahora);
   void cerrarRecordatorio();
@@ -233,6 +270,16 @@ class Sistema {
   void dibujarPanel();
   const char* nombrePomodoro() const;
   void falla(uint32_t ahora);
+  void revisarDespertador(uint32_t ahora);
+  void cuidar(uint32_t ahora);
+  void preguntarAnimo(uint32_t ahora);
+  void tactoJuego(bool apretado, uint32_t ahora);
+  void avanzarJuego(uint32_t ahora);
+  void terminarJuego(int resultado);  // 0 perdió el dueño, 1 ganó, 2 empate, 3 sin resultado
+  void dibujarJuego(float cx, float W, float H, float alfa);
+  void avanzarAlarma(uint32_t ahora);
+  void mostrarGlobo(uint32_t ahora);
+  void dibujarClima(float cx, float W, float H, float alfa);
   void log(const char* m) {
     if (hal_.registrar) hal_.registrar(m);
   }
@@ -333,6 +380,33 @@ class Sistema {
   uint32_t caraHasta_ = 0;         // reloj: hasta cuándo se ve la cara por un toque
   bool pomoCorriendo_ = false, pomoDescanso_ = false;
   uint32_t pomoRestanteMs_ = 0;
+  // El globo (lo que dice), el despertador y el clima.
+  char globoTexto_[LARGO_TEXTO_AJUSTADO] = {};  // también el del despertador (no se ven a la vez)
+  char globoPendiente_[LARGO_TEXTO_AJUSTADO] = {};
+  Config::Cara caraPendiente_;
+  bool hayPendiente_ = false, globo_ = false, pendienteHablando_ = false;
+  uint32_t globoHasta_ = 0;
+  Hablador hablador_;
+  bool alarma_ = false, alarmaApretado_ = false, tragarAlarma_ = false;
+  uint32_t alarmaDesde_ = 0, alarmaTono_ = 0, alarmaToque_ = 0, pospuestaHasta_ = 0;
+  int16_t alarmaMinuto_ = -1;
+  uint16_t alarmaDia_ = 0;
+  DatosClima clima_;
+  uint32_t proximaCaraClima_ = 0;
+  // Cuidarte (v1.7).
+  uint32_t proximaAgua_ = 0;
+  bool pausaDicha_ = false;
+  uint16_t animoDia_ = 0;
+  bool preguntando_ = false, pregApretado_ = false, tragarPregunta_ = false;
+  uint8_t pregToques_ = 0;
+  uint32_t pregDesde_ = 0, pregToque_ = 0;
+  // Juegos (v1.7).
+  Juego juego_ = Juego::Ninguno;
+  uint8_t juegoFase_ = 0, juegoRonda_ = 0, juegoPuntos_ = 0, juegoDato_ = 0;
+  int8_t juegoLado_ = 0;
+  uint32_t juegoDesde_ = 0, juegoProximo_ = 0, juegoAccion_ = 0;
+  bool juegoApretado_ = false;
+  char juegoTexto_[40] = {};
   // Protector de pantalla.
   uint32_t ultimaActividad_ = 0;
   float faseProtector_ = 0;

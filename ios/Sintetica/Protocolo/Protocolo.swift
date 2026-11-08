@@ -40,6 +40,9 @@ enum Op {
     // v1.4: el motor de vida.
     static let hora: UInt8 = 0x1A, vida: UInt8 = 0x1B, memoria: UInt8 = 0x1C, restaurar: UInt8 = 0x1D, registro: UInt8 = 0x1E
     static let comportamiento: UInt8 = 0x1F
+    // v1.6 y v1.7: el paquete de vida.
+    static let decir: UInt8 = 0x40, clima: UInt8 = 0x41, alarma: UInt8 = 0x42, jugar: UInt8 = 0x43
+    static let aviso: UInt8 = 0x44, animo: UInt8 = 0x45, mirar: UInt8 = 0x46
     static let imgInicio: UInt8 = 0x20, imgBloque: UInt8 = 0x21, imgFin: UInt8 = 0x22, imgBorrar: UInt8 = 0x23, imgListar: UInt8 = 0x24
     static let imgPedir: UInt8 = 0x25
     // v1.5: los sprites de las caras de imagen (espacios 8 a 19).
@@ -58,7 +61,12 @@ let EVENTOS = [
     "caricia", "muchos-toques", "sacudida-suave", "sacudida-fuerte", "inclinado", "caida", "voz", "nombre",
     "ruido", "musica", "silencio", "notificacion", "llamada", "bateria-baja", "bateria-critica", "enchufado",
     "desenchufado", "cargado", "sin-wifi", "cambio-de-cara", "bicho-cerca", "volvio", "hito", "recordatorio", "pomodoro",
+    "despertador", "juego", "animo",
 ]
+/// Los juegos del comando Jugar (v1.7), en orden; los ánimos y las acciones del despertador.
+let JUEGOS = ["ppt", "reflejos", "mirada", "dado", "moneda"]
+let ANIMOS = ["bien", "medio", "mal"]
+let ACCIONES_ALARMA = ["apagar", "posponer", "probar", "despertar"]
 let MODOS = ["mascota", "reloj", "pomodoro", "clima", "notificaciones"]
 
 private let MENSAJES: [Int: String] = [
@@ -116,6 +124,46 @@ enum Comando {
     static func restaurar(_ memoria: [UInt8]) -> [UInt8] { [Op.restaurar] + memoria }
     static func registro() -> [UInt8] { [Op.registro] }
     static func comportamiento(_ nombre: String) -> [UInt8] { [Op.comportamiento] + Array(nombre.utf8) }
+
+    /// Un texto con su largo adelante, cortado sin partir una letra.
+    private static func campo(_ s: String, _ max: Int) -> [UInt8] {
+        let b = Array(cortarBytes(s, max).utf8)
+        return [UInt8(b.count)] + b
+    }
+
+    /// Lo muestra en un globo (v1.6): texto de 1 a 60 bytes y, si hay, una expresión.
+    static func decir(_ texto: String, expresion: String = "") -> [UInt8] {
+        [Op.decir] + campo(expresion, 24) + Array(cortarBytes(texto, 60).utf8)
+    }
+
+    /// El clima (v1.6): °C (va en décimas), código WMO, máx, mín, si es de día y la ciudad.
+    static func clima(temp: Double, codigo: Int, max: Int, min: Int, dia: Bool = true, ciudad: String = "") -> [UInt8] {
+        let t = Int16(clamping: Int((temp * 10).rounded()))
+        let u = UInt16(bitPattern: t)
+        let alto = UInt8(truncatingIfNeeded: Int(max)), bajo = UInt8(truncatingIfNeeded: Int(min))
+        return [Op.clima, UInt8(u & 0xFF), UInt8(u >> 8), UInt8(clamping: codigo), alto, bajo, dia ? 1 : 0] + campo(ciudad, 24)
+    }
+
+    /// El despertador desde lejos: apagar, posponer, probar o despertar.
+    static func alarma(_ accion: String) -> [UInt8] { [Op.alarma, UInt8(ACCIONES_ALARMA.firstIndex(of: accion) ?? 0)] }
+
+    /// Un juego (v1.7) o "terminar".
+    static func jugar(_ juego: String) -> [UInt8] { [Op.jugar, juego == "terminar" ? 255 : UInt8(JUEGOS.firstIndex(of: juego) ?? 0)] }
+
+    /// Una notificación o llamada del celu con su app y su contacto (v1.7).
+    static func aviso(llamada: Bool, app: String, contacto: String) -> [UInt8] {
+        [Op.aviso, llamada ? 1 : 0] + campo(app, 24) + campo(contacto, 24)
+    }
+
+    /// La respuesta al "¿cómo estás?" (v1.7): bien, medio o mal.
+    static func animo(_ a: String) -> [UInt8] { [Op.animo, UInt8(ANIMOS.firstIndex(of: a) ?? 0)] }
+
+    /// De dónde viene un sonido (v1.7): x e y de -1 a 1.
+    static func mirar(x: Double, y: Double = 0) -> [UInt8] {
+        let a = Int8(Swift.max(-100, Swift.min(100, Int((x * 100).rounded()))))
+        let b = Int8(Swift.max(-100, Swift.min(100, Int((y * 100).rounded()))))
+        return [Op.mirar, UInt8(bitPattern: a), UInt8(bitPattern: b)]
+    }
 }
 
 /// Una imagen QOI (del tamaño de la pantalla) en las escrituras de la característica Imagen.

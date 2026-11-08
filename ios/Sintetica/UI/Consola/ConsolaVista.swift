@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Los diez módulos de la consola.
 enum Modulo: String, CaseIterable, Identifiable {
-    case caracter, cara, imagenes, dia, recordatorios, modos, reflejos, integraciones, voz, ajustes
+    case caracter, cara, imagenes, dia, cuidado, recordatorios, modos, reflejos, integraciones, habla, jugar, voz, ajustes
     var id: String { rawValue }
 
     var nombre: String {
@@ -11,10 +11,13 @@ enum Modulo: String, CaseIterable, Identifiable {
         case .cara: "Cara"
         case .imagenes: "Imágenes"
         case .dia: "Su día"
+        case .cuidado: "Cuidado"
         case .recordatorios: "Recordatorios"
         case .modos: "Modos"
         case .reflejos: "Reflejos"
         case .integraciones: "Integraciones"
+        case .habla: "Habla"
+        case .jugar: "Jugar"
         case .voz: "Voz"
         case .ajustes: "Ajustes"
         }
@@ -26,10 +29,13 @@ enum Modulo: String, CaseIterable, Identifiable {
         case .cara: "eyes"
         case .imagenes: "photo.stack"
         case .dia: "sun.horizon"
+        case .cuidado: "heart.text.square"
         case .recordatorios: "alarm"
         case .modos: "square.grid.2x2"
         case .reflejos: "cable.connector"
         case .integraciones: "point.3.connected.trianglepath.dotted"
+        case .habla: "bubble.left.fill"
+        case .jugar: "gamecontroller.fill"
         case .voz: "waveform"
         case .ajustes: "gearshape"
         }
@@ -121,8 +127,10 @@ struct ConsolaVista: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 barra
-                if let a = modelo.aviso { AvisoDelRobot(aviso: a) { modelo.aviso = nil } }
-                Heroe(modelo: modelo, mensaje: $mensaje)
+                if let a = modelo.aviso {
+                    AvisoDelRobot(aviso: a, alarma: a.despertador && modelo.conectado ? { accion in alarma(accion) } : nil) { modelo.aviso = nil }
+                }
+                Heroe(modelo: modelo, mensaje: $mensaje) { actual = .jugar }
                 tablero
             }
             .padding(.horizontal, 16)
@@ -144,6 +152,12 @@ struct ConsolaVista: View {
             .accessibilityElement(children: .combine)
         }
         .padding(.top, 8)
+    }
+
+    private func alarma(_ accion: String) {
+        Task {
+            if let e = await modelo.alarma(accion) { mensaje = e } else { modelo.aviso = nil }
+        }
     }
 
     private var ledGuardado: EstadoLed {
@@ -173,10 +187,13 @@ struct ConsolaVista: View {
         case .cara: ModCara(modelo: modelo)
         case .imagenes: ModImagenes(modelo: modelo)
         case .dia: ModDia(modelo: modelo)
+        case .cuidado: ModCuidado(modelo: modelo)
         case .recordatorios: ModRecordatorios(modelo: modelo)
         case .modos: ModModos(modelo: modelo)
         case .reflejos: ModReflejos(modelo: modelo)
         case .integraciones: ModIntegraciones(modelo: modelo)
+        case .habla: ModHabla(modelo: modelo)
+        case .jugar: ModJugar(modelo: modelo)
         case .voz: ModVoz(modelo: modelo)
         case .ajustes: ModAjustes(modelo: modelo, laboratorio: { r in rackLab = r; laboratorio = true }, cerca: { cerca = true }, volver: { volverAtras() })
         }
@@ -236,13 +253,20 @@ struct EstiloTeclaModulo: ButtonStyle {
 /// Lo que el robot acaba de avisar solo (un recordatorio, el fin de un pomodoro, tu IA).
 struct AvisoDelRobot: View {
     let aviso: ModeloRobot.Aviso
+    /// El despertador sonando: posponer o apagar.
+    var alarma: ((String) -> Void)? = nil
     let cerrar: () -> Void
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: aviso.icono).font(.system(size: 22, weight: .bold))
             Text(aviso.texto.uppercased()).font(Tipos.marca(19, .black)).lineLimit(2).minimumScaleFactor(0.6)
             Spacer(minLength: 0)
-            Button("OK", action: cerrar).tecla(.negra, chica: true)
+            if let alarma {
+                Button { alarma("posponer") } label: { Text("Posponer") }.tecla(chica: true)
+                Button { alarma("apagar") } label: { Text("Apagar") }.tecla(.negra, chica: true)
+            } else {
+                Button("OK", action: cerrar).tecla(.negra, chica: true)
+            }
         }
         .foregroundStyle(Color.tinta)
         .padding(.leading, 18).padding(.trailing, 12).padding(.vertical, 10)
@@ -259,6 +283,9 @@ struct AvisoDelRobot: View {
 private struct Heroe: View {
     let modelo: ModeloRobot
     @Binding var mensaje: String
+    let jugar: () -> Void
+    @State private var frase = ""
+    @State private var diciendo = false
 
     var body: some View {
         let m = modelo.producto
@@ -277,6 +304,7 @@ private struct Heroe: View {
             Text(animoTexto).font(Tipos.marca(17, .semibold)).foregroundStyle(Color.hueso)
             capacidades(m)
             acciones(conectado)
+            decile(conectado)
             if !mensaje.isEmpty { AvisoConsola(texto: mensaje) }
         }
     }
@@ -317,11 +345,42 @@ private struct Heroe: View {
             Button { hacer(["evento": "caricia"], "Le gustó") } label: { Label("Acariciar", systemImage: "hand.raised.fill") }.tecla()
             Button { hacer(["evento": "nombre"], "Te escuchó") } label: { Label("Llamarlo", systemImage: "megaphone.fill") }.tecla()
             Button { hacer(["evento": "muchos-toques"], "Se rió") } label: { Label("Cosquillas", systemImage: "sparkles") }.tecla(.naranja)
+            Button(action: jugar) { Label("Jugar", systemImage: "gamecontroller.fill") }.tecla()
             if modelo.caraFija {
                 Button { hacer(["expresion": ""], "Vuelve a ser él") } label: { Text("Soltar la cara") }.tecla(.negra)
             }
         }
         .disabled(!conectado)
+    }
+
+    /// Decile algo: lo muestra en un globo con su cara.
+    private func decile(_ conectado: Bool) -> some View {
+        Visor(relleno: 12) {
+            Grabado("Decile algo")
+            HStack(spacing: 8) {
+                TextField("", text: $frase, prompt: Text(conectado ? "¡Hola!" : "Desconectado").foregroundColor(Color(hex: 0x5A524A)))
+                    .font(Tipos.marca(18, .black)).foregroundStyle(Color.brasa).tint(Color.brasa)
+                    .submitLabel(.send).onSubmit(decir)
+                    .onChange(of: frase) { _, v in let x = cortarBytes(v, MAX_TEXTO); if x != v { frase = x } }
+                Button(action: decir) { Text(diciendo ? "…" : "Decir") }.tecla(.naranja, chica: true)
+                    .disabled(!conectado || diciendo || frase.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .disabled(!conectado)
+    }
+
+    private func decir() {
+        let t = frase
+        guard !t.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        diciendo = true
+        Task {
+            let e = await modelo.decir(t)
+            diciendo = false
+            if e == nil { frase = "" }
+            mensaje = e ?? "Lo dijo"
+            try? await Task.sleep(for: .seconds(2.5))
+            mensaje = ""
+        }
     }
 
     private func hacer(_ c: [String: String], _ texto: String) {

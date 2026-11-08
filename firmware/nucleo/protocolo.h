@@ -49,6 +49,13 @@ enum Op : uint8_t {
   CmdRestaurar = 0x1D,   // [memoria, 112 bytes]: la mudanza (v1.4)
   CmdRegistro = 0x1E,    // → [0x9E][0][n][n × (u32 segundos, u8 tipo, u8 dato)] (v1.4)
   CmdComportamiento = 0x1F,  // nombre de un comportamiento: lo empieza ya (para probarlo) (v1.4)
+  CmdDecir = 0x40,       // [n][expresión][texto 1-60 bytes]: lo muestra en un globo (v1.6)
+  CmdClima = 0x41,       // [i16 décimas °C][u8 WMO][i8 máx][i8 mín][u8 flags][n][ciudad] (v1.6)
+  CmdAlarma = 0x42,      // [u8: 0 apagar, 1 posponer, 2 sonar ya, 3 despertar] (v1.6)
+  CmdJugar = 0x43,       // [u8 juego: 0 ppt, 1 reflejos, 2 mirada, 3 dado, 4 moneda; 255 terminar] (v1.7)
+  CmdAviso = 0x44,       // [u8 0 notificación, 1 llamada][n][app][n][contacto] (v1.7)
+  CmdAnimo = 0x45,       // [u8 0 bien, 1 más o menos, 2 mal] (v1.7)
+  CmdMirar = 0x46,       // [i8 x][i8 y] (-100..100): de dónde viene un sonido (v1.7)
   // Imagen
   ImgInicio = 0x20,      // u8 espacio (0-7 imágenes, 8-19 sprites), u32 largo, u32 crc32
   ImgBloque = 0x21,      // u32 desplazamiento, datos

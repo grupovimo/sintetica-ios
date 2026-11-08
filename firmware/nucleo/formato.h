@@ -3,6 +3,7 @@
 // fijos para no usar memoria dinámica.
 #pragma once
 
+#include "habla.h"
 #include "json.h"
 #include "mate.h"
 #include "vida_datos.h"
@@ -114,6 +115,9 @@ enum class Evento : uint8_t {
   Hito,        // un hito de la relación (lo genera el motor)
   Recordatorio,  // se disparó un recordatorio (lo genera el sistema)
   Pomodoro,      // terminó un tramo del pomodoro (lo genera el sistema)
+  Despertador,   // empezó a sonar el despertador (lo genera el sistema; v1.6)
+  Juego,         // terminó una partida de un juego (v1.7)
+  Animo,         // respondió el "¿cómo estás?" (v1.7)
   Cantidad
 };
 // El evento "padre" (sacudida-fuerte → sacudida, caricia → tacto): si no hay
@@ -177,9 +181,10 @@ struct Accion {
   // Expresion: una reacción de unos segundos. Reflejo: inmediata (< 50 ms),
   // gana sobre todo. Comportamiento: lo empieza ya. Estado: empuja una
   // variable del estado interno. Particula: suelta una.
-  enum class Tipo : uint8_t { Expresion, Sonido, Led, Animacion, Reflejo, Comportamiento, Estado, Particula } tipo = Tipo::Expresion;
+  // Decir: pide una frase de esa situación (habla.h; el sistema decide si habla).
+  enum class Tipo : uint8_t { Expresion, Sonido, Led, Animacion, Reflejo, Comportamiento, Estado, Particula, Decir } tipo = Tipo::Expresion;
   char argumento[LARGO_NOMBRE] = {};
-  int8_t indice = -1;     // la cara, el comportamiento o la partícula ya resueltos
+  int8_t indice = -1;     // la cara, el comportamiento, la partícula o la situación ya resueltos
   int8_t variable = -1;   // Estado: la VarVida
   float delta = 0;        // Estado: cuánto
 };
@@ -264,6 +269,10 @@ struct Config {
   Voz voz;
   TramosPomodoro pomodoro;
   Protector protector;
+  Habla habla;
+  Despertador despertador;
+  Cuidado cuidado;
+  Avisos avisos;
 
   int indiceExpresion(const char* nombre) const;
   int indiceAnimacion(const char* nombre) const;

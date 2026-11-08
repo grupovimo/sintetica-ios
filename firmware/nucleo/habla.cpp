@@ -9,7 +9,9 @@ namespace {
 const char* const NOMBRES_SITUACION[N_SITUACIONES] = {
     "despertar", "buenas-noches", "volviste", "te-extrane", "aburrido", "sueno", "bateria-baja", "cargando",
     "caricia", "saludo", "hito", "cumple-dueno", "cumple-robot", "recordatorio-hecho", "despertador", "posponer",
-    "clima-frio", "clima-calor", "clima-lluvia", "clima-lindo"};
+    "clima-frio", "clima-calor", "clima-lluvia", "clima-lindo",
+    "buen-dia", "comiste", "a-dormir", "tardaste", "agua", "pausa", "como-estas", "animo-bien", "animo-medio", "animo-mal",
+    "jugar", "gane", "perdi", "empate", "anio-nuevo", "navidad", "dia-del-amigo", "dia-del-nino", "aniversario"};
 
 const char* const PRESETS[] = {"equilibrado", "timido", "picaro", "dormilon", "carinoso", "curioso", "grunon", "electrico"};
 
@@ -183,36 +185,170 @@ const char* validarUbicacion(const Json& j, int raiz) {
   return nullptr;
 }
 
-size_t completarFrase(const char* p, const char* dueno, const char* robot, char* salida, size_t cap) {
+const char* leerCuidado(const Json& j, int raiz, Cuidado* c) {
+  const int cu = j.buscar(raiz, "cuidado");
+  if (cu < 0) return nullptr;
+  if (j.tipo(cu) != TipoJson::Objeto) return "cuidado: no es un objeto";
+  static const char* const CLAVES[] = {"agua", "pausa", "trabajo", "animo", "extranar", "extranarDias", "resumen"};
+  if (!soloEstas(j, cu, CLAVES))
+    return "cuidado: claves válidas: agua, pausa, trabajo, animo, extranar, extranarDias y resumen";
+  Cuidado n;
+  auto entero = [&](const char* k, int lo, int hi, int* v) {
+    const int t = j.buscar(cu, k);
+    if (t < 0) return true;
+    const float f = j.numero(t, -1);
+    if (j.tipo(t) != TipoJson::Numero || f != static_cast<float>(static_cast<int>(f))) return false;
+    *v = static_cast<int>(f);
+    return *v == 0 || (*v >= lo && *v <= hi);
+  };
+  int agua = 0, pausa = 0, dias = 2;
+  if (!entero("agua", 1, 8, &agua)) return "cuidado: agua cada 1 a 8 horas (0 = nunca)";
+  if (!entero("pausa", 30, 240, &pausa)) return "cuidado: pausa de 30 a 240 minutos (0 = nunca)";
+  if (!entero("extranarDias", 1, 7, &dias) || dias == 0) return "cuidado: extranarDias de 1 a 7";
+  n.agua = static_cast<uint8_t>(agua), n.pausa = static_cast<uint8_t>(pausa);
+  static const char* const BOOLEANOS[] = {"animo", "extranar", "resumen"};
+  for (const char* k : BOOLEANOS) {
+    const int t = j.buscar(cu, k);
+    if (t >= 0 && !esBool(j, t)) return "cuidado: animo, extranar y resumen son true o false";
+  }
+  n.animo = j.booleano(j.buscar(cu, "animo"), true);
+  const int tr = j.buscar(cu, "trabajo");
+  if (tr >= 0) {
+    static const char* const CT[] = {"desde", "hasta", "dias"};
+    if (j.tipo(tr) != TipoJson::Objeto || !soloEstas(j, tr, CT)) return "cuidado: trabajo es {desde, hasta, dias}";
+    char t[12];
+    const int de = j.buscar(tr, "desde"), ha = j.buscar(tr, "hasta"), di = j.buscar(tr, "dias");
+    if (de >= 0 && (j.texto(de, t, sizeof t) <= 0 || !hora(t, &n.desde))) return "cuidado: trabajo.desde es HH:MM";
+    if (ha >= 0 && (j.texto(ha, t, sizeof t) <= 0 || !hora(t, &n.hasta))) return "cuidado: trabajo.hasta es HH:MM";
+    if (n.desde >= n.hasta) return "cuidado: trabajo.desde antes que trabajo.hasta";
+    if (di >= 0) {
+      const int k = j.texto(di, t, sizeof t);
+      if (k < 0 || k > 7 || !leerDias(t, &n.dias)) return "cuidado: trabajo.dias son letras de L M X J V S D";
+    }
+  }
+  *c = n;
+  return nullptr;
+}
+
+namespace {
+// Compara sin distinguir mayúsculas (ASCII y las tildes de 2 bytes).
+bool igualesSinMayusculas(const char* a, const char* b) {
+  auto bajar = [](uint8_t c) { return (c >= 'A' && c <= 'Z') ? static_cast<uint8_t>(c + 32) : c; };
+  for (; *a && *b; a++, b++) {
+    uint8_t x = static_cast<uint8_t>(*a), y = static_cast<uint8_t>(*b);
+    // ASCII: A-Z → a-z; las tildes (segundo byte de 0xC3 0x81 Á … 0xC3 0xA1 á) difieren en 0x20.
+    x = bajar(x), y = bajar(y);
+    if (x != y) {
+      const bool tildes = static_cast<uint8_t>(a[0]) >= 0x80 && static_cast<uint8_t>(b[0]) >= 0x80 &&
+                          ((x | 0x20) == (y | 0x20));
+      if (!tildes) return false;
+    }
+  }
+  return *a == *b;
+}
+}  // namespace
+
+const char* leerAvisos(const Json& j, int raiz, const Config& c, Avisos* a) {
+  const int av = j.buscar(raiz, "avisos");
+  if (av < 0) return nullptr;
+  if (j.tipo(av) != TipoJson::Arreglo) return "avisos: es una lista";
+  if (j.cantidad(av) > MAX_AVISOS) return "avisos: hasta 8";
+  static const char* const CLAVES[] = {"tipo", "app", "contacto", "expresion", "comportamiento", "decir", "sonido"};
+  Avisos n;
+  for (int i = 0; i < j.cantidad(av); i++) {
+    const int o = j.elemento(av, i);
+    if (j.tipo(o) != TipoJson::Objeto || !soloEstas(j, o, CLAVES))
+      return "avisos: claves válidas: tipo, app, contacto, expresion, comportamiento, decir y sonido";
+    Aviso& x = n.lista[n.n];
+    const int ti = j.buscar(o, "tipo");
+    if (ti < 0 || !(j.textoIgual(ti, "notificacion") || j.textoIgual(ti, "llamada")))
+      return "avisos: tipo es notificacion o llamada";
+    x.llamada = j.textoIgual(ti, "llamada");
+    static const char* const TEXTOS[] = {"app", "contacto"};
+    for (const char* k : TEXTOS) {
+      const int t = j.buscar(o, k);
+      if (t < 0) continue;
+      char* d = iguales(k, "app") ? x.app : x.contacto;
+      char buf[LARGO_APP + 8];
+      const int l = j.tipo(t) == TipoJson::Texto ? j.texto(t, buf, sizeof buf) : -1;
+      if (l < 0 || l >= LARGO_APP) return "avisos: app y contacto de hasta 24 bytes";
+      copiarTexto(d, LARGO_APP, buf);
+    }
+    char e[LARGO_FRASE];
+    const int ex = j.buscar(o, "expresion");
+    if (ex >= 0) {
+      const Config::Cara cara = j.texto(ex, e, sizeof e) > 0 ? c.resolverCara(e) : Config::Cara();
+      if (!cara.existe()) return "avisos: una expresion que no existe";
+      x.caraVida = cara.vida, x.caraDibujo = cara.dibujo;
+    }
+    const int co = j.buscar(o, "comportamiento");
+    if (co >= 0) {
+      const int k = j.texto(co, e, sizeof e) > 0 ? c.vida.indiceComportamiento(e) : -1;
+      if (k < 0) return "avisos: un comportamiento que no existe";
+      x.comportamiento = static_cast<int8_t>(k);
+    }
+    const int de = j.buscar(o, "decir");
+    if (de >= 0) {
+      char buf[LARGO_DECIR_AVISO + 8];
+      const int l = j.tipo(de) == TipoJson::Texto ? j.texto(de, buf, sizeof buf) : -1;
+      if (l < 1 || l >= LARGO_DECIR_AVISO || !utf8Valido(buf)) return "avisos: decir de 1 a 40 bytes";
+      copiarTexto(x.decir, sizeof x.decir, buf);
+    }
+    const int so = j.buscar(o, "sonido");
+    if (so >= 0 && !esBool(j, so)) return "avisos: sonido es true o false";
+    x.sonido = j.booleano(so, true);
+    n.n++;
+  }
+  *a = n;
+  return nullptr;
+}
+
+int buscarAviso(const Avisos& a, bool llamada, const char* app, const char* contacto) {
+  for (int i = 0; i < a.n; i++) {
+    const Aviso& x = a.lista[i];
+    if (x.llamada != llamada) continue;
+    if (x.app[0] && !igualesSinMayusculas(x.app, app ? app : "")) continue;
+    if (x.contacto[0] && !igualesSinMayusculas(x.contacto, contacto ? contacto : "")) continue;
+    return i;
+  }
+  return -1;
+}
+
+size_t completarFrase(const char* p, const char* dueno, const char* robot, char* salida, size_t cap, const char* clima,
+                      const char* app, const char* contacto) {
   if (cap == 0) return 0;
-  const bool hayDueno = dueno && dueno[0];
   // Se arma entero y se corta al final, sin partir una letra.
   char buf[256];
   size_t m = 0;
   auto agregar = [&](const char* s, size_t k) {
     for (size_t i = 0; i < k && m < sizeof buf - 1; i++) buf[m++] = s[i];
   };
+  struct Marca {
+    const char* clave;
+    const char* valor;
+  };
+  const Marca marcas[] = {{"{dueno}", dueno}, {"{robot}", robot}, {"{clima}", clima}, {"{app}", app}, {"{contacto}", contacto}};
   for (const char* c = p; *c;) {
+    bool hecho = false;
     if (*c == '{') {
-      if (iguales(c, "{dueno}", 7)) {
-        if (hayDueno) {
-          agregar(dueno, largo(dueno));
+      for (const Marca& k : marcas) {
+        const size_t lk = largo(k.clave);
+        if (!iguales(c, k.clave, lk)) continue;
+        if (k.valor && k.valor[0]) {
+          agregar(k.valor, largo(k.valor));
         } else {
-          // Se lleva la coma y el espacio de antes: "¡Hola, {dueno}!" → "¡Hola!".
-          while (m > 0 && (buf[m - 1] == ' ' || buf[m - 1] == ',')) m--;
-          // Y si quedó al principio ("{dueno}, ¿me cargás?"), lo de después.
+          // Vacío: se lleva lo de antes ("¡Hola, {dueno}!" → "¡Hola!") y, si
+          // quedó al principio ("{dueno}, ¿me cargás?"), lo de después.
+          while (m > 0 && (buf[m - 1] == ' ' || buf[m - 1] == ',' || buf[m - 1] == ':')) m--;
           if (m == 0)
-            while (c[7] == ',' || c[7] == ' ') c++;
+            while (c[lk] == ',' || c[lk] == ' ' || c[lk] == ':') c++;
         }
-        c += 7;
-        continue;
-      }
-      if (iguales(c, "{robot}", 7)) {
-        agregar(robot ? robot : "", largo(robot));
-        c += 7;
-        continue;
+        c += lk;
+        hecho = true;
+        break;
       }
     }
+    if (hecho) continue;
     agregar(c, 1);
     c++;
   }
@@ -236,7 +372,7 @@ const char* presetCercano(const Personalidad& p) {
 }
 
 bool elegirFrase(const Habla& h, Situacion s, const char* preset, const char* dueno, const char* robot, Azar& azar,
-                 char* salida, size_t cap) {
+                 char* salida, size_t cap, const char* clima) {
   const bool hayDueno = dueno && dueno[0];
   auto sirve = [&](const char* t) { return hayDueno || !iguales(t, "{dueno}", 7); };
   // Las propias del usuario: si tiene para esta situación, solo esas (son su voz).
@@ -248,7 +384,7 @@ bool elegirFrase(const Habla& h, Situacion s, const char* preset, const char* du
     for (int i = 0; i < h.nPropias; i++) {
       if (h.propias[i].situacion != s || !sirve(h.propias[i].texto)) continue;
       if (k-- == 0) {
-        completarFrase(h.propias[i].texto, dueno, robot, salida, cap);
+        completarFrase(h.propias[i].texto, dueno, robot, salida, cap, clima);
         return true;
       }
     }
@@ -269,7 +405,7 @@ bool elegirFrase(const Habla& h, Situacion s, const char* preset, const char* du
     const FraseBase& f = FRASES_BASE[b->primera + i];
     k -= peso(f);
     if (k < 0) {
-      completarFrase(f.texto, dueno, robot, salida, cap);
+      completarFrase(f.texto, dueno, robot, salida, cap, clima);
       return true;
     }
   }
@@ -284,18 +420,32 @@ bool Hablador::quiere(Situacion s, uint32_t segundos, uint32_t dia, uint8_t frec
   if (dia ? dia != dia_ : segundos - diaDesde_ >= 86400u) {
     dia_ = dia, diaDesde_ = segundos, hoy_ = 0;
   }
+  const uint16_t ahora = static_cast<uint16_t>(segundos / 60u + 1u);
+  auto paso = [&](uint16_t desde) { return static_cast<uint16_t>(ahora - desde); };  // minutos
   if (!b->siempre) {
     if (frecuencia == 0) return false;
     const float f = frecuencia / 50.0f;  // 0,5 → ×1
     if (hoy_ >= static_cast<int>(FRASES_POR_DIA * f + 0.5f)) return false;
-    if (huboAlguna_ && segundos - ultimaCualquiera_ < static_cast<uint32_t>(FRASES_SEPARACION_S / f)) return false;
-    if (hubo_[i] && segundos - ultima_[i] < static_cast<uint32_t>(b->enfriamiento)) return false;
+    if (ultimaCualquiera_ && paso(ultimaCualquiera_) < static_cast<uint32_t>(FRASES_SEPARACION_S / 60 / f)) return false;
+    if (ultima_[i] && paso(ultima_[i]) < static_cast<uint32_t>(b->enfriamiento / 60)) return false;
     if (azar.real() >= minf(1, b->probabilidad / 100.0f * f)) return false;
     hoy_++;
-    ultimaCualquiera_ = segundos, huboAlguna_ = true;
+    ultimaCualquiera_ = ahora ? ahora : 1;
   }
-  ultima_[i] = segundos, hubo_[i] = true;
+  ultima_[i] = ahora ? ahora : 1;
   return true;
+}
+
+bool situacionSiempre(Situacion s) {
+  const SituacionBase* b = base(s);
+  return b && b->siempre;
+}
+
+bool textoUtf8Valido(const char* s, size_t n) {
+  char t[256];
+  if (n >= sizeof t) return false;
+  copiarTexto(t, sizeof t, s, n);
+  return largo(t) == n && utf8Valido(t);
 }
 
 uint32_t duracionGlobo(const char* texto) {

@@ -14,7 +14,7 @@ const char* const NOMBRES_EVENTO[] = {
     "caricia", "muchos-toques", "sacudida-suave", "sacudida-fuerte", "inclinado", "caida", "voz", "nombre",
     "ruido", "musica", "silencio", "notificacion", "llamada", "bateria-baja", "bateria-critica", "enchufado",
     "desenchufado", "cargado", "sin-wifi", "cambio-de-cara", "bicho-cerca", "volvio", "hito",
-    "recordatorio", "pomodoro"};
+    "recordatorio", "pomodoro", "despertador", "juego", "animo"};
 static_assert(sizeof NOMBRES_EVENTO / sizeof NOMBRES_EVENTO[0] == static_cast<int>(Evento::Cantidad), "eventos");
 
 // Memoria de trabajo compartida (no reentrante: el núcleo corre en un solo hilo).
@@ -250,6 +250,7 @@ bool leerAccion(const char* s, Accion* a) {
   else if (iguales(tipo, "reflejo")) a->tipo = Accion::Tipo::Reflejo;
   else if (iguales(tipo, "comportamiento")) a->tipo = Accion::Tipo::Comportamiento;
   else if (iguales(tipo, "particula")) a->tipo = Accion::Tipo::Particula;
+  else if (iguales(tipo, "decir")) a->tipo = Accion::Tipo::Decir;
   else return false;
   return copiarTexto(a->argumento, sizeof a->argumento, dos + 1) > 0;
 }
@@ -361,6 +362,12 @@ const char* resolverAccion(const Config& c, Accion& a) {
       TipoParticula t;
       if (!particulaPorNombre(a.argumento, &t)) return "regla: partícula desconocida";
       a.indice = static_cast<int8_t>(t);
+      return nullptr;
+    }
+    case Accion::Tipo::Decir: {
+      Situacion s;
+      if (!situacionPorNombre(a.argumento, largo(a.argumento), &s)) return "regla: decir:<situación> (una de frases.json)";
+      a.indice = static_cast<int8_t>(s);
       return nullptr;
     }
     default:
@@ -753,6 +760,13 @@ ResultadoConfig aplicarSobre(Config& c, const char* texto, size_t n) {
   float rotar = c.rotarMinutos;
   if (!numeroOpcional(j, 0, "rotar", 0, 1440, &rotar)) return error(ErrorConfig::Campo, "rotar: minutos, de 0 a 1440");
   c.rotarMinutos = static_cast<uint16_t>(rotar);
+
+  // Que hable solo, el despertador y dónde está (para el clima de la nube).
+  if (const char* m = leerHabla(j, 0, &c.habla)) return error(ErrorConfig::Campo, m);
+  if (const char* m = leerDespertador(j, 0, &c.despertador)) return error(ErrorConfig::Campo, m);
+  if (const char* m = validarUbicacion(j, 0)) return error(ErrorConfig::Campo, m);
+  if (const char* m = leerCuidado(j, 0, &c.cuidado)) return error(ErrorConfig::Campo, m);
+  if (const char* m = leerAvisos(j, 0, c, &c.avisos)) return error(ErrorConfig::Campo, m);
 
   int modo = j.buscar(0, "modo");
   if (modo >= 0) {

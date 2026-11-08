@@ -51,7 +51,7 @@ struct Rostro {
 };
 
 // Partículas: formas chiquitas que nacen, flotan y se apagan.
-enum class TipoParticula : uint8_t { Zzz, Corazon, Lagrima, Gota, Chispa, Pregunta, Exclamacion, Nota, Estrella, Burbuja, Cantidad };
+enum class TipoParticula : uint8_t { Zzz, Corazon, Lagrima, Gota, Chispa, Pregunta, Exclamacion, Nota, Estrella, Burbuja, Oveja, Cantidad };
 const char* nombreParticula(TipoParticula t);
 bool particulaPorNombre(const char* n, TipoParticula* t);
 
@@ -63,6 +63,7 @@ struct Particula {
   float edad = 0, vida = 1;            // segundos
   float tamano = 0.05f;
   float fase = 0;
+  bool enBurbuja = false;  // lo que se sueña: va adentro de la burbuja, con ella
 };
 
 // Todo lo que hace falta para dibujar un cuadro: los parámetros ya mezclados y

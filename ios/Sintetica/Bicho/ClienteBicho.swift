@@ -98,6 +98,9 @@ final class ClienteBicho {
         _ = try? await exigir(.comando, Comando.hora(epochUtc: UInt32(ahora.timeIntervalSince1970), zonaMinutos: zona))
     }
 
+    /// Un comando ya armado (los del paquete de vida): espera que diga que sí.
+    func comandoCrudo(_ bytes: [UInt8]) async throws { try await exigir(.comando, bytes) }
+
     func probarComportamiento(_ nombre: String) async throws { try await exigir(.comando, Comando.comportamiento(nombre)) }
 
     func fijarExpresion(_ nombre: String?) async throws { try await exigir(.comando, Comando.expresion(nombre ?? "")); try await actualizarEstado() }

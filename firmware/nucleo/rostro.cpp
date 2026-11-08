@@ -49,7 +49,7 @@ const InfoParametro INFO_GLOBAL[N_PARAMETROS - param::GX] = {
 };
 
 const char* const NOMBRES_PARTICULAS[static_cast<int>(TipoParticula::Cantidad)] = {
-    "zzz", "corazon", "lagrima", "gota", "chispa", "pregunta", "exclamacion", "nota", "estrella", "burbuja"};
+    "zzz", "corazon", "lagrima", "gota", "chispa", "pregunta", "exclamacion", "nota", "estrella", "burbuja", "oveja"};
 
 uint32_t g_finos = 0;
 
@@ -593,6 +593,16 @@ float sdParticula(TipoParticula t, V2 q, float a) {
       return sdStar5(q, a, 0.5f);
     case TipoParticula::Burbuja:
       return minf(absf(largo2(q.x, q.y) - a * 0.8f) - 0.08f * a, largo2(q.x + 0.85f * a, q.y + 0.95f * a) - 0.16f * a);
+    case TipoParticula::Oveja: {
+      // Lana (cuatro bultos), la cabeza adelante y dos patitas.
+      float d = largo2(q.x + 0.3f * a, q.y) - 0.38f * a;
+      d = minf(d, largo2(q.x, q.y - 0.18f * a) - 0.4f * a);
+      d = minf(d, largo2(q.x + 0.05f * a, q.y + 0.12f * a) - 0.38f * a);
+      d = minf(d, largo2(q.x - 0.28f * a, q.y - 0.02f * a) - 0.34f * a);
+      d = minf(d, largo2(q.x - 0.7f * a, q.y - 0.12f * a) - 0.2f * a);
+      d = minf(d, sdSegmento(q, {-0.25f * a, -0.3f * a}, {-0.25f * a, -0.7f * a}) - 0.07f * a);
+      return minf(d, sdSegmento(q, {0.25f * a, -0.3f * a}, {0.25f * a, -0.7f * a}) - 0.07f * a);
+    }
     default:
       return 9.0f;
   }

@@ -1,5 +1,5 @@
 {
-  "limites": { "por_dia": 10, "separacion": 900 },
+  "limites": {"por_dia": 10, "separacion": 900},
   "situaciones": {
     "despertar": {
       "probabilidad": 0.8, "enfriamiento": 14400,
@@ -174,6 +174,136 @@
       "frases": {
         "todos": ["¡Qué lindo día!", "Hay sol. ¡Salí un rato!"],
         "electrico": ["¡Día espectacular!"]
+      }
+    },
+    "buen-dia": {
+      "probabilidad": 1, "enfriamiento": 57600,
+      "frases": {
+        "todos": ["¡Buen día, {dueno}! {clima}", "¡Hola, {dueno}! {clima}", "¡Buen día! {clima}"],
+        "grunon": ["Buen día. {clima}"],
+        "electrico": ["¡BUEN DÍA, {dueno}! {clima}"],
+        "carinoso": ["¡Buen día, {dueno}! Te extrañé. {clima}"]
+      }
+    },
+    "comiste": {
+      "probabilidad": 0.8, "enfriamiento": 72000,
+      "frases": {
+        "todos": ["¿Comiste, {dueno}?", "¿Ya almorzaste?", "No te olvides de comer."],
+        "grunon": ["¿Comiste o qué?"],
+        "carinoso": ["¿Comiste algo rico?"]
+      }
+    },
+    "a-dormir": {
+      "probabilidad": 0.9, "enfriamiento": 72000,
+      "frases": {
+        "todos": ["Ya es tarde, ¿nos vamos a dormir?", "Uaah... ¿vamos a dormir?"],
+        "dormilon": ["¿A la cama ya? Dale."],
+        "electrico": ["¿Dormir? Bueno... un poco."]
+      }
+    },
+    "tardaste": {
+      "probabilidad": 0.9, "enfriamiento": 72000,
+      "frases": {
+        "todos": ["¡Tardaste! Te estaba esperando.", "¿Dónde estabas? ¡Tardaste!"],
+        "grunon": ["Tarde. Como siempre."],
+        "carinoso": ["¡Por fin! Te esperé un montón."]
+      }
+    },
+    "agua": {
+      "probabilidad": 1, "enfriamiento": 1800, "siempre": true,
+      "frases": {
+        "todos": ["¿Tomaste agua?", "Un vasito de agua, {dueno}.", "Hora de tomar agua."],
+        "grunon": ["Tomá agua. Ya."]
+      }
+    },
+    "pausa": {
+      "probabilidad": 1, "enfriamiento": 1800, "siempre": true,
+      "frases": {
+        "todos": ["¡Pausa activa! Estirá un poco.", "Levantate un ratito, dale.", "Mucho rato quieto. ¡A moverse!"]
+      }
+    },
+    "como-estas": {
+      "probabilidad": 1, "enfriamiento": 3600, "siempre": true,
+      "frases": {
+        "todos": ["¿Cómo estás hoy?", "¿Cómo andás, {dueno}?"],
+        "carinoso": ["¿Cómo estás, {dueno}? Contame."]
+      }
+    },
+    "animo-bien": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Qué bueno! Me alegra.", "¡Bien ahí!"],
+        "electrico": ["¡VAMOS!"]
+      }
+    },
+    "animo-medio": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Bueno, ya va a mejorar.", "Acá estoy si me necesitás."]
+      }
+    },
+    "animo-mal": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Uh... vení, te doy un abrazo.", "Acá estoy, {dueno}. Te quiero.", "Va a pasar. Estoy con vos."]
+      }
+    },
+    "jugar": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡A jugar!", "¡Dale, juguemos!"]
+      }
+    },
+    "gane": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Gané!", "¡Te gané, {dueno}!"],
+        "grunon": ["Obvio que gané."],
+        "timido": ["Gané... perdón."]
+      }
+    },
+    "perdi": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Ganaste!", "Me ganaste. ¿Otra?"],
+        "grunon": ["Hiciste trampa."]
+      }
+    },
+    "empate": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Empate!", "Empatamos. ¿Otra?"]
+      }
+    },
+    "anio-nuevo": {
+      "probabilidad": 1, "enfriamiento": 3600, "siempre": true,
+      "frases": {
+        "todos": ["¡Feliz año nuevo, {dueno}!"],
+        "electrico": ["¡FELIZ AÑO NUEVO!"]
+      }
+    },
+    "navidad": {
+      "probabilidad": 1, "enfriamiento": 3600, "siempre": true,
+      "frases": {
+        "todos": ["¡Feliz Navidad, {dueno}!"]
+      }
+    },
+    "dia-del-amigo": {
+      "probabilidad": 1, "enfriamiento": 3600, "siempre": true,
+      "frases": {
+        "todos": ["¡Feliz día del amigo, {dueno}!", "¡Sos mi mejor amigo!"]
+      }
+    },
+    "dia-del-nino": {
+      "probabilidad": 1, "enfriamiento": 3600, "siempre": true,
+      "frases": {
+        "todos": ["¡Feliz día del niño! ¿Jugamos?"]
+      }
+    },
+    "aniversario": {
+      "probabilidad": 1, "enfriamiento": 3600, "siempre": true,
+      "frases": {
+        "todos": ["¡Hoy hace un año que estamos juntos!", "¡Feliz aniversario, {dueno}!"]
       }
     }
   }

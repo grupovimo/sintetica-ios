@@ -287,7 +287,13 @@ struct LectorSSE {
 /// Lo que el robot avisa solo con un registro cortito: un recordatorio (por su
 /// índice en la config) o el fin de una tanda de pomodoro (evento 32). Igual
 /// que web/src/lib/bicho.svelte.ts.
-enum AvisoRobot: Equatable { case recordatorio(Int), pomodoro }
+enum AvisoRobot: Equatable {
+    case recordatorio(Int), pomodoro, despertador
+    /// Terminó una partida: el juego (0 a 4) y el resultado (0 perdiste, 1 ganaste, 2 empate, 3 sin resultado).
+    case juego(Int, Int)
+    /// Respondió el "¿cómo estás?": 0 bien, 1 más o menos, 2 mal.
+    case animo(Int)
+}
 
 func avisosDeMarco(car: Int, _ b: [UInt8]) -> [AvisoRobot] {
     guard car == Car.comando.rawValue, b.count >= 3, b[0] == 0x9E, b[1] == 0, b[2] <= 2 else { return [] }
@@ -296,7 +302,14 @@ func avisosDeMarco(car: Int, _ b: [UInt8]) -> [AvisoRobot] {
         let i = 3 + k * 6
         guard i + 6 <= b.count else { break }
         let tipo = b[i + 4], dato = b[i + 5]
-        if tipo == 4 { l.append(.recordatorio(Int(dato))) } else if tipo == 0, dato == 32 { l.append(.pomodoro) }
+        switch (tipo, dato) {
+        case (4, _): l.append(.recordatorio(Int(dato)))
+        case (5, _): l.append(.juego(Int(dato) / 16, Int(dato) % 16))
+        case (6, _): l.append(.animo(Int(dato)))
+        case (0, 32): l.append(.pomodoro)
+        case (0, 33): l.append(.despertador)
+        default: break
+        }
     }
     return l
 }

@@ -416,3 +416,123 @@ final class CarasDeImagenTests: XCTestCase {
         XCTAssertEqual(ComandoImagen.listarSprites(), [0x26])
     }
 }
+
+/// El paquete de vida (protocolo v1.6 y v1.7) contra shared/protocolo/vectores.json.
+@MainActor
+final class PaqueteDeVidaTests: XCTestCase {
+    private func vector(_ nombre: String) throws -> [String: Any] {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "vectores", withExtension: "json"))
+        let v = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let l = v["comandos"] as? [[String: Any]] ?? []
+        return try XCTUnwrap(l.first { $0["nombre"] as? String == nombre }, nombre)
+    }
+
+    func testComandosContraLosVectores() throws {
+        let d = try vector("decir hola")
+        XCTAssertEqual(hex(Comando.decir(d["texto"] as! String)), d["hex"] as? String)
+        let e = try vector("decir con expresion")
+        XCTAssertEqual(hex(Comando.decir(e["texto"] as! String, expresion: e["expresion"] as! String)), e["hex"] as? String)
+        let c = try vector("clima")
+        let clima = Comando.clima(temp: (c["temp"] as! NSNumber).doubleValue, codigo: c["codigo"] as! Int, max: c["max"] as! Int,
+                                  min: c["min"] as! Int, dia: c["dia"] as! Bool, ciudad: c["ciudad"] as! String)
+        XCTAssertEqual(hex(clima), c["hex"] as? String)
+        XCTAssertEqual(hex(Comando.alarma("probar")), try vector("alarma probar")["hex"] as? String)
+        XCTAssertEqual(hex(Comando.alarma("posponer")), try vector("alarma posponer")["hex"] as? String)
+        XCTAssertEqual(hex(Comando.jugar("dado")), try vector("jugar dado")["hex"] as? String)
+        XCTAssertEqual(hex(Comando.jugar("terminar")), try vector("jugar terminar")["hex"] as? String)
+        let a = try vector("aviso whatsapp")
+        XCTAssertEqual(hex(Comando.aviso(llamada: a["tipo"] as? String == "llamada", app: a["app"] as! String, contacto: a["contacto"] as! String)),
+                       a["hex"] as? String)
+        XCTAssertEqual(hex(Comando.animo("medio")), try vector("animo medio")["hex"] as? String)
+        let m = try vector("mirar derecha")
+        XCTAssertEqual(hex(Comando.mirar(x: (m["x"] as! NSNumber).doubleValue, y: (m["y"] as! NSNumber).doubleValue)), m["hex"] as? String)
+    }
+
+    func testCortesDeLosComandos() {
+        // El globo es de 60 bytes como mucho, sin partir una letra.
+        let largo = String(repeating: "ñ", count: 40)  // 80 bytes
+        let b = Comando.decir(largo)
+        XCTAssertEqual(b.count, 2 + 60)
+        XCTAssertEqual(Comando.aviso(llamada: true, app: String(repeating: "a", count: 30), contacto: "")[1], 1)
+        XCTAssertEqual(Comando.aviso(llamada: false, app: String(repeating: "a", count: 30), contacto: "")[2], 24)
+        XCTAssertEqual(Comando.mirar(x: 2, y: -2), [0x46, 100, 156])  // -100 = 0x9c
+        XCTAssertEqual(EVENTOS.firstIndex(of: "despertador"), 33)
+        XCTAssertEqual(EVENTOS.firstIndex(of: "juego"), 34)
+        XCTAssertEqual(EVENTOS.firstIndex(of: "animo"), 35)
+    }
+
+    func testAvisosNuevos() {
+        XCTAssertEqual(avisosDeMarco(car: 2, [0x9E, 0, 1, 0, 0, 0, 0, 0, 0x21]), [.despertador])
+        // Juego: dado (3) ganado por el dueño (1) = 3·16 + 1.
+        XCTAssertEqual(avisosDeMarco(car: 2, [0x9E, 0, 2, 0, 0, 0, 0, 0, 0x22, 0, 0, 0, 0, 5, 0x31]), [.juego(3, 1)])
+        XCTAssertEqual(avisosDeMarco(car: 2, [0x9E, 0, 2, 0, 0, 0, 0, 0, 0x23, 0, 0, 0, 0, 6, 2]), [.animo(2)])
+    }
+
+    func testDespertador() {
+        var c = ConfigDoc()
+        XCTAssertNil(c.despertador)
+        XCTAssertFalse(c.despertadorVisible.activo)
+        c.cambiarDespertador { $0.hora = sumarMinutos($0.hora, 60) }
+        let d = c.despertador
+        XCTAssertEqual(d?.hora, "08:30")
+        XCTAssertEqual(d?.dias, "LMXJV")
+        XCTAssertEqual(d?.activo, true)
+        c.cambiarDespertador { $0.alternar("S"); $0.alternar("D") }
+        XCTAssertNil((c.raiz["despertador"] as? [String: Any])?["dias"])  // los 7 = todos
+        c.cambiarDespertador { $0.texto = "¡Arriba!" }
+        XCTAssertNil(Nucleo.validar(c.texto))
+    }
+
+    func testCuidado() {
+        var c = ConfigDoc()
+        XCTAssertEqual(c.cuidado, Cuidado())
+        c.cambiarCuidado { $0.ponerPausa(10) }
+        XCTAssertEqual(c.cuidado.pausa, 30)  // de "no" salta a 30
+        c.cambiarCuidado { $0.ponerPausa(0); $0.agua = 2; $0.moverTrabajo(desde: true, -30); $0.alternarDia("V") }
+        XCTAssertEqual(c.cuidado.pausa, 0)
+        XCTAssertEqual(c.cuidado.desde, "08:30")
+        XCTAssertEqual(c.cuidado.diasTrabajo, "LMXJ")
+        XCTAssertNil(Nucleo.validar(c.texto))
+    }
+
+    func testAvisosDelCeluYHabla() {
+        var c = ConfigDoc()
+        var a = AvisoCelu(tipo: "llamada", expresion: "sorpresa", decir: "{contacto}")
+        a.app = "WhatsApp"
+        a.sonido = false
+        c.avisos = [a, AvisoCelu()]
+        let o = c.raiz["avisos"] as? [[String: Any]] ?? []
+        XCTAssertEqual(o.count, 2)
+        XCTAssertEqual(o[0]["sonido"] as? Bool, false)
+        XCTAssertNil(o[1]["sonido"])  // suena: no se escribe
+        XCTAssertNil(o[1]["app"])
+        XCTAssertEqual(c.avisos.first?.app, "WhatsApp")
+        c.ponerFrecuenciaHabla(0.8)
+        c.ponerFrases("despertar", ["¡Arriba, {dueno}!"])
+        XCTAssertEqual(c.totalFrases, 1)
+        XCTAssertEqual(c.frasesPropias["despertar"], ["¡Arriba, {dueno}!"])
+        XCTAssertNil(Nucleo.validar(c.texto))
+        c.ponerFrases("despertar", [])
+        XCTAssertNil((c.raiz["habla"] as? [String: Any])?["propias"])
+        XCTAssertEqual(armarFrase("¡Arriba,   {dueno}!", dueno: "Nahuel", robot: "Toto"), "¡Arriba, Nahuel!")
+        XCTAssertEqual(armarFrase("Soy {robot}", dueno: "", robot: "Toto"), "Soy Toto")
+    }
+
+    func testUbicacionYResumen() {
+        var c = ConfigDoc()
+        c.ponerUbicacion(Ubicacion(lat: -34.603722, lon: -58.381592, ciudad: "Buenos Aires, Argentina"))
+        XCTAssertEqual(c.ubicacion?.lat ?? 0, -34.6037, accuracy: 0.00001)
+        XCTAssertEqual(c.ubicacion?.ciudad, "Buenos Aires, Argentina")
+        XCTAssertNil(Nucleo.validar(c.texto))
+        let r = ResumenDia(["juegos": 3, "ganados": 1, "sonoCon": ["oveja"], "animo": 2, "espero": 19])
+        XCTAssertEqual(r.animo, "medio")
+        XCTAssertEqual(r.espero, "19:00")
+        XCTAssertEqual(ResumenDia(["animo": "Más o menos"]).animo, "medio")
+        XCTAssertEqual(ResumenDia(["animo": "mal"]).animo, "mal")
+        let m = Memoria(["juegosJugados": 30, "juegosGanados": 12, "mejorReflejo": 245, "juegosHoy": 3])
+        XCTAssertEqual(m.juegosJugados, 30)
+        XCTAssertEqual(m.mejorReflejo, 245)
+        let l = Lugar(nombre: "Rosario", region: "Santa Fe", pais: "Argentina", lat: 0, lon: 0, ciudad: "Rosario")
+        XCTAssertEqual(l.detalle, "Santa Fe · Argentina")
+    }
+}

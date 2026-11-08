@@ -13,6 +13,7 @@ struct LabVida: View {
     @State private var aviso = ""
     @State private var error = ""
     @State private var superposicion = false
+    @State private var resumen: ResumenDia?
 
     private var api: ApiSintetica { Cuenta.compartida.api }
 
@@ -20,6 +21,7 @@ struct LabVida: View {
         VStack(alignment: .leading, spacing: 18) {
             ahora
             if modelo.esNube {
+                if let r = resumen { suDia(r) }
                 diario
                 mudanza
             }
@@ -29,7 +31,10 @@ struct LabVida: View {
             var vuelta = 0
             while !Task.isCancelled {
                 await modelo.pedirVida()
-                if modelo.esNube, vuelta % 30 == 0 { await cargarMemoria() }
+                if modelo.esNube, vuelta % 30 == 0 {
+                    await cargarMemoria()
+                    resumen = try? await api.resumen(modelo.id)
+                }
                 vuelta += 1
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -87,6 +92,41 @@ struct LabVida: View {
         guard let v else { return "Escuchando…" }
         if v.dormido { return v.sonando ? "Soñando" : "Durmiendo" }
         return v.comportamiento.isEmpty ? "Tranqui" : v.comportamiento.replacingOccurrences(of: "-", with: " ")
+    }
+
+    // MARK: Su día (lo de hoy, contado)
+
+    private static let suenos: [String: String] = ["corazon": "♥", "estrella": "★", "nota": "♪", "oveja": "🐑", "pesadilla": "⚡"]
+    private static let caraAnimo: [String: String] = ["bien": "😀", "medio": "😐", "mal": "😞"]
+
+    private func suDia(_ r: ResumenDia) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Grabado("Su día")
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                Visor(relleno: 12) {
+                    Grabado("Juegos")
+                    Digitos(texto: r.ganados > 0 ? "\(r.juegos) · \(r.ganados)" : "\(r.juegos)", chicos: true)
+                }
+                Visor(relleno: 12) {
+                    Grabado("Soñó")
+                    if r.sonoCon.isEmpty {
+                        Digitos(texto: "\(r.suenos)", chicos: true)
+                    } else {
+                        Text(r.sonoCon.map { Self.suenos[$0] ?? "·" }.joined(separator: " ")).font(.system(size: 20)).foregroundStyle(Color.brasa)
+                    }
+                }
+                Visor(relleno: 12) {
+                    Grabado("Ánimo")
+                    Text(r.animo.flatMap { Self.caraAnimo[$0] } ?? "—").font(.system(size: 24)).foregroundStyle(Color.gris)
+                }
+                Visor(relleno: 12) {
+                    Grabado("Te esperó")
+                    Digitos(texto: r.espero.isEmpty ? "—" : r.espero, chicos: true)
+                }
+            }
+        }
+        .padding(20)
+        .chapa()
     }
 
     // MARK: Diario

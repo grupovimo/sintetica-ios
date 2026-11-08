@@ -21,6 +21,9 @@ enum class Situacion : uint8_t {
   Despertar, BuenasNoches, Volviste, TeExtrane, Aburrido, Sueno, BateriaBaja, Cargando, Caricia, Saludo,
   Hito, CumpleDueno, CumpleRobot, RecordatorioHecho, Despertador, Posponer,
   ClimaFrio, ClimaCalor, ClimaLluvia, ClimaLindo,
+  // v1.7: el día con vos, cuidarte, juegos y fechas.
+  BuenDia, Comiste, ADormir, Tardaste, Agua, Pausa, ComoEstas, AnimoBien, AnimoMedio, AnimoMal,
+  Jugar, Gane, Perdi, Empate, AnioNuevo, Navidad, DiaDelAmigo, DiaDelNino, Aniversario,
   Cantidad
 };
 constexpr int N_SITUACIONES = static_cast<int>(Situacion::Cantidad);
@@ -50,15 +53,51 @@ struct Despertador {
   char texto[LARGO_FRASE] = {};  // vacío = una frase de "despertador"
 };
 
+// "cuidado" (v1.7): recordar el agua, la pausa activa en el horario de
+// trabajo, el "¿cómo estás?" del día; lo demás (te extraña, el resumen) lo usa la nube.
+struct Cuidado {
+  uint8_t agua = 0;           // horas (0 = nunca)
+  uint8_t pausa = 0;          // minutos sin tocarlo en horario de trabajo (0 = nunca)
+  uint16_t desde = 9 * 60, hasta = 18 * 60;  // el horario de trabajo (minutos del día)
+  uint8_t dias = 0x1F;        // L a V
+  bool animo = true;          // "¿Cómo estás?" una vez por día
+};
+
+// "avisos" (v1.7): cómo reacciona a una notificación o llamada del celu.
+constexpr int MAX_AVISOS = 8;
+constexpr int LARGO_APP = 25;       // 24 bytes + terminador (app y contacto)
+constexpr int LARGO_DECIR_AVISO = 41;
+struct Aviso {
+  bool llamada = false;
+  bool sonido = true;
+  int8_t caraVida = -1, caraDibujo = -1;
+  int8_t comportamiento = -1;
+  char app[LARGO_APP] = {};
+  char contacto[LARGO_APP] = {};
+  char decir[LARGO_DECIR_AVISO] = {};
+};
+struct Avisos {
+  uint8_t n = 0;
+  Aviso lista[MAX_AVISOS];
+};
+
 // Lee "habla", "despertador" y "ubicacion" (esta la usa la nube: acá solo se
 // valida). nullptr si está bien; si no, el motivo.
 const char* leerHabla(const Json& j, int raiz, Habla* h);
 const char* leerDespertador(const Json& j, int raiz, Despertador* d);
 const char* validarUbicacion(const Json& j, int raiz);
+const char* leerCuidado(const Json& j, int raiz, Cuidado* c);
+struct Config;
+const char* leerAvisos(const Json& j, int raiz, const Config& c, Avisos* a);
+// El aviso que corresponde (-1 = ninguno): sin distinguir mayúsculas; app o
+// contacto vacíos en el aviso = cualquiera.
+int buscarAviso(const Avisos& a, bool llamada, const char* app, const char* contacto);
 
-// Reemplaza {dueno} y {robot} y corta en `cap - 1` bytes sin partir una letra.
-// Sin dueño, se lleva la coma o el espacio de antes ("¡Hola, {dueno}!" → "¡Hola!").
-size_t completarFrase(const char* plantilla, const char* dueno, const char* robot, char* salida, size_t cap);
+// Reemplaza {dueno}, {robot} y {clima} (y, en los avisos, {app} y {contacto})
+// y corta en `cap - 1` bytes sin partir una letra. Lo que está vacío se lleva
+// la coma, los dos puntos o el espacio de antes ("¡Hola, {dueno}!" → "¡Hola!").
+size_t completarFrase(const char* plantilla, const char* dueno, const char* robot, char* salida, size_t cap,
+                      const char* clima = nullptr, const char* app = nullptr, const char* contacto = nullptr);
 
 // El preset más parecido a esa personalidad (los de personalidades.json),
 // para elegir las variantes de las frases.
@@ -68,7 +107,7 @@ const char* presetCercano(const Personalidad& p);
 // más; si no, las de fábrica para todos y las de su preset (doble peso). Sin
 // dueño, saltea las que empiezan con {dueno}. false si no hay ninguna.
 bool elegirFrase(const Habla& h, Situacion s, const char* preset, const char* dueno, const char* robot, Azar& azar,
-                 char* salida, size_t cap);
+                 char* salida, size_t cap, const char* clima = nullptr);
 
 // Lo que decide si habla o no (en RAM: unos pocos bytes).
 class Hablador {
@@ -80,14 +119,19 @@ class Hablador {
   int hoy() const { return hoy_; }
 
  private:
-  uint32_t ultima_[N_SITUACIONES] = {};
-  bool hubo_[N_SITUACIONES] = {};
-  uint32_t ultimaCualquiera_ = 0;
-  bool huboAlguna_ = false;
+  // En minutos + 1 (0 = nunca), de 16 bits: el broche no tiene RAM de sobra.
+  // Da la vuelta a los 45 días; las cuentas son con resta sin signo.
+  uint16_t ultima_[N_SITUACIONES] = {};
+  uint16_t ultimaCualquiera_ = 0;
   uint32_t dia_ = 0;
   uint32_t diaDesde_ = 0;   // sin calendario: un "día" cada 24 h de reloj
   uint8_t hoy_ = 0;
 };
+
+// Si la situación habla siempre (el cumple, el despertador: frases.json "siempre").
+bool situacionSiempre(Situacion s);
+// Un texto UTF-8 bien formado (sin terminador: n bytes).
+bool textoUtf8Valido(const char* s, size_t n);
 
 // La duración del globo según el largo: 2,5 s + 60 ms por byte, entre 3 y 10 s.
 uint32_t duracionGlobo(const char* texto);

@@ -181,6 +181,7 @@ struct ModDia: View {
                     }
                 }
             }
+            BloqueDespertador(modelo: modelo)
             CampoVisor(rotulo: "Vos te llamás", texto: $tuNombre, ayuda: "Tu nombre", claro: true) {
                 let n = tuNombre
                 if n != modelo.config.nombreDueno { modelo.cambiar { $0.ponerNombreDueno(n) } }
@@ -263,7 +264,7 @@ struct ModModos: View {
 
     private let modos: [(clave: String, nombre: String, icono: String, listo: Bool)] = [
         ("mascota", "Compañía", "heart.fill", true), ("reloj", "Reloj", "clock.fill", true), ("pomodoro", "Pomodoro", "timer", true),
-        ("clima", "Clima", "cloud.sun.fill", false), ("notificaciones", "Avisos", "bell.fill", false),
+        ("clima", "Clima", "cloud.sun.fill", true), ("notificaciones", "Avisos", "bell.fill", false),
     ]
 
     var body: some View {
@@ -278,6 +279,7 @@ struct ModModos: View {
                         .accessibilityAddTraits(c.modo == m.clave ? [.isSelected] : [])
                 }
             }
+            if c.modo == "clima" { BloqueUbicacion(modelo: modelo) }
             if c.modo == "pomodoro" {
                 VisorMasMenos(rotulo: "Foco", valor: String(format: "%02d min", c.trabajo),
                               menos: { modelo.cambiar { $0.moverPomodoro(trabajo: true, -5) } },

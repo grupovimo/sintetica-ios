@@ -40,7 +40,9 @@ struct Guardado {
   uint8_t* datos;
   size_t n;
 };
-Guardado g_memoria[16];
+// Las claves fijas (config, ajustes, serie, codigo, claves, imagenes, sprites, red,
+// nube, vida), las 8 imágenes y los 12 sprites, con margen.
+Guardado g_memoria[40];
 
 // Una config suelta, fuera de la instancia (grande: fuera de la pila): para
 // validar y para dibujar una expresión sin tocar el bicho.
