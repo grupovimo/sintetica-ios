@@ -50,12 +50,13 @@ enum Op : uint8_t {
   CmdRegistro = 0x1E,    // → [0x9E][0][n][n × (u32 segundos, u8 tipo, u8 dato)] (v1.4)
   CmdComportamiento = 0x1F,  // nombre de un comportamiento: lo empieza ya (para probarlo) (v1.4)
   // Imagen
-  ImgInicio = 0x20,      // u8 espacio (0-7), u32 largo, u32 crc32
+  ImgInicio = 0x20,      // u8 espacio (0-7 imágenes, 8-19 sprites), u32 largo, u32 crc32
   ImgBloque = 0x21,      // u32 desplazamiento, datos
   ImgFin = 0x22,         // (nada)
   ImgBorrar = 0x23,      // u8 espacio
   ImgListar = 0x24,      // → [0xA4][0][máscara u8] + por espacio ocupado [espacio][u32 largo][u32 crc]
   ImgPedir = 0x25,       // u8 espacio → [0xA5][0], varios 0xA7 y un 0xA8 (v1.3)
+  ImgListarSprites = 0x26,  // → [0xA6][0][máscara u16] + por sprite [espacio 8-19][u32 largo][u32 crc] (v1.5)
   // OTA (v1.3)
   OtaInicio = 0x30,      // manifiesto → después, bloques
   OtaBloque = 0x31,      // u32 desplazamiento, datos

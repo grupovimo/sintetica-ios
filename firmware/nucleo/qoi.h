@@ -18,6 +18,10 @@ class DecodificadorQoi {
   uint32_t fila() const { return fila_; }  // la próxima fila a decodificar
   // Decodifica la próxima fila en `rgb565` (ancho elementos). false si los datos se cortan.
   bool siguienteFila(uint16_t* rgb565);
+  // Lo mismo con la transparencia: ancho × 4 bytes (R, G, B, A sin premultiplicar).
+  bool siguienteFilaRgba(uint8_t* rgba);
+  // Los canales de la cabecera (3 o 4).
+  uint8_t canales() const { return canales_; }
   // Salta filas (para empezar a mitad de pantalla).
   bool saltarFilas(uint32_t n);
 
@@ -37,6 +41,7 @@ class DecodificadorQoi {
   uint8_t indice_[64][4] = {};
   uint8_t r_ = 0, g_ = 0, b_ = 0, a_ = 255;
   uint8_t racha_ = 0;
+  uint8_t canales_ = 3;
 };
 
 // Una imagen animada ("sani", de un GIF): la cabecera, la tabla de cuadros y

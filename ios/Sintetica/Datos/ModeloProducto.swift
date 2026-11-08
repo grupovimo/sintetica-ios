@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Cómo se presenta cada robot: el nombre de producto, la foto real y dónde
 /// cae la pantalla en esa foto, y lo que trae. Igual que web/src/lib/consola/modelo.ts.
@@ -41,16 +42,24 @@ struct Encuadre: Equatable, Sendable {
     let pantalla: Caja
     let fondo: UInt32
 
-    static let rectangular = Encuadre(imagen: "hebilla", alt: "El robot puesto en un cinturón",
-                                      foto: Foto(ancho: 155.56, izq: -27.78, arriba: -25.56),
-                                      pantalla: Caja(izq: 36.11, arriba: 23.33, ancho: 25, alto: 42.78), fondo: 0x0E0D0B)
+    static let rectangular = Encuadre(imagen: "unidad", alt: "La Unidad sobre un escritorio",
+                                      foto: Foto(ancho: 100, izq: 0, arriba: 0),
+                                      pantalla: Caja(izq: 23.5, arriba: 29.5, ancho: 43.5, alto: 39.5), fondo: 0xE9E2D8)
     static let redonda = Encuadre(imagen: "pieza-colgante", alt: "El robot colgado de una cadena",
                                   foto: Foto(ancho: 160, izq: -28.2, arriba: -43.1),
                                   pantalla: Caja(izq: 26.8, arriba: 36.9, ancho: 46.2, alto: 37), fondo: 0xF3EEEA)
 
-    /// Una pantalla apaisada en una caja de pie (en la ventana 4:5): se agranda
-    /// al 185 % para que la cara llene el ancho sin cortar las anchas, como en la web.
-    func apaisada(redonda: Bool) -> Bool { !redonda && pantalla.alto * 5 > pantalla.ancho * 4 }
+    /// Una pantalla apaisada en una caja bien de pie (en la ventana 4:5): se
+    /// agranda al 185 % para que la cara llene el ancho, como en la web. Con la
+    /// foto de la Unidad no hace falta.
+    func apaisada(redonda: Bool) -> Bool { !redonda && pantalla.alto * 5 > pantalla.ancho * 4 * 1.5 }
+
+    /// Alto / ancho de la foto (las dos son 4:5).
+    @MainActor
+    static func proporcion(_ imagen: String) -> CGFloat {
+        guard let i = UIImage(named: imagen), i.size.width > 0 else { return 1.25 }
+        return i.size.height / i.size.width
+    }
     static let agrandado = 1.85
 }
 

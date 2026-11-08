@@ -206,6 +206,18 @@ final class ClienteBicho {
         }
     }
 
+    /// Los sprites de las caras de imagen (v1.5); un firmware anterior no tiene.
+    func listarSprites() async throws -> [EspacioImagen] {
+        let flujo = transporte.difusor.escuchar()
+        try await transporte.escribir(.imagen, ComandoImagen.listarSprites())
+        return try await conTiempo(5) {
+            for await (c, b) in flujo where c == .imagen && b.first == (Op.sprListar | Op.respuesta) {
+                return leerListaSprites(b)
+            }
+            throw ErrorBicho.tiempo
+        }
+    }
+
     func cerrar() {
         escucha?.cancel()
         transporte.cerrar()

@@ -42,6 +42,10 @@ enum Op {
     static let comportamiento: UInt8 = 0x1F
     static let imgInicio: UInt8 = 0x20, imgBloque: UInt8 = 0x21, imgFin: UInt8 = 0x22, imgBorrar: UInt8 = 0x23, imgListar: UInt8 = 0x24
     static let imgPedir: UInt8 = 0x25
+    // v1.5: los sprites de las caras de imagen (espacios 8 a 19).
+    static let sprListar: UInt8 = 0x26
+    static let primerSprite = 8
+    static let maxSprites = 12
     static let otaInicio: UInt8 = 0x30, otaBloque: UInt8 = 0x31, otaFin: UInt8 = 0x32, otaDescargar: UInt8 = 0x33
     static let otaProgreso: UInt8 = 0x34, otaCancelar: UInt8 = 0x35
     static let respuesta: UInt8 = 0x80, configTrozo: UInt8 = 0x84, configCierre: UInt8 = 0x85
@@ -132,6 +136,7 @@ enum ComandoImagen {
     static func borrar(_ espacio: Int) -> [UInt8] { [Op.imgBorrar, UInt8(espacio)] }
     static func listar() -> [UInt8] { [Op.imgListar] }
     static func pedir(_ espacio: Int) -> [UInt8] { [Op.imgPedir, UInt8(espacio)] }
+    static func listarSprites() -> [UInt8] { [Op.sprListar] }
 }
 
 struct EspacioImagen: Equatable, Sendable { let espacio: Int; let largo: UInt32; let crc: UInt32 }
@@ -142,6 +147,20 @@ func leerListaImagenes(_ b: [UInt8]) -> [EspacioImagen] {
     var i = 3
     while i + 9 <= b.count {
         l.append(EspacioImagen(espacio: Int(b[i]), largo: leerU32(b, i + 1), crc: leerU32(b, i + 5)))
+        i += 9
+    }
+    return l
+}
+
+/// La respuesta a ComandoImagen.listarSprites(): [0xA6][0][u16 máscara] y por
+/// cada uno [espacio 8-19][u32 largo][u32 CRC]. Devuelve los sprites (0 a 11).
+func leerListaSprites(_ b: [UInt8]) -> [EspacioImagen] {
+    guard b.count >= 4, b[0] == (Op.sprListar | Op.respuesta), b[1] == 0 else { return [] }
+    var l: [EspacioImagen] = []
+    var i = 4
+    while i + 9 <= b.count {
+        let e = Int(b[i]) - Op.primerSprite
+        if e >= 0, e < Op.maxSprites { l.append(EspacioImagen(espacio: e, largo: leerU32(b, i + 1), crc: leerU32(b, i + 5))) }
         i += 9
     }
     return l

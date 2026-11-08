@@ -1,5 +1,5 @@
 {
-  "version": "1.4",
+  "version": "1.5",
   "nota": "Generado por shared/protocolo/generar_vectores.mjs. No editar a mano. Bytes en hex separados por espacios.",
   "comandos": [
     {
@@ -52,6 +52,14 @@
     {
       "nombre": "imagen pedir 5",
       "hex": "25 05"
+    },
+    {
+      "nombre": "imagen listar sprites",
+      "hex": "26"
+    },
+    {
+      "nombre": "imagen borrar sprite 0",
+      "hex": "23 08"
     },
     {
       "nombre": "red",

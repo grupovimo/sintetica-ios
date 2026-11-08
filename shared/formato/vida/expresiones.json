@@ -35,5 +35,6 @@
   "espiar": { "izq": { "lt": 0.5, "lb": 0.5 }, "der": { "w": 0.11, "lt": 0.22 }, "gx": 0.1, "parpadeo": "no" },
   "estirarse": { "ojo": { "h": 0.26 }, "ey": 0.03, "fscale": 1.06, "movimiento": "estirarse" },
   "sonando": { "ojo": { "w": 0.12, "lt": 0.5, "lb": 0.5, "smile": 0.5 }, "gy": -0.06, "ftilt": 0.1, "mcurve": 0.45, "movimiento": "dormir", "parpadeo": "no" },
-  "pesadilla": { "ojo": { "w": 0.12, "lt": 0.5, "lb": 0.5 }, "gy": -0.06, "mcurve": -0.45, "shake": 0.12, "movimiento": "dormir", "parpadeo": "no" }
+  "pesadilla": { "ojo": { "w": 0.12, "lt": 0.5, "lb": 0.5 }, "gy": -0.06, "mcurve": -0.45, "shake": 0.12, "movimiento": "dormir", "parpadeo": "no" },
+  "frio": { "ojo": { "w": 0.11, "h": 0.17, "lb": 0.12 }, "gy": -0.03, "shake": 0.3, "fscale": 0.93, "blush": 0.35, "mw": 0.05, "mcurve": -0.2, "movimiento": "temblor", "parpadeo": "mas" }
 }

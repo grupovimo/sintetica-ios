@@ -5,6 +5,7 @@
 
 #include "rostro.h"
 #include "sistema.h"
+#include "sprites.h"
 #include "vida_base.h"
 
 using namespace sintetica;
@@ -19,11 +20,18 @@ Sistema g_sistema;
 uint16_t g_pixeles[640 * 640];
 int g_ancho = 0, g_alto = 0;
 
-// Las imágenes de la vista previa, en memoria ("img0" a "img7"). Con malloc:
-// al doble de la pantalla una foto puede pasar el megabyte (las apps tienen lugar).
-uint8_t* g_imagenes[MAX_IMAGENES];
-uint32_t g_capacidad[MAX_IMAGENES];
-uint32_t g_largos[MAX_IMAGENES];
+// Las imágenes de la vista previa, en memoria ("img0" a "img7" y los sprites,
+// "spr0" a "spr11"). Con malloc: al doble de la pantalla una foto puede pasar
+// el megabyte (las apps tienen lugar).
+constexpr int N_ARCHIVOS = PRIMER_SPRITE + MAX_SPRITES;
+uint8_t* g_imagenes[N_ARCHIVOS];
+uint32_t g_capacidad[N_ARCHIVOS];
+uint32_t g_largos[N_ARCHIVOS];
+
+// Los sprites sueltos (para dibujar una expresión sin la instancia) y su caché.
+uint8_t* g_sueltos[MAX_SPRITES];
+uint32_t g_largoSuelto[MAX_SPRITES];
+CacheSprites g_cacheSuelta;
 
 // Si el anfitrión no guarda nada (una vista previa), se guarda en memoria: así
 // pedir la config devuelve la última que llegó.
@@ -52,9 +60,23 @@ Guardado* buscarGuardado(const char* clave, bool crear) {
 }
 
 int espacioDe(const char* clave) {
-  return (clave[0] == 'i' && clave[1] == 'm' && clave[2] == 'g' && clave[3] >= '0' && clave[3] < '0' + MAX_IMAGENES && !clave[4])
-             ? clave[3] - '0'
-             : -1;
+  if (clave[0] == 'i' && clave[1] == 'm' && clave[2] == 'g' && clave[3] >= '0' && clave[3] < '0' + MAX_IMAGENES && !clave[4])
+    return clave[3] - '0';
+  if (clave[0] == 's' && clave[1] == 'p' && clave[2] == 'r' && clave[3] >= '0' && clave[3] <= '9') {
+    int n = clave[3] - '0';
+    if (clave[4] >= '0' && clave[4] <= '9' && !clave[5] && n == 1) n = 10 + clave[4] - '0';
+    else if (clave[4]) return -1;
+    return n < MAX_SPRITES ? PRIMER_SPRITE + n : -1;
+  }
+  return -1;
+}
+
+int leerSuelto(void*, int sprite, uint32_t off, uint8_t* d, size_t n) {
+  if (sprite < 0 || sprite >= MAX_SPRITES || !g_largoSuelto[sprite]) return -1;
+  if (off >= g_largoSuelto[sprite]) return 0;
+  const uint32_t m = mini(static_cast<int>(n), static_cast<int>(g_largoSuelto[sprite] - off));
+  copiarBytes(d, g_sueltos[sprite] + off, m);
+  return static_cast<int>(m);
 }
 }  // namespace
 
@@ -222,6 +244,28 @@ int sintetica_validar_config(const char* json, size_t n, char* detalle, size_t c
 
 int sintetica_dibujar_expresion(const char* json, size_t n, const char* nombre, int ancho, int alto, int redonda,
                                 float t, uint8_t* rgba, char* detalle, size_t cap) {
+  return sintetica_dibujar_expresion_cierre(json, n, nombre, ancho, alto, redonda, t, 0, rgba, detalle, cap);
+}
+
+int sintetica_sprite_suelto(int sprite, const uint8_t* qoi, size_t n) {
+  if (sprite < 0 || sprite >= MAX_SPRITES) return -1;
+  g_cacheSuelta.vaciar();
+  if (n == 0) {
+    g_largoSuelto[sprite] = 0;
+    return 0;
+  }
+  uint32_t w = 0, h = 0;
+  if (!qoi || n > LIMITE_SPRITE || !cabeceraSprite(qoi, n, &w, &h)) return -1;
+  auto* p = static_cast<uint8_t*>(realloc(g_sueltos[sprite], n));
+  if (!p) return -1;
+  copiarBytes(p, qoi, n);
+  g_sueltos[sprite] = p;
+  g_largoSuelto[sprite] = static_cast<uint32_t>(n);
+  return 0;
+}
+
+int sintetica_dibujar_expresion_cierre(const char* json, size_t n, const char* nombre, int ancho, int alto, int redonda,
+                                       float t, float cierre, uint8_t* rgba, char* detalle, size_t cap) {
   if (detalle && cap) detalle[0] = 0;
   if (!rgba || !nombre || ancho < 16 || alto < 16 || ancho > MAX_ANCHO || alto > MAX_ALTO) return -1;
   static const char vacia[] = "{\"version\":2}";
@@ -241,6 +285,13 @@ int sintetica_dibujar_expresion(const char* json, size_t n, const char* nombre, 
   if (neutral >= 0) vida.caras[neutral].aplicar(c.r);
   vida.caras[i].aplicar(c.r);
   c.r.limitar();
+  // El parpadeo cierra los párpados hacia el medio (como el motor).
+  const float bl = limitar(cierre, 0, 1);
+  for (int lado = 0; lado < 2; lado++) {
+    const int b = lado * param::POR_OJO;
+    c.r[b + param::LT] += (0.5f - c.r[b + param::LT]) * bl;
+    c.r[b + param::LB] += (0.5f - c.r[b + param::LB]) * bl;
+  }
   c.tiempo = t;
   c.faseSpin = t * 3.2f * c.r[param::SPIN];
   c.faseOrbita = t * 4.5f * c.r[param::ORBIT];
@@ -264,9 +315,13 @@ int sintetica_dibujar_expresion(const char* json, size_t n, const char* nombre, 
   Lienzo lienzo;
   lienzo.iniciar(franja, ancho, alto, 32);
   const VistaRostro v = VistaRostro::para(ancho, alto, redonda != 0);
+  // Una cara de imagen: con los sprites sueltos.
+  const CacheSprites* sprites = nullptr;
+  if (vida.caras[i].imagen >= 0 && g_cacheSuelta.cargar(vida.imagenes[vida.caras[i].imagen], v.unidad, leerSuelto, nullptr))
+    sprites = &g_cacheSuelta;
   for (int y0 = 0; y0 < alto; y0 += lienzo.filasPorFranja()) {
     lienzo.empezarFranja(y0);
-    dibujarRostro(lienzo, v, c);
+    dibujarRostro(lienzo, v, c, sprites, 1, sprites ? 1 : 0);
     const int filas = lienzo.filasFranja();
     for (int k = 0; k < filas * ancho; k++) {
       const uint32_t px = de565(franja[k]);

@@ -132,19 +132,35 @@ enum Nucleo {
 
     /// Dibuja una cara paramétrica sin tocar la instancia (miniaturas, el
     /// laboratorio y el dock). nil si no hay una cara paramétrica con ese nombre.
-    static func dibujarExpresion(config: String?, nombre: String, ancho: Int, alto: Int, redonda: Bool, t: Double) -> CGImage? {
+    static func dibujarExpresion(config: String?, nombre: String, ancho: Int, alto: Int, redonda: Bool, t: Double, cierre: Double = 0) -> CGImage? {
         var rgba = [UInt8](repeating: 0, count: ancho * alto * 4)
         var detalle = [CChar](repeating: 0, count: 128)
         let texto = config ?? ""
         let n = texto.utf8.count
         let r: Int32 = texto.withCString { c in
             nombre.withCString { nom in
-                sintetica_dibujar_expresion(n > 0 ? c : nil, n, nom, Int32(ancho), Int32(alto), redonda ? 1 : 0, Float(t), &rgba, &detalle, 128)
+                sintetica_dibujar_expresion_cierre(n > 0 ? c : nil, n, nom, Int32(ancho), Int32(alto), redonda ? 1 : 0, Float(t), Float(cierre),
+                                                   &rgba, &detalle, 128)
             }
         }
-        if r > 0, config != nil { return dibujarExpresion(config: nil, nombre: nombre, ancho: ancho, alto: alto, redonda: redonda, t: t) }
+        if r > 0, config != nil { return dibujarExpresion(config: nil, nombre: nombre, ancho: ancho, alto: alto, redonda: redonda, t: t, cierre: cierre) }
         guard r == 0 else { return nil }
         return imagenRGBA(rgba, ancho: ancho, alto: alto)
+    }
+
+    /// Un sprite de las caras de imagen para dibujarExpresion (0 a 11); vacío lo borra.
+    @discardableResult
+    static func spriteSuelto(_ n: Int, _ qoi: [UInt8]) -> Bool {
+        if qoi.isEmpty { return sintetica_sprite_suelto(Int32(n), nil, 0) == 0 }
+        return qoi.withUnsafeBufferPointer { sintetica_sprite_suelto(Int32(n), $0.baseAddress, qoi.count) } == 0
+    }
+
+    /// El parpadeo de muestra: cada 3,2 s se cierra y se abre (0 abierto, 1 cerrado).
+    nonisolated static func parpadeo(_ t: Double) -> Double {
+        let f = t.truncatingRemainder(dividingBy: 3.2)
+        if f < 0.09 { return f / 0.09 }
+        if f < 0.2 { return 1 - (f - 0.09) / 0.11 }
+        return 0
     }
 
     static func imagenRGBA(_ rgba: [UInt8], ancho w: Int, alto h: Int) -> CGImage? {

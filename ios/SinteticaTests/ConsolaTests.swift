@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import Sintetica
 
@@ -196,9 +197,14 @@ final class ProductoTests: XCTestCase {
         let u = ModeloProducto.de(perfil: "dev-147b", virtual: false, pantalla: nil)
         XCTAssertEqual(u.nombre, "Unidad")
         XCTAssertEqual(u.encuadre, .rectangular)
-        XCTAssertEqual(u.encuadre.foto.ancho, 155.56, accuracy: 0.001)
-        XCTAssertEqual(u.encuadre.pantalla.alto, 42.78, accuracy: 0.001)
-        XCTAssertTrue(u.encuadre.apaisada(redonda: u.redonda))  // se agranda al 185 %
+        XCTAssertEqual(u.encuadre.imagen, "unidad")
+        XCTAssertEqual(u.encuadre.foto.ancho, 100, accuracy: 0.001)
+        XCTAssertEqual(u.encuadre.pantalla.izq, 23.5, accuracy: 0.001)
+        XCTAssertEqual(u.encuadre.pantalla.alto, 39.5, accuracy: 0.001)
+        XCTAssertEqual(u.encuadre.fondo, 0xE9E2D8)
+        XCTAssertFalse(u.encuadre.apaisada(redonda: u.redonda))  // con la foto de la Unidad no se agranda
+        let dePie = Encuadre(imagen: "x", alt: "", foto: .init(ancho: 100, izq: 0, arriba: 0), pantalla: .init(izq: 0, arriba: 0, ancho: 20, alto: 40), fondo: 0)
+        XCTAssertTrue(dePie.apaisada(redonda: false))
         XCTAssertEqual(Encuadre.agrandado, 1.85, accuracy: 0.0001)
         XCTAssertFalse(u.tiene(.microfono))
         XCTAssertTrue(Modulo.voz.bloqueado(u))
@@ -336,5 +342,77 @@ final class LaboratorioTests: XCTestCase {
         r.append(.cuenta)
         Navegacion.alInicio(&r)
         XCTAssertTrue(r.isEmpty)
+    }
+}
+
+@MainActor
+final class CarasDeImagenTests: XCTestCase {
+    /// Un círculo opaco de 40 × 40 en el medio de un lienzo transparente de 100 × 60.
+    private func dibujo() -> UIImage {
+        let f = UIGraphicsImageRendererFormat()
+        f.scale = 1
+        f.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 100, height: 60), format: f).image { ctx in
+            UIColor.orange.setFill()
+            ctx.cgContext.fillEllipse(in: CGRect(x: 30, y: 10, width: 40, height: 40))
+        }
+    }
+
+    func testQoiConTransparencia() {
+        var rgba = [UInt8](repeating: 0, count: 6 * 4 * 4)
+        for i in 0 ..< 24 { rgba[i * 4] = UInt8(i * 10); rgba[i * 4 + 1] = 200; rgba[i * 4 + 2] = 3; rgba[i * 4 + 3] = i % 3 == 0 ? 0 : 255 }
+        for i in 0 ..< 24 where rgba[i * 4 + 3] == 0 { rgba[i * 4] = 0; rgba[i * 4 + 1] = 0; rgba[i * 4 + 2] = 0 }
+        let q = Qoi.codificarRGBA(rgba, ancho: 6, alto: 4)
+        XCTAssertEqual(q[12], 4)
+        let d = Qoi.decodificarRGBA(q)
+        XCTAssertEqual(d?.canales, 4)
+        XCTAssertEqual(d?.rgba, rgba)
+    }
+
+    func testPrepararSpriteRecorta() throws {
+        let q = try XCTUnwrap(PrepararSprite.qoi(dibujo()))
+        let d = try XCTUnwrap(Qoi.decodificarRGBA(q))
+        XCTAssertEqual(d.canales, 4)
+        XCTAssertLessThanOrEqual(abs(d.ancho - 40), 2)  // recortado a lo que se ve
+        XCTAssertLessThanOrEqual(abs(d.alto - 40), 2)
+        XCTAssertEqual(d.rgba[3], 0)  // la esquina es transparente
+        // Y el núcleo lo acepta como sprite y dibuja una cara de imagen con él.
+        XCTAssertTrue(Nucleo.spriteSuelto(0, q))
+        var c = ConfigDoc()
+        c.ponerExpresion("mi-imagen", ["sprites": ["ojo": 0], "tamano": 0.4])
+        XCTAssertNil(Nucleo.validar(c.texto))
+        XCTAssertNotNil(Nucleo.dibujarExpresion(config: c.texto, nombre: "mi-imagen", ancho: 160, alto: 86, redonda: false, t: 0.4, cierre: 1))
+        Nucleo.spriteSuelto(0, [])
+    }
+
+    func testSpritesEnLaConfig() {
+        var c = ConfigDoc()
+        c.ponerExpresion("a", ["sprites": ["ojo": 0, "boca": 2]])
+        c.ponerExpresion("b", ["sprites": ["ojo": 1]])
+        c.ponerExpresion("contento", ["ojo": ["w": 0.1]])
+        XCTAssertEqual(c.deImagen, ["a", "b"])
+        XCTAssertEqual(c.sprite("a", "boca"), 2)
+        XCTAssertNil(c.sprite("a", "ojo_cerrado"))
+        XCTAssertEqual(c.spritesEnUso(), [0, 1, 2])
+        XCTAssertEqual(c.spritesEnUso(menos: "a"), [1])
+        XCTAssertEqual(spriteLibre(usados: c.spritesEnUso()), 3)
+        XCTAssertNil(spriteLibre(usados: Set(0 ..< 12)))
+        c.ponerCaraSiempre("a")
+        XCTAssertEqual(c.caraSiempre, "a")
+        c.ponerCaraSiempre("")
+        XCTAssertNil(c.raiz["cara"])
+        XCTAssertTrue(esImagen(["sprites": ["ojo": 0]]))
+        XCTAssertFalse(esImagen(["formas": []]))
+    }
+
+    func testListaDeSprites() {
+        // [0xA6][0][máscara u16] y por cada uno [espacio][u32 largo][u32 CRC].
+        let b: [UInt8] = [0xA6, 0, 0x05, 0, 8, 10, 0, 0, 0, 1, 2, 3, 4, 10, 20, 0, 0, 0, 0xFF, 0, 0, 0]
+        let l = leerListaSprites(b)
+        XCTAssertEqual(l.map(\.espacio), [0, 2])
+        XCTAssertEqual(l.first?.largo, 10)
+        XCTAssertEqual(l.first?.crc, 0x0403_0201)
+        XCTAssertEqual(leerListaSprites([0xA6, 0x08]), [])  // un firmware anterior
+        XCTAssertEqual(ComandoImagen.listarSprites(), [0x26])
     }
 }

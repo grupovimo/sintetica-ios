@@ -114,6 +114,17 @@ int sintetica_validar_config(const char* json, size_t n, char* detalle, size_t c
 int sintetica_dibujar_expresion(const char* json, size_t n, const char* nombre, int ancho, int alto, int redonda,
                                 float t, uint8_t* rgba, char* detalle, size_t cap);
 
+/* Como sintetica_dibujar_expresion, con un parpadeo: `cierre` de 0 (abierto) a
+ * 1 (cerrado). Una cara de imagen ("sprites") se dibuja con los sprites
+ * sueltos (sintetica_sprite_suelto); si no está el de su ojo, con la SDF. */
+int sintetica_dibujar_expresion_cierre(const char* json, size_t n, const char* nombre, int ancho, int alto, int redonda,
+                                       float t, float cierre, uint8_t* rgba, char* detalle, size_t cap);
+
+/* Los sprites que usa sintetica_dibujar_expresion (aparte de los del bicho de
+ * la instancia): `sprite` de 0 a 11, un QOI de 3 o 4 canales de hasta
+ * 128 × 128. n = 0 lo borra. Devuelve 0 si lo guardó, -1 si no es válido. */
+int sintetica_sprite_suelto(int sprite, const uint8_t* qoi, size_t n);
+
 /* Lo de fábrica del motor de vida (shared/formato/vida): tipo 0 = las
  * expresiones paramétricas, 1 = los comportamientos. Devuelve cuántos hay; si
  * `indice` está en rango, deja en *nombre y *json los de ese (el JSON, como en

@@ -18,6 +18,8 @@ struct LabExpresiones: View {
     @State private var error = ""
     @State private var aviso = ""
     @State private var guardando = false
+    /// Una cara de imagen abierta: nil = el editor de perillas; "" = una nueva.
+    @State private var imagen: String?
 
     struct Extra: Equatable { var movimiento = "ninguno", particula = "ninguna", parpadeo = "normal" }
 
@@ -67,6 +69,21 @@ struct LabExpresiones: View {
         let cambios = documento.count
         VStack(alignment: .leading, spacing: 16) {
             galeria
+            if let im = imagen {
+                LabDeImagen(modelo: modelo, inicial: im) { n in imagenLista(n) }.id(im)
+            } else {
+                editor(cambios)
+            }
+        }
+        .onAppear { if elegida.isEmpty && nombre.isEmpty { elegir("contento") } }
+    }
+
+    private func imagenLista(_ n: String) {
+        imagen = nil
+        if n.isEmpty { elegir("neutral") } else { elegida = n; imagen = n }
+    }
+
+    @ViewBuilder private func editor(_ cambios: Int) -> some View {
             PantallaDibujada(config: configEnVivo, expresion: nombreDibujo, pantalla: modelo.pantalla, fps: 30, escala: 2)
                 .aspectRatio(modelo.pantalla.redonda ? 1 : 320 / 172, contentMode: .fit)
                 .clipShape(modelo.pantalla.redonda ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 18)))
@@ -80,8 +97,6 @@ struct LabExpresiones: View {
                 solapas
                 Bandeja { controles }
             }
-        }
-        .onAppear { if elegida.isEmpty && nombre.isEmpty { elegir("contento") } }
     }
 
     private var accionEnRobot: (() -> Void)? {
@@ -114,10 +129,19 @@ struct LabExpresiones: View {
                     }
                 }
                 .buttonStyle(.plain)
+                Button { elegida = ""; imagen = "" } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "photo.badge.plus").font(.system(size: 22, weight: .bold)).foregroundStyle(Color.brasa)
+                            .frame(width: 96, height: modelo.pantalla.redonda ? 96 : 52)
+                            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(imagen == "" ? Color.brasa : Color(hex: 0x3A3632), style: StrokeStyle(lineWidth: 2, dash: [5, 4])))
+                        Text("DE IMAGEN").font(Tipos.marca(9.5, .heavy)).foregroundStyle(Color.grisClaro)
+                    }
+                }
+                .buttonStyle(.plain)
                 ForEach(nombres, id: \.self) { n in
                     Button { elegir(n) } label: {
                         VStack(spacing: 6) {
-                            MiniCara(nombre: n, config: configUsuario, pantalla: modelo.pantalla, ancho: 96)
+                            miniatura(n)
                             HStack(spacing: 4) {
                                 Text(n).font(Tipos.marca(9.5, .bold)).lineLimit(1)
                                 if propias[n] != nil { Led(estado: .on, tamano: 6) }
@@ -132,6 +156,21 @@ struct LabExpresiones: View {
                 }
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    /// Las caras de imagen se muestran con su ojo.
+    @ViewBuilder private func miniatura(_ n: String) -> some View {
+        if esImagen(propias[n]) {
+            let ojo = modelo.config.sprite(n, "ojo").flatMap { modelo.miniSprites[$0] }
+            ZStack {
+                Color.black
+                if let ojo { Image(uiImage: ojo).resizable().scaledToFit().padding(6) }
+            }
+            .frame(width: 96, height: modelo.pantalla.redonda ? 96 : 52)
+            .clipShape(modelo.pantalla.redonda ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 8)))
+        } else {
+            MiniCara(nombre: n, config: configUsuario, pantalla: modelo.pantalla, ancho: 96)
         }
     }
 
@@ -203,6 +242,12 @@ struct LabExpresiones: View {
     }
 
     private func elegir(_ n: String) {
+        if esImagen(propias[n]) {
+            elegida = n
+            imagen = n
+            return
+        }
+        imagen = nil
         error = ""
         aviso = ""
         elegida = n

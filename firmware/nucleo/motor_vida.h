@@ -112,6 +112,14 @@ class MotorVida {
 
   // Lo que se dibuja.
   const CuadroRostro& cuadro() const { return cuadro_; }
+  // La cara de imagen que se ve (índice en config.vida.caras, -1 = la SDF):
+  // la de la capa (un reflejo o un paso de un comportamiento) si es de imagen;
+  // si no, la "persona" (fija > estado > base > la de config.cara.expresion),
+  // y las demás caras (paramétricas) la mueven con sus parámetros.
+  int caraImagen() const;
+  // Qué caras de imagen se pueden mostrar (bit i = vida.imagenes[i]: tiene su
+  // sprite del ojo). El sistema lo actualiza cuando cambian la config o los sprites.
+  void imagenesDisponibles(uint8_t mascara) { dispImagenes_ = mascara; }
   // Si hay que dibujar un dibujo de formas (una cara propia del usuario):
   // su índice y su opacidad (para el fundido). -1 = solo el rostro.
   int dibujo() const { return dibujo_; }
@@ -186,6 +194,7 @@ class MotorVida {
   void cambioDeCapa(int cara, float peso);
   bool enHorarioDormir() const;
   int caraEstado();
+  bool esImagen(int cara) const;
   int idxOvejas() const;
 
   const Config* config_ = nullptr;
@@ -215,6 +224,8 @@ class MotorVida {
   float opDibujo_ = 0;
   int dibujoObjetivo_ = -1;
   int8_t animoCaras_[6] = {-1, -1, -1, -1, -1, -1};
+  uint8_t dispImagenes_ = 0xFF;
+  int personaImagen_ = -1;  // la cara de imagen de la persona (sin la capa)
   float animoPesos_[6] = {};
   float grunonHasta_ = 0, ofendidoHasta_ = 0;
 

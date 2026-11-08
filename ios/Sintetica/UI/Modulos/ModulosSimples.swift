@@ -62,6 +62,7 @@ struct ModCara: View {
                     ForEach(COLORES_OJOS, id: \.hex) { o in lampara(o.hex, o.nombre, elegido: c.colorOjos == o.hex) }
                 }
             }
+            if !c.deImagen.isEmpty || !c.caraSiempre.isEmpty { suCara(c) }
             Bandeja {
                 Perilla(nombre: "Tamaño", valor: c.tamano, min: 0.5, max: 1.5, mostrar: { "\(Int(($0 * 100).rounded()))%" }, tamano: 72) { v in
                     modelo.cambiar { $0.ponerTamano(v) }
@@ -93,6 +94,47 @@ struct ModCara: View {
                 if !error.isEmpty { AvisoConsola(texto: error, error: true) }
             }
         }
+    }
+
+    /// Su cara de siempre: la de fábrica o una de imagen (con la miniatura de su ojo).
+    private func suCara(_ c: ConfigDoc) -> some View {
+        Bandeja {
+            Grabado("Su cara", color: Color.tinta.opacity(0.66))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    opcionCara("", "De fábrica", elegida: c.caraSiempre.isEmpty, imagen: nil)
+                    ForEach(c.deImagen, id: \.self) { n in
+                        opcionCara(n, n, elegida: c.caraSiempre == n, imagen: c.sprite(n, "ojo").flatMap { modelo.miniSprites[$0] })
+                    }
+                }
+            }
+        }
+    }
+
+    private func opcionCara(_ n: String, _ t: String, elegida: Bool, imagen: UIImage?) -> some View {
+        Button { modelo.cambiar { $0.ponerCaraSiempre(n) } } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    if let imagen {
+                        Image(uiImage: imagen).resizable().scaledToFit().padding(6)
+                    } else {
+                        HStack(spacing: 6) {
+                            Capsule().fill(Color.led).frame(width: 8, height: 18)
+                            Capsule().fill(Color.led).frame(width: 8, height: 18)
+                        }
+                    }
+                }
+                .frame(width: 64, height: 44)
+                Text(t.uppercased()).font(Tipos.marca(8.5, .heavy)).lineLimit(1).minimumScaleFactor(0.6)
+                    .foregroundStyle(elegida ? Color.papel : Color.gris)
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color.hundido.shadow(.inner(color: .black.opacity(0.8), radius: 3, y: 2))))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(elegida ? Color.brasa : Color.clear, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(n.isEmpty ? "Cara de fábrica" : "Cara \(n)")
+        .accessibilityAddTraits(elegida ? [.isSelected] : [])
     }
 
     private func lampara(_ hex: String, _ nombre: String, elegido: Bool) -> some View {

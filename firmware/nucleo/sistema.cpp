@@ -13,6 +13,7 @@ constexpr const char* CLAVE_SERIE = "serie";
 constexpr const char* CLAVE_CODIGO = "codigo";
 constexpr const char* CLAVE_CLAVES = "claves";
 constexpr const char* CLAVE_IMAGENES = "imagenes";
+constexpr const char* CLAVE_SPRITES = "sprites";
 constexpr const char* CLAVE_RED = "red";
 constexpr const char* CLAVE_NUBE = "nube";
 constexpr const char* CLAVE_VIDA = "vida";
@@ -21,10 +22,21 @@ constexpr const char* CLAVE_VIDA = "vida";
 constexpr size_t TROZO_NUBE = 1024;
 uint8_t g_trozo[TROZO_NUBE + 16];
 
+// "img0" a "img7"; los sprites (espacios 8 a 19), "spr0" a "spr11".
 void claveImagen(char* destino, int espacio) {
-  copiarTexto(destino, 6, "img0");
-  destino[3] = static_cast<char>('0' + espacio);
+  if (espacio < PRIMER_SPRITE) {
+    copiarTexto(destino, 6, "img0");
+    destino[3] = static_cast<char>('0' + espacio);
+    return;
+  }
+  const int n = espacio - PRIMER_SPRITE;
+  copiarTexto(destino, 6, "spr");
+  if (n >= 10) destino[3] = '1', destino[4] = static_cast<char>('0' + n - 10), destino[5] = 0;
+  else destino[3] = static_cast<char>('0' + n), destino[4] = 0;
 }
+
+bool esSprite(int espacio) { return espacio >= PRIMER_SPRITE && espacio < PRIMER_SPRITE + MAX_SPRITES; }
+bool espacioValido(int espacio) { return (espacio >= 0 && espacio < MAX_IMAGENES) || esSprite(espacio); }
 
 uint16_t g_filaImagen[MAX_ANCHO];
 constexpr uint32_t QR_POR_BOTON_MS = 120000;  // el QR del botón dura 2 min
@@ -108,6 +120,11 @@ void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
   leerMemoria();
   leerAjustes();
   leerImagenes();
+  leerSprites();
+  cache_.vaciar();
+  firmaCache_ = 0;
+  opSprites_ = ocultarOjos_ = 0;
+  actualizarSprites();
   azar_.sembrar(hal_.semilla ? hal_.semilla() : ahora);
   subiendo_ = -1;
   mostrandoImagen_ = -1;
@@ -333,6 +350,107 @@ void Sistema::guardarImagenes() {
   hal_.guardar(CLAVE_IMAGENES, b, sizeof b);
 }
 
+void Sistema::leerSprites() {
+  for (auto& m : sprites_) m = MetaImagen();
+  uint8_t b[MAX_SPRITES * 8];
+  const int n = hal_.leer ? hal_.leer(CLAVE_SPRITES, b, sizeof b) : -1;
+  if (n != static_cast<int>(sizeof b)) return;
+  for (int i = 0; i < MAX_SPRITES; i++) {
+    sprites_[i].largo = protocolo::leer32(b + i * 8);
+    sprites_[i].crc = protocolo::leer32(b + i * 8 + 4);
+  }
+}
+
+void Sistema::guardarSprites() {
+  if (!hal_.guardar) return;
+  uint8_t b[MAX_SPRITES * 8];
+  for (int i = 0; i < MAX_SPRITES; i++) {
+    protocolo::escribir32(b + i * 8, sprites_[i].largo);
+    protocolo::escribir32(b + i * 8 + 4, sprites_[i].crc);
+  }
+  hal_.guardar(CLAVE_SPRITES, b, sizeof b);
+}
+
+Sistema::MetaImagen* Sistema::meta(int espacio) {
+  if (espacio >= 0 && espacio < MAX_IMAGENES) return &imagenes_[espacio];
+  if (esSprite(espacio)) return &sprites_[espacio - PRIMER_SPRITE];
+  return nullptr;
+}
+
+int Sistema::leerSprite(void* contexto, int sprite, uint32_t desplazamiento, uint8_t* destino, size_t n) {
+  auto* s = static_cast<Sistema*>(contexto);
+  if (!s->hal_.leerTrozo || sprite < 0 || sprite >= MAX_SPRITES || !s->sprites_[sprite].largo) return -1;
+  char clave[6];
+  claveImagen(clave, PRIMER_SPRITE + sprite);
+  return s->hal_.leerTrozo(clave, desplazamiento, destino, n);
+}
+
+// Un QOI de 3 o 4 canales de hasta 128 × 128.
+bool Sistema::spriteValido(const char* clave, const char** porQue) {
+  *porQue = "un sprite es un QOI de hasta 128 × 128";
+  uint8_t cab[14];
+  uint32_t w = 0, h = 0;
+  return leerArchivo(clave, 0, cab, sizeof cab) && cabeceraSprite(cab, sizeof cab, &w, &h);
+}
+
+void Sistema::actualizarSprites() {
+  uint8_t m = 0;
+  for (int i = 0; i < config_.vida.nImagenes; i++) {
+    const int s = config_.vida.imagenes[i].sprite[static_cast<int>(ParteSprite::Ojo)];
+    if (s >= 0 && s < MAX_SPRITES && sprites_[s].largo) m = static_cast<uint8_t>(m | (1u << i));
+  }
+  motor_.imagenesDisponibles(m);
+}
+
+// De qué es la cara de imagen `cara` (0 = ninguna): sus partes, su geometría
+// y los CRC de sus sprites. Si cambia algo, se vuelve a cargar con un fundido.
+uint32_t Sistema::firmaSprites(int cara) const {
+  if (cara < 0 || cara >= config_.vida.nCaras || config_.vida.caras[cara].imagen < 0) return 0;
+  const CaraImagen& c = config_.vida.imagenes[config_.vida.caras[cara].imagen];
+  uint8_t b[N_PARTES_SPRITE * 5 + 8];
+  size_t n = 0;
+  for (int i = 0; i < N_PARTES_SPRITE; i++) {
+    b[n++] = static_cast<uint8_t>(c.sprite[i]);
+    protocolo::escribir32(b + n, c.sprite[i] >= 0 ? sprites_[c.sprite[i]].crc : 0);
+    n += 4;
+  }
+  b[n++] = c.espejar ? 1 : 0;
+  b[n++] = static_cast<uint8_t>(c.tamano), b[n++] = static_cast<uint8_t>(c.tamano >> 8);
+  b[n++] = static_cast<uint8_t>(c.bocaTamano), b[n++] = static_cast<uint8_t>(c.bocaTamano >> 8);
+  b[n++] = static_cast<uint8_t>(c.bocaY), b[n++] = static_cast<uint8_t>(c.bocaY >> 8);
+  b[n++] = 0x5A;
+  return protocolo::crc32(b, n) | 1u;
+}
+
+// El fundido entre la SDF y la cara de imagen (nunca un corte): si la que
+// toca no es la que está cargada, se apaga, se carga la nueva y se prende.
+void Sistema::avanzarSprites(uint32_t dt) {
+  const float paso = static_cast<float>(dt < 200 ? dt : 200) / 200.0f;
+  const int cara = motor_.caraImagen();
+  const uint32_t objetivo = firmaSprites(cara);
+  if (objetivo != firmaCache_) {
+    opSprites_ = maxf(0, opSprites_ - paso);
+    if (opSprites_ <= 0) {
+      firmaCache_ = 0;
+      cache_.vaciar();
+      if (objetivo) {
+        const CaraImagen& c = config_.vida.imagenes[config_.vida.caras[cara].imagen];
+        if (cache_.cargar(c, vistaRostro_.unidad, leerSprite, this)) {
+          firmaCache_ = objetivo;
+        } else {
+          log("no pude leer los sprites de la cara; uso la de siempre");
+          motor_.imagenesDisponibles(0);  // hasta que cambien la config o los sprites
+        }
+      }
+    }
+  } else if (firmaCache_) {
+    opSprites_ = minf(1, opSprites_ + paso);
+  }
+  // Los ojos de la SDF se apagan mientras haya una cara de imagen (o mientras entra).
+  const float quiere = objetivo ? 1.0f : 0.0f;
+  ocultarOjos_ = quiere > ocultarOjos_ ? minf(quiere, ocultarOjos_ + paso) : maxf(quiere, ocultarOjos_ - paso);
+}
+
 int Sistema::leerParaQoi(void* contexto, uint32_t desplazamiento, uint8_t* destino, size_t n) {
   auto* s = static_cast<Sistema*>(contexto);
   if (!s->hal_.leerTrozo) return -1;
@@ -458,18 +576,26 @@ void Sistema::bleImagen(uint8_t op, const uint8_t* d, size_t n) {
   char clave[6];
   switch (op) {
     case ImgInicio: {
-      if (n != 10 || d[1] >= MAX_IMAGENES) return responder(car, op, Malformado);
+      if (n != 10 || !espacioValido(d[1])) return responder(car, op, Malformado);
       const uint32_t largo = leer32(d + 2);
-      if (largo < 22 || largo > limiteImagen(perfil_.ancho, perfil_.alto)) return responder(car, op, MuyGrande);
+      const uint32_t limite = esSprite(d[1]) ? LIMITE_SPRITE : limiteImagen(perfil_.ancho, perfil_.alto);
+      if (largo < 22 || largo > limite) return responder(car, op, MuyGrande);
       subiendo_ = d[1];
       subidaLargo_ = largo;
       subidaCrc_ = leer32(d + 6);
       subidaRecibido_ = 0;
       subidaCrcAcum_ = 0;
-      imagenes_[subiendo_] = MetaImagen();
-      guardarImagenes();
-      imagenSucia_ = true;
-      imagenPreparada_ = -1;
+      *meta(subiendo_) = MetaImagen();
+      if (esSprite(subiendo_)) {
+        // La cara que lo usa se va con un fundido (los sprites que se ven
+        // siguen en la RAM) y vuelve cuando llega el nuevo.
+        guardarSprites();
+        actualizarSprites();
+      } else {
+        guardarImagenes();
+        imagenSucia_ = true;
+        imagenPreparada_ = -1;
+      }
       return responder(car, op, Ok);
     }
     case ImgBloque: {
@@ -498,27 +624,56 @@ void Sistema::bleImagen(uint8_t op, const uint8_t* d, size_t n) {
         return responder(car, op, subidaRecibido_ != subidaLargo_ ? FueraDeOrden : CrcDistinto);
       }
       const char* porQue = "";
-      if (!imagenValida(clave, subidaLargo_, &porQue)) {
+      if (esSprite(espacio) ? !spriteValido(clave, &porQue) : !imagenValida(clave, subidaLargo_, &porQue)) {
         if (hal_.borrar) hal_.borrar(clave);
         return responder(car, op, ImagenInvalida, porQue);
       }
-      imagenes_[espacio].largo = subidaLargo_;
-      imagenes_[espacio].crc = subidaCrc_;
-      guardarImagenes();
-      imagenSucia_ = true;
-      imagenPreparada_ = -1;
-      log("imagen guardada");
+      meta(espacio)->largo = subidaLargo_;
+      meta(espacio)->crc = subidaCrc_;
+      if (esSprite(espacio)) {
+        guardarSprites();
+        actualizarSprites();
+        log("sprite guardado");
+      } else {
+        guardarImagenes();
+        imagenSucia_ = true;
+        imagenPreparada_ = -1;
+        log("imagen guardada");
+      }
       return responder(car, op, Ok);
     }
     case ImgBorrar: {
-      if (n != 2 || d[1] >= MAX_IMAGENES) return responder(car, op, Malformado);
+      if (n != 2 || !espacioValido(d[1])) return responder(car, op, Malformado);
       claveImagen(clave, d[1]);
       if (hal_.borrar) hal_.borrar(clave);
-      imagenes_[d[1]] = MetaImagen();
-      guardarImagenes();
-      imagenSucia_ = true;
-      imagenPreparada_ = -1;
+      *meta(d[1]) = MetaImagen();
+      if (esSprite(d[1])) {
+        guardarSprites();
+        actualizarSprites();
+      } else {
+        guardarImagenes();
+        imagenSucia_ = true;
+        imagenPreparada_ = -1;
+      }
       return responder(car, op, Ok);
+    }
+    case ImgListarSprites: {
+      uint8_t b[4 + MAX_SPRITES * 9];
+      size_t i = 4;
+      uint16_t mascara = 0;
+      for (int k = 0; k < MAX_SPRITES; k++) {
+        if (!sprites_[k].largo) continue;
+        mascara = static_cast<uint16_t>(mascara | (1u << k));
+        b[i++] = static_cast<uint8_t>(PRIMER_SPRITE + k);
+        escribir32(b + i, sprites_[k].largo);
+        escribir32(b + i + 4, sprites_[k].crc);
+        i += 8;
+      }
+      b[0] = op | Respuesta;
+      b[1] = Ok;
+      b[2] = static_cast<uint8_t>(mascara), b[3] = static_cast<uint8_t>(mascara >> 8);
+      enviar(car, b, i);
+      return;
     }
     case ImgListar: {
       uint8_t b[3 + MAX_IMAGENES * 9];
@@ -539,8 +694,8 @@ void Sistema::bleImagen(uint8_t op, const uint8_t* d, size_t n) {
       return;
     }
     case ImgPedir: {
-      if (n != 2 || d[1] >= MAX_IMAGENES) return responder(car, op, Malformado);
-      if (!imagenes_[d[1]].largo) return responder(car, op, NoExiste);
+      if (n != 2 || !espacioValido(d[1])) return responder(car, op, Malformado);
+      if (!meta(d[1])->largo) return responder(car, op, NoExiste);
       return enviarImagen(d[1]);
     }
     default:
@@ -682,7 +837,7 @@ void Sistema::dibujarPantalla(uint32_t ahora) {
   if (dibujo >= 0 && op >= 0.999f) {
     lienzo_.limpiar(paleta::PANTALLA);
   } else {
-    dibujarRostro(lienzo_, vistaRostro_, motor_.cuadro());
+    dibujarRostro(lienzo_, vistaRostro_, motor_.cuadro(), &cache_, opSprites_, ocultarOjos_);
   }
   if (dibujo >= 0 && op > 0.001f) {
     lienzo_.opacidad(op);
@@ -741,6 +896,7 @@ void Sistema::tick() {
   revisarRecordatorios(ahora);
   avanzarPomodoro(ahora, dtCuadro);
   motor_.tick(ahora, contexto());
+  avanzarSprites(dtCuadro);
   avanzarPanel(ahora, dtCuadro);
   avanzarProtector(ahora, dtCuadro);
   // El broche, de noche y ya dormido, apaga la pantalla hasta la mañana (no
@@ -1072,7 +1228,7 @@ void Sistema::dibujarPanel() {
   VistaRostro v = vistaRostro_;
   v.unidad = mezclar(v.unidad, v.unidad * 0.45f, f);
   v.origenY = mezclar(v.origenY, H * 0.27f, f);
-  dibujarRostro(lienzo_, v, motor_.cuadro());
+  dibujarRostro(lienzo_, v, motor_.cuadro(), &cache_, opSprites_, ocultarOjos_);
   const int dibujo = motor_.dibujo();
   const float op = motor_.opacidadDibujo() * (1 - f);
   if (dibujo >= 0 && op > 0.001f) {
@@ -1267,7 +1423,7 @@ void Sistema::enviarImagen(int espacio) {
   enviar(CarImagen, ok, 2);
   const size_t porTrozo = canal_ == Canal::Nube ? TROZO_NUBE : MAX_NOTIFICACION - 5;
   uint32_t off = 0, crc = 0;
-  while (off < imagenes_[espacio].largo && hal_.leerTrozo) {
+  while (off < meta(espacio)->largo && hal_.leerTrozo) {
     const int m = hal_.leerTrozo(clave, off, g_trozo + 5, porTrozo);
     if (m <= 0) break;
     g_trozo[0] = ImgTrozo;
@@ -1654,6 +1810,7 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
         guardarAjustes();
         // El motor sigue con su estado y su memoria: solo cambian los datos.
         motor_.reconfigurar(&config_);
+        actualizarSprites();
         // Los recordatorios cambiaron: el que se veía se va con un fundido
         // (su texto quedó copiado) y se revisa de nuevo el minuto actual.
         recVisible_ = -1;

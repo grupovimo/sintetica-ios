@@ -499,6 +499,19 @@ void MotorVida::cambioDeCapa(int cara, float peso) {
   proximaParticula_ = t + entre(azar_, 1.0f, 2.5f);
 }
 
+bool MotorVida::esImagen(int cara) const {
+  if (cara < 0 || cara >= config_->vida.nCaras) return false;
+  const int i = config_->vida.caras[cara].imagen;
+  return i >= 0 && (dispImagenes_ & (1u << i));
+}
+
+int MotorVida::caraImagen() const {
+  const float t = static_cast<float>(t_);
+  if (reflejo_ >= 0 && t < reflejoHasta_ && esImagen(reflejo_)) return reflejo_;
+  if (capaCara_ >= 0 && capaPeso_ >= 0.5f && esImagen(capaCara_)) return capaCara_;
+  return personaImagen_ >= 0 && esImagen(personaImagen_) ? personaImagen_ : -1;
+}
+
 int MotorVida::caraEstado() {
   // Las reglas de estado ("bateria<15" → una cara mientras se cumpla).
   for (int i = 0; i < config_->nReglas; i++) {
@@ -530,8 +543,21 @@ void MotorVida::calcularObjetivos(float dt) {
   const int neutral = v.indiceCara("neutral");
   if (neutral >= 0) v.caras[neutral].aplicar(N);
 
-  // La cara de reposo: fija > estado (batería) > base de la lista > dormido > neutral.
-  int reposo = neutral;
+  // La cara de reposo: fija > estado (batería) > base de la lista > dormido >
+  // la de la config ("cara": {"expresion": …}) > neutral.
+  int reposo = v.reposo >= 0 ? v.reposo : neutral;
+  // La cara de imagen de la persona: la primera de imagen entre la fija, la de
+  // estado, la base y la de la config; una fija o una base que no es de imagen
+  // corta la búsqueda (la eligió el dueño). Dormido sigue siendo la misma cara,
+  // con los ojos cerrados.
+  personaImagen_ = -1;
+  if (fija_.existe()) {
+    personaImagen_ = esImagen(fija_.vida) ? fija_.vida : -2;
+  }
+  if (personaImagen_ == -1 && caraEstado_ >= 0 && caraEstado_ < 1000 && esImagen(caraEstado_)) personaImagen_ = caraEstado_;
+  if (personaImagen_ == -1 && base_.existe()) personaImagen_ = esImagen(base_.vida) ? base_.vida : -2;
+  if (personaImagen_ == -1 && esImagen(v.reposo)) personaImagen_ = v.reposo;
+  if (personaImagen_ < 0) personaImagen_ = -1;
   int dibujo = -1;
   bool conAnimo = true;
   if (fija_.existe()) {
@@ -1330,11 +1356,15 @@ const char* MotorVida::nombreVisible() const {
   if (dibujo_ >= 0 && opDibujo_ >= 0.5f) return config_->expresiones[dibujo_].nombre;
   const float t = static_cast<float>(t_);
   if (fija_.existe()) return fija_.vida >= 0 ? v.caras[fija_.vida].nombre : config_->expresiones[fija_.dibujo].nombre;
+  // Lo que se ve es la cara de imagen (las paramétricas solo la mueven).
+  const int imagen = caraImagen();
+  if (imagen >= 0) return v.caras[imagen].nombre;
   if (reflejo_ >= 0 && t < reflejoHasta_) return v.caras[reflejo_].nombre;
   if (actual_ != -1 && pasoCara_ >= 0 && pasoPeso_ >= 0.5f) return v.caras[pasoCara_].nombre;
   if (modo_ == Modo::Dormido) return "dormido";
   if (caraEstado_ >= 0 && caraEstado_ < 1000) return v.caras[caraEstado_].nombre;
   if (base_.vida >= 0) return v.caras[base_.vida].nombre;
+  if (v.reposo >= 0) return v.caras[v.reposo].nombre;
   if (animoCaras_[0] >= 0 && animoPesos_[0] >= 0.3f) return v.caras[animoCaras_[0]].nombre;
   return "neutral";
 }

@@ -30,6 +30,9 @@ final class ModeloRobot {
     var progreso: Double?
     var errorImagenes = ""
     var aviso: Aviso?
+    /// Los sprites de las caras de imagen (QOI, por número 0 a 11) y su miniatura.
+    var sprites: [Int: [UInt8]] = [:]
+    var miniSprites: [Int: UIImage] = [:]
     var vida: VidaEnVivo?
     var vidaEn = Date.distantPast
     var ota: Actualizacion?
@@ -43,6 +46,7 @@ final class ModeloRobot {
     @ObservationIgnored private var espejo: Task<Void, Never>?
     @ObservationIgnored private var oyente: UUID?
     @ObservationIgnored private var crcCargado: [Int: UInt32] = [:]
+    @ObservationIgnored private var crcSprites: [Int: UInt32] = [:]
     @ObservationIgnored private var ultimaFijada = ""
     @ObservationIgnored var pausaEspejo = Date.distantPast
     @ObservationIgnored private let conexion = UUID().uuidString
@@ -122,6 +126,7 @@ final class ModeloRobot {
         config = ConfigDoc(texto: try await c.pedirConfig())
         escuchar(c)
         await cargarImagenes()
+        await cargarSprites()
     }
 
     private func abrirNube(_ r: RobotNube) async throws {
@@ -133,6 +138,7 @@ final class ModeloRobot {
         iniciarVistaPrevia()
         oyente = EnVivo.compartido.escuchar { [weak self] e in self?.recibir(e) }
         await cargarImagenes()
+        await cargarSprites()
     }
 
     private func abrirBle() async throws {
@@ -153,6 +159,7 @@ final class ModeloRobot {
         iniciarVistaPrevia()
         escuchar(c)
         await cargarImagenes()
+        await cargarSprites()
     }
 
     private func cerrarConexiones() {
@@ -198,6 +205,8 @@ final class ModeloRobot {
             if v != versionConfig, pendiente == nil, guardado != .guardando { Task { await recargarConfig() } }
         case "imagenes":
             Task { await cargarImagenes() }
+        case "sprites":
+            Task { await cargarSprites() }
         case "bicho":
             if let b = e.datos["bicho"] as? [String: Any] { robot = RobotNube(b); if let x = robot?.estado { estado = x } }
         case "mcp":
@@ -524,6 +533,83 @@ final class ModeloRobot {
             }
         }
         await cargarImagenes()
+    }
+
+    // MARK: - Sprites (las caras de imagen)
+
+    enum FuenteSprite { case datos(Data), svg(String) }
+
+    func cargarSprites() async {
+        var lista: [EspacioImagen] = []
+        switch via {
+        case .nube:
+            guard let l = try? await api.sprites(id) else { return }
+            lista = l
+        case .ble, .demo:
+            guard let c = cliente, let l = try? await c.listarSprites() else { return }
+            lista = l
+        }
+        let hay = Set(lista.map(\.espacio))
+        for n in Array(sprites.keys) where !hay.contains(n) {
+            sprites[n] = nil
+            miniSprites[n] = nil
+            crcSprites[n] = nil
+            Nucleo.spriteSuelto(n, [])
+            if !esDemo { Nucleo.bleEscribir(Car.imagen.rawValue, Data(ComandoImagen.borrar(Op.primerSprite + n))) }
+        }
+        for e in lista where crcSprites[e.espacio] != e.crc {
+            var bytes: [UInt8]?
+            if esNube {
+                bytes = try? await api.sprite(id, e.espacio)
+            } else if let m = CacheImagenes.mandada(id, Op.primerSprite + e.espacio), crc32(m) == e.crc {
+                bytes = m
+            }
+            guard let b = bytes else { continue }
+            ponerSprite(e.espacio, b)
+            crcSprites[e.espacio] = e.crc
+        }
+        Miniaturas.vaciar()
+    }
+
+    /// Lo deja en el núcleo del celu (para dibujar y para la vista previa).
+    private func ponerSprite(_ n: Int, _ b: [UInt8]) {
+        sprites[n] = b
+        miniSprites[n] = Qoi.imagen(b).map { UIImage(cgImage: $0) }
+        Nucleo.spriteSuelto(n, b)
+        if !esDemo {
+            for w in escriturasDeImagen(Op.primerSprite + n, b, tamanoBloque: 512) { Nucleo.bleEscribir(Car.imagen.rawValue, Data(w)) }
+        }
+    }
+
+    /// Sube un dibujo como el sprite n (por la nube la API lo convierte; cerca, el celu).
+    func subirSprite(_ n: Int, _ f: FuenteSprite) async throws {
+        switch via {
+        case .nube:
+            switch f {
+            case let .datos(d): try await api.subirSprite(id, n, d, tipo: "application/octet-stream")
+            case let .svg(t): try await api.subirSprite(id, n, Data(t.utf8), tipo: "image/svg+xml")
+            }
+            crcSprites[n] = nil
+            await cargarSprites()
+        case .ble, .demo:
+            guard case let .datos(d) = f else { throw ErrorBicho.rechazo("El SVG va por la nube.") }
+            guard let img = UIImage(data: d), let q = PrepararSprite.qoi(img) else { throw PrepararImagen.ErrorImagen.noEsGif }
+            guard let c = cliente else { throw ErrorBicho.rechazo("Sin conexión.") }
+            try await c.subirImagen(Op.primerSprite + n, q)
+            CacheImagenes.guardar(id, Op.primerSprite + n, mandada: q, vistaPrevia: q, miniatura: UIImage(data: d) ?? UIImage())
+            crcSprites[n] = nil
+            await cargarSprites()
+        }
+    }
+
+    func borrarSprite(_ n: Int) async {
+        switch via {
+        case .nube: try? await api.borrarSprite(id, n)
+        case .ble, .demo:
+            try? await cliente?.borrarImagen(Op.primerSprite + n)
+            CacheImagenes.borrar(id, Op.primerSprite + n)
+        }
+        await cargarSprites()
     }
 
     // MARK: - Ajustes

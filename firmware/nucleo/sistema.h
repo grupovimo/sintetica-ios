@@ -11,6 +11,7 @@
 #include "motor_vida.h"
 #include "protocolo.h"
 #include "qoi.h"
+#include "sprites.h"
 
 namespace sintetica {
 
@@ -151,6 +152,14 @@ class Sistema {
   uint32_t largoImagen(int espacio) const { return (espacio >= 0 && espacio < MAX_IMAGENES) ? imagenes_[espacio].largo : 0; }
   // La imagen que se ve ahora (-1 = una cara).
   int imagenVisible() const { return mostrandoImagen_; }
+  // Sprites guardados (0 a 11): largo 0 = vacío.
+  uint32_t largoSprite(int sprite) const {
+    return (sprite >= 0 && sprite < MAX_SPRITES) ? sprites_[sprite].largo : 0;
+  }
+  // La cara de imagen que se dibuja (los sprites ya decodificados) y cuánto se
+  // ve (el fundido: 0 = la SDF, 1 = los sprites).
+  const CacheSprites& cacheSprites() const { return cache_; }
+  float opacidadSprites() const { return opSprites_; }
 
   // Vista previa de las apps: nunca muestra el QR y confía en quien escribe.
   void modoVistaPrevia() {
@@ -193,6 +202,15 @@ class Sistema {
   size_t leerGuardada(char* buf) const;
   void leerImagenes();
   void guardarImagenes();
+  // Los sprites (espacios 8 a 19 de la característica Imagen).
+  void leerSprites();
+  void guardarSprites();
+  bool spriteValido(const char* clave, const char** porQue);
+  // Cambiaron la config o los sprites: qué caras de imagen se pueden mostrar.
+  void actualizarSprites();
+  uint32_t firmaSprites(int cara) const;
+  void avanzarSprites(uint32_t dt);
+  static int leerSprite(void* contexto, int sprite, uint32_t desplazamiento, uint8_t* destino, size_t n);
   int imagenParaMostrar(uint32_t ahora);
   bool dibujarImagen(int espacio, float alfa = 1);
   void avanzarProtector(uint32_t ahora, uint32_t dt);
@@ -263,7 +281,13 @@ class Sistema {
   // Imágenes.
   struct MetaImagen {
     uint32_t largo = 0, crc = 0;
-  } imagenes_[MAX_IMAGENES];
+  } imagenes_[MAX_IMAGENES], sprites_[MAX_SPRITES];
+  MetaImagen* meta(int espacio);  // de una imagen (0-7) o un sprite (8-19)
+  // La cara de imagen: sus sprites decodificados, de qué son (una firma de la
+  // cara y de los CRC de sus sprites) y el fundido con la SDF.
+  CacheSprites cache_;
+  uint32_t firmaCache_ = 0;
+  float opSprites_ = 0, ocultarOjos_ = 0;
   int subiendo_ = -1;  // espacio que se está recibiendo
   uint32_t subidaLargo_ = 0, subidaCrc_ = 0, subidaRecibido_ = 0, subidaCrcAcum_ = 0;
   int mostrandoImagen_ = -1;

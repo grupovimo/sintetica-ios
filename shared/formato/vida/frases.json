@@ -1,0 +1,180 @@
+{
+  "limites": { "por_dia": 10, "separacion": 900 },
+  "situaciones": {
+    "despertar": {
+      "probabilidad": 0.8, "enfriamiento": 14400,
+      "frases": {
+        "todos": ["¡Buen día, {dueno}!", "¡Arriba! Hoy va a estar bueno.", "Buen día. ¿Dormiste bien?", "¡Ya estoy! ¿Qué hacemos hoy?"],
+        "dormilon": ["Cinco minutitos más...", "Buen día... creo.", "¿Ya es de día? Uf."],
+        "grunon": ["Mmm. Buen día.", "Ya va, ya va.", "¿Tan temprano?"],
+        "electrico": ["¡BUEN DÍA! ¡A full!", "¡Arrancamos, {dueno}!"],
+        "carinoso": ["¡Buen día, {dueno}! Te extrañé.", "¡Qué lindo verte!"],
+        "timido": ["Hola... buen día.", "Buen día, {dueno}."],
+        "picaro": ["¿Me trajiste el desayuno?", "Buen día, dormilón."],
+        "curioso": ["¡Buen día! ¿Qué hay de nuevo?"]
+      }
+    },
+    "buenas-noches": {
+      "probabilidad": 0.7, "enfriamiento": 36000,
+      "frases": {
+        "todos": ["Buenas noches, {dueno}.", "Hasta mañana.", "Me voy a dormir. Chau."],
+        "carinoso": ["Que sueñes lindo, {dueno}.", "Buenas noches. Te quiero."],
+        "grunon": ["Por fin, a dormir."],
+        "electrico": ["¡Mañana más! Buenas noches."],
+        "dormilon": ["Al fin... a la cama."],
+        "picaro": ["No me despiertes, ¿eh?"]
+      }
+    },
+    "volviste": {
+      "probabilidad": 0.6, "enfriamiento": 7200,
+      "frases": {
+        "todos": ["¡Volviste!", "¡Hola, {dueno}!", "¡Ahí estás!"],
+        "carinoso": ["¡Te estaba esperando, {dueno}!", "¡Qué bueno que volviste!"],
+        "grunon": ["Ah, sos vos."],
+        "timido": ["Hola... volviste."],
+        "electrico": ["¡VOLVISTE! ¡Vamos!"],
+        "picaro": ["¿Me trajiste algo?"]
+      }
+    },
+    "te-extrane": {
+      "probabilidad": 0.9, "enfriamiento": 86400,
+      "frases": {
+        "todos": ["Te extrañé, {dueno}.", "¿Dónde estabas?", "Pensé que no volvías."],
+        "grunon": ["Mirá quién apareció.", "No te hablo. Bueno, sí."],
+        "carinoso": ["¡Te extrañé un montón!"],
+        "timido": ["Te extrañé... un poco."]
+      }
+    },
+    "aburrido": {
+      "probabilidad": 0.35, "enfriamiento": 5400,
+      "frases": {
+        "todos": ["Me aburro...", "¿Jugamos a algo?", "Hola, ¿hay alguien?", "Qué día largo."],
+        "picaro": ["Si no me tocás, me pongo a cantar.", "Pssst... acá estoy."],
+        "grunon": ["Nadie me da bola."],
+        "curioso": ["¿Qué estás haciendo?"],
+        "electrico": ["¡Hagamos algo YA!"],
+        "timido": ["..."]
+      }
+    },
+    "sueno": {
+      "probabilidad": 0.3, "enfriamiento": 7200,
+      "frases": {
+        "todos": ["Tengo sueño...", "Uaaah.", "Una siestita no vendría mal."],
+        "dormilon": ["Me caigo de sueño.", "¿Siesta? ¿Siesta?"],
+        "electrico": ["¿Sueño yo? Para nada... uaah."]
+      }
+    },
+    "bateria-baja": {
+      "probabilidad": 0.9, "enfriamiento": 3600,
+      "frases": {
+        "todos": ["Tengo hambre de batería.", "Me estoy quedando sin pila.", "¿Me enchufás?"],
+        "grunon": ["Enchufame. Ya."],
+        "carinoso": ["{dueno}, ¿me cargás un poquito?"]
+      }
+    },
+    "cargando": {
+      "probabilidad": 0.5, "enfriamiento": 7200,
+      "frases": {
+        "todos": ["Ahh, comidita.", "Gracias por enchufarme.", "Recargando..."],
+        "electrico": ["¡Energía! ¡Más energía!"]
+      }
+    },
+    "caricia": {
+      "probabilidad": 0.15, "enfriamiento": 3600,
+      "frases": {
+        "todos": ["Qué lindo.", "Más, más.", "Me encanta eso."],
+        "carinoso": ["Te quiero, {dueno}.", "Sos lo más."],
+        "grunon": ["Bueno, está bien. Seguí."],
+        "timido": ["Ay... gracias."],
+        "picaro": ["Uy, cosquillas."]
+      }
+    },
+    "saludo": {
+      "probabilidad": 0.4, "enfriamiento": 7200,
+      "frases": {
+        "todos": ["¡Hola!", "¡Ey, {dueno}!", "¿Qué hacés?"],
+        "timido": ["Hola..."],
+        "grunon": ["¿Qué querés?"],
+        "electrico": ["¡HOLA HOLA!"]
+      }
+    },
+    "hito": {
+      "probabilidad": 1, "enfriamiento": 3600,
+      "frases": {
+        "todos": ["¡Esto hay que festejarlo!", "¡Qué buen equipo somos!", "¡Hoy es un día especial!"],
+        "carinoso": ["¡Gracias por estar, {dueno}!"]
+      }
+    },
+    "cumple-dueno": {
+      "probabilidad": 1, "enfriamiento": 3600, "siempre": true,
+      "frases": {
+        "todos": ["¡Feliz cumple, {dueno}!"],
+        "electrico": ["¡FELIZ CUMPLE, {dueno}!"],
+        "grunon": ["Feliz cumple, {dueno}. En serio."],
+        "carinoso": ["¡Feliz cumple, {dueno}! Te quiero."]
+      }
+    },
+    "cumple-robot": {
+      "probabilidad": 1, "enfriamiento": 3600, "siempre": true,
+      "frases": {
+        "todos": ["¡Hoy cumplo años!"],
+        "picaro": ["¡Hoy cumplo años! ¿Y mi regalo?"],
+        "timido": ["Hoy... cumplo años."]
+      }
+    },
+    "recordatorio-hecho": {
+      "probabilidad": 0.5, "enfriamiento": 600,
+      "frases": {
+        "todos": ["¡Bien ahí!", "Listo.", "Anotado."],
+        "electrico": ["¡Vamos todavía!"],
+        "grunon": ["Era hora."]
+      }
+    },
+    "despertador": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Buen día, {dueno}!", "¡Arriba, {dueno}!"],
+        "dormilon": ["Arriba... aunque yo también duermo."],
+        "electrico": ["¡ARRIBA, {dueno}! ¡Es hoy!"],
+        "grunon": ["Arriba. No me mires así."],
+        "carinoso": ["¡Buen día, {dueno}! Arriba, dale."]
+      }
+    },
+    "posponer": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Bueno, un ratito más.", "Te llamo en un rato."],
+        "grunon": ["La última, ¿eh?"],
+        "picaro": ["Dormilón."]
+      }
+    },
+    "clima-frio": {
+      "probabilidad": 0.6, "enfriamiento": 21600,
+      "frases": {
+        "todos": ["¡Qué frío! Abrigate.", "Brrr. Llevá campera."],
+        "carinoso": ["Abrigate, {dueno}, hace frío."]
+      }
+    },
+    "clima-calor": {
+      "probabilidad": 0.6, "enfriamiento": 21600,
+      "frases": {
+        "todos": ["Hace un calor bárbaro.", "Tomá agua, ¿eh?"],
+        "grunon": ["Qué calor insoportable."]
+      }
+    },
+    "clima-lluvia": {
+      "probabilidad": 0.6, "enfriamiento": 21600,
+      "frases": {
+        "todos": ["Llueve. Llevá paraguas.", "Día de lluvia..."],
+        "dormilon": ["Llueve. Día de quedarse en la cama."]
+      }
+    },
+    "clima-lindo": {
+      "probabilidad": 0.4, "enfriamiento": 21600,
+      "frases": {
+        "todos": ["¡Qué lindo día!", "Hay sol. ¡Salí un rato!"],
+        "electrico": ["¡Día espectacular!"]
+      }
+    }
+  }
+}

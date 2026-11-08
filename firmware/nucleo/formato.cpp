@@ -680,6 +680,16 @@ ResultadoConfig aplicarSobre(Config& c, const char* texto, size_t n) {
     ResultadoConfig r = leerVidaConfig(j, 0, c);
     if (!r.ok()) return r;
   }
+  // La cara de siempre ("cara": {"expresion": …}), cuando ya están todas las expresiones.
+  if (cara >= 0) {
+    const int ex = j.buscar(cara, "expresion");
+    if (ex >= 0) {
+      char n[LARGO_NOMBRE];
+      const int i = j.texto(ex, n, sizeof n) > 0 ? c.vida.indiceCara(n) : -1;
+      if (i < 0) return error(ErrorConfig::Campo, "cara: expresion es el nombre de una expresión paramétrica o de imagen que exista");
+      c.vida.reposo = static_cast<int8_t>(i);
+    }
+  }
 
   int ans = j.buscar(0, "animaciones");
   if (ans >= 0) {

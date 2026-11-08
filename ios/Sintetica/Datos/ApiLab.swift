@@ -198,5 +198,23 @@ extension ApiSintetica {
         return (o["token"] as? String ?? "", o["url"] as? String ?? "")
     }
 
+    /// Los sprites del robot (las caras de imagen): número, largo y CRC.
+    func sprites(_ id: String) async throws -> [EspacioImagen] {
+        let l: [[String: Any]] = (try await pedir("/v1/bichos/\(id)/sprites"))["sprites"] as? [[String: Any]] ?? []
+        return l.compactMap { o in
+            guard let n = (o["sprite"] as? NSNumber)?.intValue else { return nil }
+            return EspacioImagen(espacio: n, largo: (o["largo"] as? NSNumber)?.uint32Value ?? 0, crc: (o["crc"] as? NSNumber)?.uint32Value ?? 0)
+        }
+    }
+
+    func sprite(_ id: String, _ n: Int) async throws -> [UInt8] { [UInt8](try await pedirCrudo("/v1/bichos/\(id)/sprites/\(n)", "GET")) }
+
+    /// SVG, PNG, JPEG, GIF o QOI: la API lo recorta y lo achica.
+    func subirSprite(_ id: String, _ n: Int, _ d: Data, tipo: String) async throws {
+        _ = try await pedirCrudo("/v1/bichos/\(id)/sprites/\(n)", "PUT", cuerpo: d, tipo: tipo)
+    }
+
+    func borrarSprite(_ id: String, _ n: Int) async throws { _ = try await pedirCrudo("/v1/bichos/\(id)/sprites/\(n)", "DELETE") }
+
     func borrarTokenIA(_ id: String) async throws { _ = try await pedirCrudo("/v1/mcp/tokens/\(id)", "DELETE") }
 }

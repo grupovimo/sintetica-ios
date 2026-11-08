@@ -32,7 +32,7 @@ struct Producto<Contenido: View>: View {
         return ZStack(alignment: .topLeading) {
             Color(hex: e.fondo)
             Image(e.imagen).resizable().interpolation(.high)
-                .frame(width: fw, height: fw * 1.25)
+                .frame(width: fw, height: fw * Encuadre.proporcion(e.imagen))
                 .offset(x: w * e.foto.izq / 100, y: h * e.foto.arriba / 100)
                 .saturation(apagado ? 0.3 : 1)
                 .brightness(apagado ? -0.32 : 0)
@@ -128,8 +128,9 @@ struct PantallaDibujada: View {
     private func dibujar(_ t: Double) -> CGImage? {
         let w = max(16, Int(Double(pantalla.ancho) * escala)), h = max(16, Int(Double(pantalla.alto) * escala))
         let nombre = nombreDibujable(expresion)
-        return Nucleo.dibujarExpresion(config: config, nombre: nombre, ancho: w, alto: h, redonda: pantalla.redonda, t: t)
-            ?? Nucleo.dibujarExpresion(config: nil, nombre: "neutral", ancho: w, alto: h, redonda: pantalla.redonda, t: t)
+        let c = Nucleo.parpadeo(t)
+        return Nucleo.dibujarExpresion(config: config, nombre: nombre, ancho: w, alto: h, redonda: pantalla.redonda, t: t, cierre: c)
+            ?? Nucleo.dibujarExpresion(config: nil, nombre: "neutral", ancho: w, alto: h, redonda: pantalla.redonda, t: t, cierre: c)
     }
 }
 
@@ -144,6 +145,9 @@ func nombreDibujable(_ e: String) -> String {
 @MainActor
 enum Miniaturas {
     private static var cache: [String: UIImage] = [:]
+
+    /// Cambiaron los sprites: las caras de imagen se ven distinto.
+    static func vaciar() { cache.removeAll() }
 
     static func de(_ nombre: String, config: String?, pantalla: Pantalla) -> UIImage? {
         let clave = "\(config?.hashValue ?? 0)|\(nombre)|\(pantalla.ancho)x\(pantalla.alto)"

@@ -31,6 +31,8 @@ const char* const NOMBRES_MOVIMIENTO[static_cast<int>(Movimiento::Cantidad)] = {
 const char* const NOMBRES_PARPADEO[static_cast<int>(Parpadeo::Cantidad)] = {"normal", "menos", "mas", "no",
                                                                             "lento", "rapido", "doble"};
 
+const char* const NOMBRES_PARTES[N_PARTES_SPRITE] = {"ojo", "ojo_cerrado", "ojo_der", "ojo_der_cerrado", "boca"};
+
 const char* const NOMBRES_MIRADA[static_cast<int>(Mirada::Cantidad)] = {
     "libre", "frente", "arriba", "abajo", "izquierda", "derecha", "lado", "alrededor", "perdida", "reojo", "estimulo",
     "rem", "ovejas"};
@@ -82,7 +84,9 @@ ResultadoConfig leerParametros(const Json& j, int obj, int lado, CaraVida* c) {
       // En el nivel de arriba hay también otras cosas.
       if (iguales(clave, "ojo") || iguales(clave, "izq") || iguales(clave, "der") || iguales(clave, "movimiento") ||
           iguales(clave, "particula") || iguales(clave, "parpadeo") || iguales(clave, "extiende") ||
-          iguales(clave, "nombre") || iguales(clave, "numero") || iguales(clave, "disparador"))
+          iguales(clave, "nombre") || iguales(clave, "numero") || iguales(clave, "disparador") ||
+          iguales(clave, "sprites") || iguales(clave, "tamano") || iguales(clave, "boca_tamano") ||
+          iguales(clave, "boca_y") || iguales(clave, "espejar_der"))
         continue;
       if (p < 0 || esOjo) return falla("expresion: parámetro desconocido (los del ojo van en \"ojo\", \"izq\" o \"der\")");
     } else if (p < 0 || !esOjo) {
@@ -505,6 +509,8 @@ int leerCondiciones(const char* s, CondVida* salida, int max) {
   return n;
 }
 
+const char* nombreParteSprite(int p) { return p >= 0 && p < N_PARTES_SPRITE ? NOMBRES_PARTES[p] : ""; }
+
 const char* nombreRasgo(int i) { return i >= 0 && i < N_RASGOS ? NOMBRES_RASGO[i] : ""; }
 
 bool presetPersonalidad(const char* nombre, Personalidad* p) {
@@ -582,6 +588,52 @@ bool esCaraParametrica(const Json& j, int obj) {
   return true;
 }
 
+// Lo de una cara de imagen: "sprites" ({"ojo": 0, …}, de 0 a 11) y la
+// geometría ("tamano", "boca_tamano", "boca_y", "espejar_der"). *hay: si es
+// una cara de imagen (tiene "sprites" o lo heredó).
+ResultadoConfig leerImagen(const Json& j, int obj, CaraImagen* im, bool* hay) {
+  const int sp = j.buscar(obj, "sprites");
+  if (sp >= 0) {
+    if (j.tipo(sp) != TipoJson::Objeto) return falla("expresion: sprites es un objeto {\"ojo\": 0, \"boca\": 2, …}");
+    CaraImagen nueva;
+    nueva.espejar = im->espejar, nueva.tamano = im->tamano, nueva.bocaTamano = im->bocaTamano, nueva.bocaY = im->bocaY;
+    int k = sp + 1;
+    for (int i = 0; i < j.cantidad(sp); i++, k = j.saltar(k + 1)) {
+      char clave[20];
+      const int parte = j.texto(k, clave, sizeof clave) > 0 ? buscarNombre(NOMBRES_PARTES, clave) : -1;
+      if (parte < 0) return falla("expresion: las partes de sprites son ojo, ojo_cerrado, ojo_der, ojo_der_cerrado y boca");
+      const float v = j.numero(k + 1, -1);
+      if (j.tipo(k + 1) != TipoJson::Numero || v < 0 || v > MAX_SPRITES - 1 || v != static_cast<float>(static_cast<int>(v)))
+        return falla("expresion: cada parte de sprites es el número de un sprite, de 0 a 11");
+      nueva.sprite[parte] = static_cast<int8_t>(v);
+    }
+    if (!nueva.tiene(ParteSprite::Ojo)) return falla("expresion: una cara de imagen necesita al menos sprites.ojo");
+    *im = nueva;
+    *hay = true;
+  }
+  struct Medida {
+    const char* clave;
+    float lo, hi;
+    int16_t* destino;
+  } medidas[] = {{"tamano", 0.08f, 0.8f, &im->tamano}, {"boca_tamano", 0.04f, 0.9f, &im->bocaTamano}, {"boca_y", -0.7f, 0.3f, &im->bocaY}};
+  for (const Medida& m : medidas) {
+    const int t = j.buscar(obj, m.clave);
+    if (t < 0) continue;
+    if (!*hay) return falla("expresion: tamano, boca_tamano, boca_y y espejar_der van solo en una cara de imagen (con sprites)");
+    const float v = j.numero(t, -9);
+    if (j.tipo(t) != TipoJson::Numero || v < m.lo - 1e-6f || v > m.hi + 1e-6f)
+      return falla("expresion: tamano de 0,08 a 0,8; boca_tamano de 0,04 a 0,9; boca_y de -0,7 a 0,3");
+    *m.destino = static_cast<int16_t>(v * 10000.0f + (v < 0 ? -0.5f : 0.5f));
+  }
+  const int es = j.buscar(obj, "espejar_der");
+  if (es >= 0) {
+    if (!*hay) return falla("expresion: tamano, boca_tamano, boca_y y espejar_der van solo en una cara de imagen (con sprites)");
+    if (j.tipo(es) != TipoJson::Verdadero && j.tipo(es) != TipoJson::Falso) return falla("expresion: espejar_der es true o false");
+    im->espejar = j.booleano(es, true);
+  }
+  return {};
+}
+
 ResultadoConfig leerCaraVida(const Json& j, int obj, Config& c, const char* nombre, bool propia) {
   if (!j.valido(obj) || j.tipo(obj) != TipoJson::Objeto) return falla("expresion: no es un objeto");
   static CaraVida cv;
@@ -594,13 +646,18 @@ ResultadoConfig leerCaraVida(const Json& j, int obj, Config& c, const char* nomb
   if (r < 0) return falla("expresion: extiende es el nombre de otra expresión");
   const int desde = r > 0 ? c.vida.indiceCara(ext) : c.vida.indiceCara(nombre);
   if (r > 0 && desde < 0) return falla("expresion: extiende una expresión que no existe");
+  CaraImagen im;
+  bool hayImagen = false;
   if (desde >= 0) {
     const CaraVida& b = c.vida.caras[desde];
     cv.nAjustes = b.nAjustes;
     for (int i = 0; i < b.nAjustes; i++) cv.ajustes[i] = b.ajustes[i];
     cv.movimiento = b.movimiento, cv.particula = b.particula, cv.parpadeo = b.parpadeo;
+    if (b.imagen >= 0) im = c.vida.imagenes[b.imagen], hayImagen = true;
   }
-  ResultadoConfig rr = leerParametros(j, obj, -1, &cv);
+  ResultadoConfig rr = leerImagen(j, obj, &im, &hayImagen);
+  if (!rr.ok()) return rr;
+  rr = leerParametros(j, obj, -1, &cv);
   if (!rr.ok()) return rr;
   const char* lados[3] = {"ojo", "izq", "der"};
   const int codigos[3] = {2, 0, 1};
@@ -620,6 +677,17 @@ ResultadoConfig leerCaraVida(const Json& j, int obj, Config& c, const char* nomb
     TipoParticula tp;
     if (r < 0 || (!iguales(t, "ninguna") && !particulaPorNombre(t, &tp))) return falla("expresion: partícula desconocida");
     cv.particula = iguales(t, "ninguna") ? -1 : static_cast<int8_t>(tp);
+  }
+  if (hayImagen) {
+    // Si ya era de imagen (la misma, reemplazada), usa su lugar.
+    const int ya = c.vida.indiceCara(nombre);
+    int slot = ya >= 0 ? c.vida.caras[ya].imagen : -1;
+    if (slot < 0) {
+      if (c.vida.nImagenes >= MAX_CARAS_IMAGEN) return falla("expresiones: hasta 8 caras de imagen", ErrorConfig::Demasiadas);
+      slot = c.vida.nImagenes++;
+    }
+    c.vida.imagenes[slot] = im;
+    cv.imagen = static_cast<int8_t>(slot);
   }
   return guardarCara(c.vida, cv);
 }
