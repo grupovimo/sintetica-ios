@@ -31,6 +31,8 @@ const char* const NOMBRES_MOVIMIENTO[static_cast<int>(Movimiento::Cantidad)] = {
 const char* const NOMBRES_PARPADEO[static_cast<int>(Parpadeo::Cantidad)] = {"normal", "menos", "mas", "no",
                                                                             "lento", "rapido", "doble"};
 
+const char* const NOMBRES_PARTES[N_PARTES_SPRITE] = {"ojo", "ojo_cerrado", "ojo_der", "ojo_der_cerrado", "boca"};
+
 const char* const NOMBRES_MIRADA[static_cast<int>(Mirada::Cantidad)] = {
     "libre", "frente", "arriba", "abajo", "izquierda", "derecha", "lado", "alrededor", "perdida", "reojo", "estimulo",
     "rem", "ovejas"};
@@ -82,7 +84,9 @@ ResultadoConfig leerParametros(const Json& j, int obj, int lado, CaraVida* c) {
       // En el nivel de arriba hay también otras cosas.
       if (iguales(clave, "ojo") || iguales(clave, "izq") || iguales(clave, "der") || iguales(clave, "movimiento") ||
           iguales(clave, "particula") || iguales(clave, "parpadeo") || iguales(clave, "extiende") ||
-          iguales(clave, "nombre") || iguales(clave, "numero") || iguales(clave, "disparador"))
+          iguales(clave, "nombre") || iguales(clave, "numero") || iguales(clave, "disparador") ||
+          iguales(clave, "sprites") || iguales(clave, "tamano") || iguales(clave, "boca_tamano") ||
+          iguales(clave, "boca_y") || iguales(clave, "espejar_der"))
         continue;
       if (p < 0 || esOjo) return falla("expresion: parámetro desconocido (los del ojo van en \"ojo\", \"izq\" o \"der\")");
     } else if (p < 0 || !esOjo) {
@@ -295,7 +299,171 @@ bool leerPersonalidadObj(const Json& j, int obj, Personalidad* p) {
   return true;
 }
 
+// Que el objeto no tenga claves fuera de `claves` (additionalProperties: false).
+template <int N>
+bool soloClaves(const Json& j, int obj, const char* const (&claves)[N]) {
+  int k = obj + 1;
+  for (int i = 0; i < j.cantidad(obj); i++, k = j.saltar(k + 1)) {
+    char clave[16];
+    if (j.texto(k, clave, sizeof clave) <= 0 || buscarNombre(claves, clave) < 0) return false;
+  }
+  return true;
+}
+
+bool esBooleano(const Json& j, int t) { return j.tipo(t) == TipoJson::Verdadero || j.tipo(t) == TipoJson::Falso; }
+
+// Un número de 0 a 1 en centésimos (lo que no es 0 queda en 1 como mínimo:
+// 0 es "silencio" y tiene que ser exacto).
+bool leerCentesimos(const Json& j, int obj, const char* clave, uint8_t* salida) {
+  const int t = j.buscar(obj, clave);
+  if (t < 0) return true;
+  if (j.tipo(t) != TipoJson::Numero) return false;
+  const float v = j.numero(t, -1);
+  if (v < 0 || v > 1) return false;
+  const int c = static_cast<int>(v * 100 + 0.5f);
+  *salida = static_cast<uint8_t>(v > 0 && c == 0 ? 1 : c);
+  return true;
+}
+
+// Un entero en [lo, hi] (opcional).
+bool leerEntero(const Json& j, int obj, const char* clave, int lo, int hi, uint8_t* salida) {
+  const int t = j.buscar(obj, clave);
+  if (t < 0) return true;
+  if (j.tipo(t) != TipoJson::Numero) return false;
+  const float v = j.numero(t, -1);
+  if (v < lo || v > hi || v != static_cast<float>(static_cast<int>(v))) return false;
+  *salida = static_cast<uint8_t>(v);
+  return true;
+}
+
+const char* const CLAVES_RECORDATORIO[] = {"hora", "dias", "texto", "expresion", "sonido", "activo"};
+const char* const CLAVES_VOZ[] = {"volumen", "tipo", "palabra", "conversar", "microfono"};
+const char* const CLAVES_POMODORO[] = {"trabajo", "descanso"};
+const char* const CLAVES_PROTECTOR[] = {"imagen", "espera"};
+const char* const TIPOS_VOZ[] = {"grave", "media", "aguda", "robot"};
+
+ResultadoConfig leerRecordatorio(const Json& j, int obj, const Config& c, Recordatorio* r) {
+  if (!j.valido(obj) || j.tipo(obj) != TipoJson::Objeto) return falla("recordatorios: cada uno es un objeto");
+  if (!soloClaves(j, obj, CLAVES_RECORDATORIO))
+    return falla("recordatorios: claves válidas: hora, dias, texto, expresion, sonido y activo");
+  char h[8];
+  int16_t minuto = 0;
+  if (leerTextoEn(j, obj, "hora", h, sizeof h) <= 0 || !leerHoraVida(h, &minuto))
+    return falla("recordatorios: hora es HH:MM (obligatoria)");
+  r->minuto = static_cast<uint16_t>(minuto);
+  const int di = j.buscar(obj, "dias");
+  if (di >= 0) {
+    char d[12];
+    const int n = j.texto(di, d, sizeof d);
+    if (n < 0 || n > 7 || !leerDias(d, &r->dias))
+      return falla("recordatorios: dias son letras de L M X J V S D, sin repetir (vacío = todos)");
+  }
+  const int te = j.buscar(obj, "texto");
+  char t[LARGO_RECORDATORIO + 8];
+  const int nt = te >= 0 ? j.texto(te, t, sizeof t) : -1;
+  if (nt < 1 || nt >= LARGO_RECORDATORIO) return falla("recordatorios: texto de 1 a 40 bytes (obligatorio; una tilde ocupa 2)");
+  copiarTexto(r->texto, sizeof r->texto, t);
+  char e[LARGO_NOMBRE];
+  const int re = leerTextoEn(j, obj, "expresion", e, sizeof e);
+  if (re < 0) return falla("recordatorios: expresion es el nombre de una expresión");
+  const Config::Cara cara = c.resolverCara(re > 0 ? e : "sorpresa");
+  if (re > 0 && !cara.existe()) return falla("recordatorios: una expresion que no existe");
+  r->caraVida = cara.vida, r->caraDibujo = cara.dibujo;
+  const int so = j.buscar(obj, "sonido"), ac = j.buscar(obj, "activo");
+  if ((so >= 0 && !esBooleano(j, so)) || (ac >= 0 && !esBooleano(j, ac)))
+    return falla("recordatorios: sonido y activo son true o false");
+  r->sonido = j.booleano(so, true);
+  r->activo = j.booleano(ac, true);
+  return {};
+}
+
+// recordatorios, voz, pomodoro y protector.
+ResultadoConfig leerAvisos(const Json& j, int raiz, Config& c) {
+  const int re = j.buscar(raiz, "recordatorios");
+  if (re >= 0) {
+    if (j.tipo(re) != TipoJson::Arreglo) return falla("recordatorios: es una lista");
+    if (j.cantidad(re) > MAX_RECORDATORIOS) return falla("recordatorios: hasta 12", ErrorConfig::Demasiadas);
+    c.nRecordatorios = 0;
+    for (int i = 0; i < j.cantidad(re); i++) {
+      Recordatorio& r = c.recordatorios[i];
+      r = Recordatorio();
+      ResultadoConfig rr = leerRecordatorio(j, j.elemento(re, i), c, &r);
+      if (!rr.ok()) {
+        c.nRecordatorios = 0;
+        return rr;
+      }
+      c.nRecordatorios++;
+    }
+  }
+  const int vo = j.buscar(raiz, "voz");
+  if (vo >= 0) {
+    if (j.tipo(vo) != TipoJson::Objeto) return falla("voz: no es un objeto");
+    if (!soloClaves(j, vo, CLAVES_VOZ)) return falla("voz: claves válidas: volumen, tipo, palabra, conversar y microfono");
+    Voz v;
+    if (!leerCentesimos(j, vo, "volumen", &v.volumen)) return falla("voz: volumen de 0 a 1");
+    if (!leerCentesimos(j, vo, "microfono", &v.microfono)) return falla("voz: microfono de 0 a 1");
+    char t[12];
+    const int r = leerTextoEn(j, vo, "tipo", t, sizeof t);
+    if (r != 0) {
+      const int i = r > 0 ? buscarNombre(TIPOS_VOZ, t) : -1;
+      if (i < 0) return falla("voz: tipo es grave, media, aguda o robot");
+      v.tipo = static_cast<Voz::Tipo>(i);
+    }
+    const int pa = j.buscar(vo, "palabra");
+    if (pa >= 0) {
+      char p[LARGO_PALABRA + 8];
+      const int n = j.texto(pa, p, sizeof p);
+      if (n < 1 || n >= LARGO_PALABRA) return falla("voz: palabra de 1 a 16 bytes (una tilde ocupa 2)");
+      copiarTexto(v.palabra, sizeof v.palabra, p);
+    }
+    const int co = j.buscar(vo, "conversar");
+    if (co >= 0 && !esBooleano(j, co)) return falla("voz: conversar es true o false");
+    v.conversar = j.booleano(co, false);
+    c.voz = v;
+  }
+  const int po = j.buscar(raiz, "pomodoro");
+  if (po >= 0) {
+    if (j.tipo(po) != TipoJson::Objeto) return falla("pomodoro: no es un objeto");
+    if (!soloClaves(j, po, CLAVES_POMODORO)) return falla("pomodoro: claves válidas: trabajo y descanso");
+    TramosPomodoro p;
+    if (!leerEntero(j, po, "trabajo", 1, 120, &p.trabajo)) return falla("pomodoro: trabajo en minutos, de 1 a 120");
+    if (!leerEntero(j, po, "descanso", 1, 60, &p.descanso)) return falla("pomodoro: descanso en minutos, de 1 a 60");
+    c.pomodoro = p;
+  }
+  const int pr = j.buscar(raiz, "protector");
+  if (pr >= 0) {
+    if (j.tipo(pr) != TipoJson::Objeto) return falla("protector: no es un objeto");
+    if (!soloClaves(j, pr, CLAVES_PROTECTOR)) return falla("protector: claves válidas: imagen y espera");
+    uint8_t imagen = 255;
+    if (j.buscar(pr, "imagen") < 0 || !leerEntero(j, pr, "imagen", 0, MAX_IMAGENES - 1, &imagen))
+      return falla("protector: imagen es el espacio de una imagen, de 0 a 7 (obligatorio)");
+    const int es = j.buscar(pr, "espera");
+    float espera = 10;
+    if (es >= 0) {
+      espera = j.numero(es, -1);
+      if (j.tipo(es) != TipoJson::Numero || espera < 3 || espera > 3600 || espera != static_cast<float>(static_cast<int>(espera)))
+        return falla("protector: espera en segundos, de 3 a 3600");
+    }
+    c.protector.imagen = static_cast<int8_t>(imagen);
+    c.protector.espera = static_cast<uint16_t>(espera);
+  }
+  return {};
+}
+
 }  // namespace
+
+bool leerDias(const char* s, uint8_t* mascara) {
+  static const char LETRAS[] = "LMXJVSD";
+  uint8_t m = 0;
+  for (; *s; s++) {
+    int i = 0;
+    while (LETRAS[i] && LETRAS[i] != *s) i++;
+    if (!LETRAS[i] || (m & (1u << i))) return false;
+    m = static_cast<uint8_t>(m | (1u << i));
+  }
+  *mascara = m ? m : 0x7F;
+  return true;
+}
 
 const char* nombreVarVida(VarVida v) {
   const int i = static_cast<int>(v);
@@ -340,6 +508,8 @@ int leerCondiciones(const char* s, CondVida* salida, int max) {
   }
   return n;
 }
+
+const char* nombreParteSprite(int p) { return p >= 0 && p < N_PARTES_SPRITE ? NOMBRES_PARTES[p] : ""; }
 
 const char* nombreRasgo(int i) { return i >= 0 && i < N_RASGOS ? NOMBRES_RASGO[i] : ""; }
 
@@ -418,6 +588,52 @@ bool esCaraParametrica(const Json& j, int obj) {
   return true;
 }
 
+// Lo de una cara de imagen: "sprites" ({"ojo": 0, …}, de 0 a 11) y la
+// geometría ("tamano", "boca_tamano", "boca_y", "espejar_der"). *hay: si es
+// una cara de imagen (tiene "sprites" o lo heredó).
+ResultadoConfig leerImagen(const Json& j, int obj, CaraImagen* im, bool* hay) {
+  const int sp = j.buscar(obj, "sprites");
+  if (sp >= 0) {
+    if (j.tipo(sp) != TipoJson::Objeto) return falla("expresion: sprites es un objeto {\"ojo\": 0, \"boca\": 2, …}");
+    CaraImagen nueva;
+    nueva.espejar = im->espejar, nueva.tamano = im->tamano, nueva.bocaTamano = im->bocaTamano, nueva.bocaY = im->bocaY;
+    int k = sp + 1;
+    for (int i = 0; i < j.cantidad(sp); i++, k = j.saltar(k + 1)) {
+      char clave[20];
+      const int parte = j.texto(k, clave, sizeof clave) > 0 ? buscarNombre(NOMBRES_PARTES, clave) : -1;
+      if (parte < 0) return falla("expresion: las partes de sprites son ojo, ojo_cerrado, ojo_der, ojo_der_cerrado y boca");
+      const float v = j.numero(k + 1, -1);
+      if (j.tipo(k + 1) != TipoJson::Numero || v < 0 || v > MAX_SPRITES - 1 || v != static_cast<float>(static_cast<int>(v)))
+        return falla("expresion: cada parte de sprites es el número de un sprite, de 0 a 11");
+      nueva.sprite[parte] = static_cast<int8_t>(v);
+    }
+    if (!nueva.tiene(ParteSprite::Ojo)) return falla("expresion: una cara de imagen necesita al menos sprites.ojo");
+    *im = nueva;
+    *hay = true;
+  }
+  struct Medida {
+    const char* clave;
+    float lo, hi;
+    int16_t* destino;
+  } medidas[] = {{"tamano", 0.08f, 0.8f, &im->tamano}, {"boca_tamano", 0.04f, 0.9f, &im->bocaTamano}, {"boca_y", -0.7f, 0.3f, &im->bocaY}};
+  for (const Medida& m : medidas) {
+    const int t = j.buscar(obj, m.clave);
+    if (t < 0) continue;
+    if (!*hay) return falla("expresion: tamano, boca_tamano, boca_y y espejar_der van solo en una cara de imagen (con sprites)");
+    const float v = j.numero(t, -9);
+    if (j.tipo(t) != TipoJson::Numero || v < m.lo - 1e-6f || v > m.hi + 1e-6f)
+      return falla("expresion: tamano de 0,08 a 0,8; boca_tamano de 0,04 a 0,9; boca_y de -0,7 a 0,3");
+    *m.destino = static_cast<int16_t>(v * 10000.0f + (v < 0 ? -0.5f : 0.5f));
+  }
+  const int es = j.buscar(obj, "espejar_der");
+  if (es >= 0) {
+    if (!*hay) return falla("expresion: tamano, boca_tamano, boca_y y espejar_der van solo en una cara de imagen (con sprites)");
+    if (j.tipo(es) != TipoJson::Verdadero && j.tipo(es) != TipoJson::Falso) return falla("expresion: espejar_der es true o false");
+    im->espejar = j.booleano(es, true);
+  }
+  return {};
+}
+
 ResultadoConfig leerCaraVida(const Json& j, int obj, Config& c, const char* nombre, bool propia) {
   if (!j.valido(obj) || j.tipo(obj) != TipoJson::Objeto) return falla("expresion: no es un objeto");
   static CaraVida cv;
@@ -430,13 +646,18 @@ ResultadoConfig leerCaraVida(const Json& j, int obj, Config& c, const char* nomb
   if (r < 0) return falla("expresion: extiende es el nombre de otra expresión");
   const int desde = r > 0 ? c.vida.indiceCara(ext) : c.vida.indiceCara(nombre);
   if (r > 0 && desde < 0) return falla("expresion: extiende una expresión que no existe");
+  CaraImagen im;
+  bool hayImagen = false;
   if (desde >= 0) {
     const CaraVida& b = c.vida.caras[desde];
     cv.nAjustes = b.nAjustes;
     for (int i = 0; i < b.nAjustes; i++) cv.ajustes[i] = b.ajustes[i];
     cv.movimiento = b.movimiento, cv.particula = b.particula, cv.parpadeo = b.parpadeo;
+    if (b.imagen >= 0) im = c.vida.imagenes[b.imagen], hayImagen = true;
   }
-  ResultadoConfig rr = leerParametros(j, obj, -1, &cv);
+  ResultadoConfig rr = leerImagen(j, obj, &im, &hayImagen);
+  if (!rr.ok()) return rr;
+  rr = leerParametros(j, obj, -1, &cv);
   if (!rr.ok()) return rr;
   const char* lados[3] = {"ojo", "izq", "der"};
   const int codigos[3] = {2, 0, 1};
@@ -456,6 +677,17 @@ ResultadoConfig leerCaraVida(const Json& j, int obj, Config& c, const char* nomb
     TipoParticula tp;
     if (r < 0 || (!iguales(t, "ninguna") && !particulaPorNombre(t, &tp))) return falla("expresion: partícula desconocida");
     cv.particula = iguales(t, "ninguna") ? -1 : static_cast<int8_t>(tp);
+  }
+  if (hayImagen) {
+    // Si ya era de imagen (la misma, reemplazada), usa su lugar.
+    const int ya = c.vida.indiceCara(nombre);
+    int slot = ya >= 0 ? c.vida.caras[ya].imagen : -1;
+    if (slot < 0) {
+      if (c.vida.nImagenes >= MAX_CARAS_IMAGEN) return falla("expresiones: hasta 8 caras de imagen", ErrorConfig::Demasiadas);
+      slot = c.vida.nImagenes++;
+    }
+    c.vida.imagenes[slot] = im;
+    cv.imagen = static_cast<int8_t>(slot);
   }
   return guardarCara(c.vida, cv);
 }
@@ -531,7 +763,7 @@ ResultadoConfig leerVidaConfig(const Json& j, int raiz, Config& c) {
       if (!rr.ok()) return rr;
     }
   }
-  return {};
+  return leerAvisos(j, raiz, c);
 }
 
 ResultadoConfig cargarVidaBase(Config& c) {

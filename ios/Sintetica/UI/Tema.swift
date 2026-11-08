@@ -1,63 +1,58 @@
-import CoreText
 import SwiftUI
-import UIKit
 
-/// Los tokens del manual de marca: tema Claro y tema Pantalla.
+/// Los tokens de la consola (web/src/lib/consola/consola.css): chapa oscura,
+/// visores hundidos, teclas mecánicas y la placa naranja anodizada. La app va
+/// siempre en oscuro.
 extension Color {
-    init(hex: UInt32) {
-        self.init(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    init(hex: UInt32, alfa: Double = 1) {
+        self.init(.sRGB, red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255,
+                  blue: Double(hex & 0xFF) / 255, opacity: alfa)
     }
 
-    static func token(_ claro: UInt32, _ oscuro: UInt32) -> Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(Color(hex: oscuro)) : UIColor(Color(hex: claro)) })
-    }
-
-    static let papel = token(0xFBFAF7, 0x0E0D0C)
-    static let papelAlto = token(0xFFFFFF, 0x1A1816)
-    static let linea = token(0xE6E2DA, 0x2C2925)
-    static let tinta = token(0x141210, 0xF5F2EC)
-    static let tintaSuave = token(0x6B6660, 0xA39E96)
-    static let naranja = token(0xF5501A, 0xFF6A33)
-    static let naranjaProfundo = token(0xB83C0C, 0xFF8A5C)
-    static let naranjaClaro = token(0xFFE3D6, 0x4A2416)
-    static let sobreNaranja = Color(hex: 0x141210)
+    static let fondo = Color(hex: 0x16140F)
+    static let chapa = Color(hex: 0x211E1A)
+    static let hundido = Color(hex: 0x0E0D0B)
+    static let papel = Color(hex: 0xF3EEE8)
+    static let gris = Color(hex: 0x8F877C)
+    static let grisClaro = Color(hex: 0xB9B1A6)
+    static let hueso = Color(hex: 0xD9D2C6)
+    static let naranja = Color(hex: 0xFF5A1F)
+    static let brasa = Color(hex: 0xFF8A5C)
+    static let led = Color(hex: 0xFF6A33)
+    static let verde = Color(hex: 0x4ADE80)
+    static let ambar = Color(hex: 0xFFB347)
+    static let rojo = Color(hex: 0xFF4D4D)
+    /// El texto sobre las teclas blancas y la placa naranja.
+    static let tinta = Color(hex: 0x1A1714)
     static let pantalla = Color(hex: 0x0B0A09)
-    static let carcasa = token(0x1A1816, 0x26231F)
+    static let apagado = Color(hex: 0x4A443E)
 }
 
-/// Fraunces y JetBrains Mono son fuentes variables: se arman con sus ejes.
+/// La letra: la del sistema, ancha y pesada (como Archivo en la web).
 enum Tipos {
-    private static func variable(_ familia: String, _ tamano: CGFloat, _ ejes: [String: CGFloat]) -> Font {
-        let nombre = UIFont.fontNames(forFamilyName: familia).first ?? familia
-        guard let base = UIFont(name: nombre, size: tamano) else { return .system(size: tamano) }
-        var porId: [NSNumber: CGFloat] = [:]
-        let axes = (CTFontCopyVariationAxes(base as CTFont) as? [[String: Any]]) ?? []
-        for eje in axes {
-            guard let id = eje[kCTFontVariationAxisIdentifierKey as String] as? NSNumber,
-                  let etiqueta = eje[kCTFontVariationAxisNameKey as String] as? String else { continue }
-            let tag = Self.tag(id.uint32Value)
-            if let v = ejes[tag] ?? ejes[etiqueta] { porId[id] = v }
+    static func marca(_ tamano: CGFloat, _ peso: Font.Weight = .heavy) -> Font {
+        .system(size: tamano, weight: peso).width(.expanded)
+    }
+
+    static func angosta(_ tamano: CGFloat, _ peso: Font.Weight = .heavy) -> Font {
+        .system(size: tamano, weight: peso).width(.condensed)
+    }
+
+    static let titular = marca(46, .black)
+    static let grabado = marca(11, .heavy)
+    static let texto = Font.system(size: 15, weight: .semibold)
+    static let chico = Font.system(size: 13, weight: .semibold)
+    static let digitos = marca(40, .black).monospacedDigit()
+    static let digitosChicos = marca(20, .black).monospacedDigit()
+}
+
+/// El fondo de la consola: una luz arriba que cae sobre la chapa.
+struct FondoConsola: View {
+    var body: some View {
+        ZStack {
+            Color.fondo
+            RadialGradient(colors: [Color(hex: 0x2A2622), Color.fondo], center: UnitPoint(x: 0.6, y: 0), startRadius: 0, endRadius: 520)
         }
-        let d = base.fontDescriptor.addingAttributes([UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): porId])
-        return Font(UIFont(descriptor: d, size: tamano) as CTFont)
+        .ignoresSafeArea()
     }
-
-    private static func tag(_ n: UInt32) -> String {
-        String(bytes: [UInt8(n >> 24 & 0xFF), UInt8(n >> 16 & 0xFF), UInt8(n >> 8 & 0xFF), UInt8(n & 0xFF)], encoding: .ascii) ?? ""
-    }
-
-    static func fraunces(_ tamano: CGFloat, _ peso: CGFloat) -> Font {
-        variable("Fraunces", tamano, ["wght": peso, "SOFT": 100, "WONK": 0, "opsz": min(144, max(9, tamano))])
-    }
-
-    static func mono(_ tamano: CGFloat, _ peso: CGFloat) -> Font { variable("JetBrains Mono", tamano, ["wght": peso]) }
-
-    static let display = fraunces(40, 800)
-    static let titulo = fraunces(24, 700)
-    static let cuerpo = fraunces(17, 400)
-    static let chico = fraunces(14, 400)
-    static let dato = mono(14, 400)
-    static let etiqueta = mono(11, 700)
-    static let boton = mono(13, 700)
-    static let serie = mono(13, 700)
 }

@@ -30,6 +30,10 @@ float anchoTexto(const Fuente& f, const char* utf8);
 // no tiene se saltean con el ancho de un espacio.
 float dibujarTexto(Lienzo& l, const Fuente& f, const char* utf8, float x, float base, uint32_t rgb);
 
+// Lo mismo, agrandado `escala` veces (con interpolación bilineal): la hora del
+// reloj y la cuenta del pomodoro. Solo recorre las filas de la franja actual.
+float dibujarTextoEscalado(Lienzo& l, const Fuente& f, const char* utf8, float x, float base, float escala, uint32_t rgb);
+
 // Lee el próximo punto de código de un texto UTF-8 y avanza el puntero.
 uint32_t siguienteCodigo(const char** p);
 

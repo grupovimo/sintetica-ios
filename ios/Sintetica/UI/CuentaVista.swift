@@ -17,37 +17,33 @@ struct CuentaVista: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Button("← INICIO") { ruta = [] }.font(Tipos.boton).foregroundStyle(Color.tintaSuave)
-                Etiqueta("Tu cuenta")
+                Button { ruta = [] } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
+                Grabado("Tu cuenta", color: .brasa)
                 if cuenta.activa {
-                    Text(cuenta.email.isEmpty ? "Adentro" : cuenta.email).font(Tipos.display).foregroundStyle(Color.tinta)
-                    Text("Desde acá y desde la web manejás tus bichos aunque estén lejos.").font(Tipos.cuerpo).foregroundStyle(Color.tintaSuave)
-                    FilaDato(etiqueta: "Servidor", valor: cuenta.servidor)
-                    BotonSecundario(texto: "Salir") {
-                        Task { await cuenta.api.salir(); cuenta.salir() }
+                    Titular(cuenta.email.isEmpty ? "Adentro" : cuenta.email, tamano: 30)
+                    Visor(relleno: 12) {
+                        Grabado("Servidor")
+                        Text(cuenta.servidor).font(Tipos.marca(14, .bold)).foregroundStyle(Color.papel).lineLimit(1).truncationMode(.middle)
                     }
+                    Button { Task { await cuenta.api.salir(); cuenta.salir(); EnVivo.compartido.reiniciar() } } label: { Text("Salir") }.tecla(.negra)
                 } else {
-                    Text("Entrá con tu email").font(Tipos.display).foregroundStyle(Color.tinta)
-                    Text("Sin contraseñas: te llega un link.").font(Tipos.cuerpo).foregroundStyle(Color.tintaSuave)
-                    TextField("Servidor", text: $servidor).textInputAutocapitalization(.never).keyboardType(.URL)
-                        .autocorrectionDisabled().font(Tipos.dato).textFieldStyle(.roundedBorder)
-                    Text("En local: http://<la IP de tu Mac>:8080").font(Tipos.dato).foregroundStyle(Color.tintaSuave)
-                    TextField("Email", text: $email).textInputAutocapitalization(.never).keyboardType(.emailAddress)
-                        .autocorrectionDisabled().font(Tipos.cuerpo).textFieldStyle(.roundedBorder)
-                    BotonPrimario(texto: "Mandame el link") { Task { await pedirLink() } }
+                    Titular("Entrá", tamano: 40)
+                    CampoVisor(rotulo: "Servidor", texto: $servidor, ayuda: "https://…", claro: true, teclado: .URL)
+                    CampoVisor(rotulo: "Email", texto: $email, ayuda: "vos@mail.com", claro: true, teclado: .emailAddress)
+                    Button { Task { await pedirLink() } } label: { Label("Mandame el link", systemImage: "envelope.fill") }
+                        .tecla(.naranja, ancha: true)
                         .disabled(ocupado || !email.contains("@") || !servidor.hasPrefix("http"))
                     if pedido {
-                        TextField("Código del mail", text: $codigo).textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled().font(Tipos.dato).textFieldStyle(.roundedBorder)
-                        BotonSecundario(texto: "Entrar") { Task { await entrar() } }
+                        CampoVisor(rotulo: "Código del mail", texto: $codigo, ayuda: "XXXX-XXXX", teclado: .asciiCapable)
+                        Button { Task { await entrar() } } label: { Text("Entrar") }.tecla(ancha: true)
                             .disabled(ocupado || codigo.replacingOccurrences(of: "-", with: "").count != 8)
                     }
                 }
-                if let mensaje { Aviso(texto: mensaje) }
+                if let mensaje { AvisoConsola(texto: mensaje) }
             }
-            .padding(24)
+            .padding(16)
         }
-        .background(Color.papel.ignoresSafeArea())
+        .background(FondoConsola())
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -59,7 +55,7 @@ struct CuentaVista: View {
         do {
             try await cuenta.api.pedirEnlace(cuenta.email)
             pedido = true
-            mensaje = "Te mandamos un link: abrilo en este celu, o escribí el código del mail."
+            mensaje = "Abrí el link o poné el código."
         } catch { mensaje = error.localizedDescription }
     }
 
@@ -70,6 +66,7 @@ struct CuentaVista: View {
             cuenta.entrar(try await cuenta.api.canjear(email: cuenta.email, codigo: codigo))
             pedido = false
             mensaje = nil
+            EnVivo.compartido.reiniciar()
         } catch { mensaje = error.localizedDescription }
     }
 }
@@ -82,6 +79,7 @@ func entrarConLink(_ url: URL) async -> String? {
     do {
         let c = Cuenta.compartida
         c.entrar(try await c.api.canjear(tokenEnlace: t))
+        EnVivo.compartido.reiniciar()
         return "Entraste."
     } catch {
         return error.localizedDescription

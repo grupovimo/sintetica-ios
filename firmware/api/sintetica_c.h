@@ -103,6 +103,23 @@ int sintetica_quiere_dormir(void);
  * sintetica_iniciar. */
 int sintetica_validar_config(const char* json, size_t n, char* detalle, size_t cap);
 
+/* Dibuja una expresión paramétrica (del motor de vida) como la ve el editor,
+ * sin tocar la instancia: la de la config `json` (n bytes; NULL o n = 0 = solo
+ * las de fábrica) que se llama `nombre`, en el instante `t` (segundos: fases
+ * del giro, el latido, el brillo), con una partícula de muestra si la cara
+ * suelta alguna. `rgba` recibe ancho × alto × 4 bytes (ancho y alto de 16 a 640).
+ * Devuelve 0 si la dibujó; -1 si no hay una expresión paramétrica con ese
+ * nombre; > 0 si la config no es válida (el código, con el detalle en `detalle`).
+ * No hace falta haber llamado a sintetica_iniciar. */
+int sintetica_dibujar_expresion(const char* json, size_t n, const char* nombre, int ancho, int alto, int redonda,
+                                float t, uint8_t* rgba, char* detalle, size_t cap);
+
+/* Lo de fábrica del motor de vida (shared/formato/vida): tipo 0 = las
+ * expresiones paramétricas, 1 = los comportamientos. Devuelve cuántos hay; si
+ * `indice` está en rango, deja en *nombre y *json los de ese (el JSON, como en
+ * la config). */
+int sintetica_vida_base(int tipo, int indice, const char** nombre, const char** json);
+
 int sintetica_cantidad_expresiones(void);
 const char* sintetica_nombre_expresion(int indice);
 /* La expresión visible, o "animacion:<nombre>" mientras se ve una animación. */

@@ -1,5 +1,7 @@
 #include "rostro.h"
 
+#include "sprites.h"
+
 namespace sintetica {
 
 namespace {
@@ -177,6 +179,23 @@ void prepararOjo(const CuadroRostro& c, int lado, Ojo* o) {
   o->pupY = limitar(r[param::GY] * 0.6f, -o->h * 0.4f, o->h * 0.4f);
 }
 
+}  // namespace
+
+MarcoRostro marcoRostro(const CuadroRostro& c) {
+  const Rostro& r = c.r;
+  MarcoRostro m;
+  const float ft = r[param::FTILT] + r[param::SPIN] * 0.12f * seno(c.tiempo * 2.5f);
+  m.cRot = coseno(-ft), m.sRot = seno(-ft);
+  const float fs = r[param::FSCALE];
+  m.ex = maxf(0.2f, c.escalaX * fs), m.ey = maxf(0.2f, c.escalaY * fs);
+  const float sh = r[param::SHAKE];
+  m.dx = c.derivaX + sh * 0.018f * seno(c.tiempo * 61.0f);
+  m.dy = c.derivaY + sh * 0.011f * seno(c.tiempo * 47.0f + 1.3f);
+  return m;
+}
+
+namespace {
+
 void preparar(const CuadroRostro& c, Prep* p) {
   const Rostro& r = c.r;
   prepararOjo(c, 0, &p->ojo[0]);
@@ -186,13 +205,8 @@ void preparar(const CuadroRostro& c, Prep* p) {
   p->mo = r[param::MO], p->mw = r[param::MW], p->mcurve = r[param::MCURVE];
   p->bocaX = (p->ojo[0].cx + p->ojo[1].cx) * 0.5f;
   p->bocaY = -0.42f + r[param::EY] + r[param::GY] * 0.5f;
-  const float ft = r[param::FTILT] + r[param::SPIN] * 0.12f * seno(c.tiempo * 2.5f);
-  p->cRot = coseno(-ft), p->sRot = seno(-ft);
-  const float fs = r[param::FSCALE];
-  p->ex = maxf(0.2f, c.escalaX * fs), p->ey = maxf(0.2f, c.escalaY * fs);
-  const float sh = r[param::SHAKE];
-  p->dx = c.derivaX + sh * 0.018f * seno(c.tiempo * 61.0f);
-  p->dy = c.derivaY + sh * 0.011f * seno(c.tiempo * 47.0f + 1.3f);
+  const MarcoRostro m = marcoRostro(c);
+  p->cRot = m.cRot, p->sRot = m.sRot, p->ex = m.ex, p->ey = m.ey, p->dx = m.dx, p->dy = m.dy;
   p->glitch = c.glitch;
   p->semilla = c.semillaGlitch;
   p->blush = r[param::BLUSH];
@@ -377,14 +391,18 @@ float distanciaRostro(const CuadroRostro& c, float x, float y) {
   return cara({x, y}, pr, 0.01f).d;
 }
 
-void dibujarRostro(Lienzo& l, const VistaRostro& v, const CuadroRostro& c) {
+void dibujarRostro(Lienzo& l, const VistaRostro& v, const CuadroRostro& c, const CacheSprites* sprites, float opSprites,
+                   float ocultarOjos) {
   Prep pr;
   preparar(c, &pr);
   g_finos = l.franja() == 0 ? 0 : g_finos;
+  const bool conSprites = sprites && sprites->listo() && opSprites > 0.001f;
+  ocultarOjos = limitar(ocultarOjos, 0, 1);
 
   const Rgb fondo = rgbDe(paleta::PANTALLA);
   const float hue = c.r[param::HUE];
-  const float apagar = (1.0f - c.r[param::DIM] * 0.55f) * c.brillo;
+  // Con una cara de imagen, los ojos de la SDF se apagan (el fundido).
+  const float apagar = (1.0f - c.r[param::DIM] * 0.55f) * c.brillo * (1.0f - ocultarOjos);
   const Rgb base = rgbDe(c.colorOjos), rojo = rgbDe(c.colorRojo);
   const Rgb ojoC = {mezclar(base.r, rojo.r, hue) * apagar, mezclar(base.g, rojo.g, hue) * apagar,
                     mezclar(base.b, rojo.b, hue) * apagar};
@@ -464,7 +482,9 @@ void dibujarRostro(Lienzo& l, const VistaRostro& v, const CuadroRostro& c) {
     return a565f(bg.r + ojoC.r * glow, bg.g + ojoC.g * glow, bg.b + ojoC.b * glow);
   };
 
-  for (int by = by0; by < by1; by += 4) {
+  // Con la cara de imagen entera, la SDF no se calcula (los sprites la reemplazan).
+  const int byFin = ocultarOjos >= 0.999f ? by0 : by1;
+  for (int by = by0; by < byFin; by += 4) {
     for (int bx = bx0; bx < bx1; bx += 4) {
       const int ya = maxi(by, y0), yb = mini(by + 4, y1);
       const int xb = mini(bx + 4, ancho);
@@ -515,6 +535,8 @@ void dibujarRostro(Lienzo& l, const VistaRostro& v, const CuadroRostro& c) {
       }
     }
   }
+
+  if (conSprites) dibujarSprites(l, v, c, *sprites, opSprites);
 
   for (const Particula& pt : c.particulas)
     if (pt.viva) dibujarParticula(l, v, pt, c.colorOjos, c.brillo);

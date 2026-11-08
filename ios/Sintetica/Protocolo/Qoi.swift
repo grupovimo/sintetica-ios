@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// QOI ("Quite OK Image", https://qoiformat.org): el formato de las imágenes del
@@ -48,5 +49,63 @@ enum Qoi {
         }
         s += [0, 0, 0, 0, 0, 0, 0, 1]
         return s
+    }
+
+    /// Al revés: los píxeles (rgb, 3 bytes por píxel) de un QOI, o nil si no es uno.
+    static func decodificar(_ b: [UInt8]) -> (ancho: Int, alto: Int, rgb: [UInt8])? {
+        guard b.count >= 22, b[0] == 0x71, b[1] == 0x6F, b[2] == 0x69, b[3] == 0x66 else { return nil }
+        func u32(_ i: Int) -> Int { Int(b[i]) << 24 | Int(b[i + 1]) << 16 | Int(b[i + 2]) << 8 | Int(b[i + 3]) }
+        let ancho = u32(4), alto = u32(8)
+        guard ancho > 0, alto > 0, ancho <= 4096, alto <= 4096 else { return nil }
+        let total = ancho * alto
+        var rgb = [UInt8](repeating: 0, count: total * 3)
+        var indice = [Int](repeating: 0, count: 64 * 4)
+        var r = 0, g = 0, bl = 0, a = 255
+        var p = 14, racha = 0
+        let fin = b.count - 8
+        for i in 0 ..< total {
+            if racha > 0 {
+                racha -= 1
+            } else if p < fin {
+                let op = Int(b[p]); p += 1
+                if op == 0xFE {
+                    r = Int(b[p]); g = Int(b[p + 1]); bl = Int(b[p + 2]); p += 3
+                } else if op == 0xFF {
+                    r = Int(b[p]); g = Int(b[p + 1]); bl = Int(b[p + 2]); a = Int(b[p + 3]); p += 4
+                } else if op >> 6 == 0 {
+                    let k = op * 4
+                    r = indice[k]; g = indice[k + 1]; bl = indice[k + 2]; a = indice[k + 3]
+                } else if op >> 6 == 1 {
+                    r = (r + (op >> 4 & 3) - 2) & 255
+                    g = (g + (op >> 2 & 3) - 2) & 255
+                    bl = (bl + (op & 3) - 2) & 255
+                } else if op >> 6 == 2 {
+                    let dg = (op & 63) - 32
+                    let s2 = Int(b[p]); p += 1
+                    r = (r + dg + (s2 >> 4 & 15) - 8) & 255
+                    g = (g + dg) & 255
+                    bl = (bl + dg + (s2 & 15) - 8) & 255
+                } else {
+                    racha = op & 63
+                }
+                let h: Int = (r * 3 + g * 5 + bl * 7 + a * 11) % 64
+                indice[h * 4] = r; indice[h * 4 + 1] = g; indice[h * 4 + 2] = bl; indice[h * 4 + 3] = a
+            }
+            rgb[i * 3] = UInt8(r); rgb[i * 3 + 1] = UInt8(g); rgb[i * 3 + 2] = UInt8(bl)
+        }
+        return (ancho, alto, rgb)
+    }
+
+    /// Un QOI como imagen.
+    static func imagen(_ b: [UInt8]) -> CGImage? {
+        guard let d = decodificar(b) else { return nil }
+        var rgba = [UInt8](repeating: 255, count: d.ancho * d.alto * 4)
+        for i in 0 ..< d.ancho * d.alto {
+            rgba[i * 4] = d.rgb[i * 3]; rgba[i * 4 + 1] = d.rgb[i * 3 + 1]; rgba[i * 4 + 2] = d.rgb[i * 3 + 2]
+        }
+        guard let proveedor = CGDataProvider(data: Data(rgba) as CFData) else { return nil }
+        return CGImage(width: d.ancho, height: d.alto, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: d.ancho * 4,
+                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                       provider: proveedor, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
     }
 }

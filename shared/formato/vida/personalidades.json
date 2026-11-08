@@ -1,0 +1,10 @@
+{
+  "equilibrado": { "energia": 0.5, "sociabilidad": 0.5, "picardia": 0.45, "timidez": 0.3, "curiosidad": 0.55, "malGenio": 0.25 },
+  "timido": { "energia": 0.4, "sociabilidad": 0.35, "picardia": 0.2, "timidez": 0.9, "curiosidad": 0.5, "malGenio": 0.15 },
+  "picaro": { "energia": 0.65, "sociabilidad": 0.6, "picardia": 0.95, "timidez": 0.15, "curiosidad": 0.6, "malGenio": 0.3 },
+  "dormilon": { "energia": 0.15, "sociabilidad": 0.45, "picardia": 0.3, "timidez": 0.35, "curiosidad": 0.3, "malGenio": 0.3 },
+  "carinoso": { "energia": 0.5, "sociabilidad": 0.95, "picardia": 0.4, "timidez": 0.3, "curiosidad": 0.45, "malGenio": 0.05 },
+  "curioso": { "energia": 0.65, "sociabilidad": 0.5, "picardia": 0.45, "timidez": 0.2, "curiosidad": 0.95, "malGenio": 0.2 },
+  "grunon": { "energia": 0.45, "sociabilidad": 0.25, "picardia": 0.3, "timidez": 0.2, "curiosidad": 0.35, "malGenio": 0.9 },
+  "electrico": { "energia": 0.95, "sociabilidad": 0.7, "picardia": 0.65, "timidez": 0.1, "curiosidad": 0.75, "malGenio": 0.35 }
+}

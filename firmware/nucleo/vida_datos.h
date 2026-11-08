@@ -17,6 +17,13 @@ constexpr int MAX_PASOS = 6;
 constexpr int MAX_CUANDO = 3;
 constexpr int LARGO_VIDA = 25;  // nombres: 24 bytes + terminador
 
+// Caras de imagen (docs/motor-de-vida.md, "Caras de imagen"): una expresión
+// v2 que arma los ojos y la boca con sprites (QOI con transparencia, hasta
+// 128 × 128) en vez de con la SDF. El motor la anima igual que a cualquier cara.
+constexpr int MAX_SPRITES = 12;        // espacios de sprites (aparte de las 8 imágenes)
+constexpr int LADO_SPRITE = 128;       // lo más grande que puede ser un sprite, por lado
+constexpr int MAX_CARAS_IMAGEN = 8;    // expresiones de imagen en una config
+
 // Las variables que leen las condiciones ("sueno>0.5", "rasgo.timidez>0.6").
 enum class VarVida : uint8_t {
   // Estado interno (0 a 1).
@@ -83,6 +90,22 @@ struct Ajuste {
     return {static_cast<uint8_t>(p), static_cast<int16_t>(v * 10000.0f + (v < 0 ? -0.5f : 0.5f))};
   }
 };
+// Las partes de una cara de imagen (las claves de "sprites").
+enum class ParteSprite : uint8_t { Ojo, OjoCerrado, OjoDer, OjoDerCerrado, Boca, Cantidad };
+constexpr int N_PARTES_SPRITE = static_cast<int>(ParteSprite::Cantidad);
+const char* nombreParteSprite(int parte);  // "ojo", "ojo_cerrado", "ojo_der", "ojo_der_cerrado", "boca"
+
+// Una cara de imagen: qué sprite va en cada parte (-1 = no tiene) y su
+// geometría, en diezmilésimos de unidad del rostro.
+struct CaraImagen {
+  int8_t sprite[N_PARTES_SPRITE] = {-1, -1, -1, -1, -1};
+  bool espejar = true;     // sin ojo_der, el derecho es el izquierdo espejado
+  int16_t tamano = 3600;   // el ancho de cada ojo
+  int16_t bocaTamano = 0;  // el ancho de la boca (0 = a la escala de los ojos)
+  int16_t bocaY = -3600;   // la altura de la boca (como la de la SDF: y hacia arriba)
+  bool tiene(ParteSprite p) const { return sprite[static_cast<int>(p)] >= 0; }
+};
+
 struct CaraVida {
   char nombre[LARGO_VIDA] = {};
   uint8_t nAjustes = 0;
@@ -91,6 +114,7 @@ struct CaraVida {
   int8_t particula = -1;  // TipoParticula que va soltando (-1 = ninguna)
   Parpadeo parpadeo = Parpadeo::Normal;
   bool propia = false;    // vino de la config del usuario
+  int8_t imagen = -1;     // una cara de imagen: su índice en DatosVida::imagenes
   // Arma el destino completo: la neutral + los ajustes.
   void aplicar(Rostro& r) const;
 };
@@ -149,6 +173,9 @@ struct DatosVida {
   CaraVida caras[MAX_CARAS_VIDA];
   uint8_t nComportamientos = 0;
   Comportamiento comportamientos[MAX_COMPORTAMIENTOS];
+  uint8_t nImagenes = 0;
+  CaraImagen imagenes[MAX_CARAS_IMAGEN];
+  int8_t reposo = -1;             // "cara": {"expresion": …}: la cara de siempre (-1 = la neutral)
 
   int indiceCara(const char* n) const;
   int indiceComportamiento(const char* n) const;

@@ -9,27 +9,30 @@ struct Escanear: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Etiqueta("Vincular")
-            Text("Escaneá el QR de la pantalla del bicho.").font(Tipos.titulo).foregroundStyle(Color.tinta)
+            Button { ruta = [] } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
+            Grabado("Vincular", color: .brasa)
+            Titular("Escaneá su QR", tamano: 38)
             ZStack {
                 Color.pantalla
                 if permiso == .authorized {
                     Camara { texto in
-                        if let qr = leerQr(texto) { ruta = [.vinculando(qr)] } else { aviso = "Ese QR no es de un bicho de Sintética Labs." }
+                        if let qr = leerQr(texto) { ruta = [.vinculando(qr)] } else { aviso = "Ese QR no es de un robot." }
                     }
                 } else {
-                    Text("Para escanear hace falta la cámara (Ajustes › Sintética).").font(Tipos.chico).foregroundStyle(Color.tintaSuave).padding(24)
+                    Label("Falta la cámara", systemImage: "camera.fill").font(Tipos.marca(14, .bold)).foregroundStyle(Color.gris).padding(24)
                 }
             }
             .aspectRatio(1, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            if let aviso { Aviso(texto: aviso) }
-            Text("¿No ves el QR? Si el bicho ya está vinculado con otro celu, mantené apretado el botón 5 segundos.")
-                .font(Tipos.chico).foregroundStyle(Color.tintaSuave)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Color.brasa.opacity(0.5), lineWidth: 2))
+            if let aviso { AvisoConsola(texto: aviso, error: true) }
+            Label("¿Sin QR? Botón 5 s", systemImage: "hand.tap.fill").font(Tipos.chico).foregroundStyle(Color.gris)
             Spacer()
         }
-        .padding(24)
-        .background(Color.papel.ignoresSafeArea())
+        .padding(16)
+        .background(FondoConsola())
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             if permiso == .notDetermined {
                 _ = await AVCaptureDevice.requestAccess(for: .video)

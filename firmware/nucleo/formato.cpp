@@ -13,7 +13,8 @@ const char* const NOMBRES_EVENTO[] = {
     "tacto", "doble-toque", "levantado", "sacudida", "boca-abajo", "vinculado", "app-abierta", "despertado",
     "caricia", "muchos-toques", "sacudida-suave", "sacudida-fuerte", "inclinado", "caida", "voz", "nombre",
     "ruido", "musica", "silencio", "notificacion", "llamada", "bateria-baja", "bateria-critica", "enchufado",
-    "desenchufado", "cargado", "sin-wifi", "cambio-de-cara", "bicho-cerca", "volvio", "hito"};
+    "desenchufado", "cargado", "sin-wifi", "cambio-de-cara", "bicho-cerca", "volvio", "hito",
+    "recordatorio", "pomodoro"};
 static_assert(sizeof NOMBRES_EVENTO / sizeof NOMBRES_EVENTO[0] == static_cast<int>(Evento::Cantidad), "eventos");
 
 // Memoria de trabajo compartida (no reentrante: el núcleo corre en un solo hilo).
@@ -678,6 +679,16 @@ ResultadoConfig aplicarSobre(Config& c, const char* texto, size_t n) {
   {
     ResultadoConfig r = leerVidaConfig(j, 0, c);
     if (!r.ok()) return r;
+  }
+  // La cara de siempre ("cara": {"expresion": …}), cuando ya están todas las expresiones.
+  if (cara >= 0) {
+    const int ex = j.buscar(cara, "expresion");
+    if (ex >= 0) {
+      char n[LARGO_NOMBRE];
+      const int i = j.texto(ex, n, sizeof n) > 0 ? c.vida.indiceCara(n) : -1;
+      if (i < 0) return error(ErrorConfig::Campo, "cara: expresion es el nombre de una expresión paramétrica o de imagen que exista");
+      c.vida.reposo = static_cast<int8_t>(i);
+    }
   }
 
   int ans = j.buscar(0, "animaciones");

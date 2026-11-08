@@ -3,7 +3,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+#include "rostro.h"
 #include "sistema.h"
+#include "vida_base.h"
 
 using namespace sintetica;
 
@@ -31,6 +33,10 @@ struct Guardado {
   size_t n;
 };
 Guardado g_memoria[16];
+
+// Una config suelta, fuera de la instancia (grande: fuera de la pila): para
+// validar y para dibujar una expresión sin tocar el bicho.
+Config g_suelta;
 
 Guardado* buscarGuardado(const char* clave, bool crear) {
   for (auto& g : g_memoria)
@@ -209,10 +215,75 @@ size_t sintetica_mensaje_ota(const sintetica_manifiesto* m, char* s, size_t cap)
 }
 
 int sintetica_validar_config(const char* json, size_t n, char* detalle, size_t cap) {
-  static Config c;  // grande: fuera de la pila
-  ResultadoConfig r = cargarConfig(c, json, n);
+  ResultadoConfig r = cargarConfig(g_suelta, json, n);
   if (detalle && cap) copiarTexto(detalle, cap, r.detalle ? r.detalle : "");
   return static_cast<int>(r.error);
+}
+
+int sintetica_dibujar_expresion(const char* json, size_t n, const char* nombre, int ancho, int alto, int redonda,
+                                float t, uint8_t* rgba, char* detalle, size_t cap) {
+  if (detalle && cap) detalle[0] = 0;
+  if (!rgba || !nombre || ancho < 16 || alto < 16 || ancho > MAX_ANCHO || alto > MAX_ALTO) return -1;
+  static const char vacia[] = "{\"version\":2}";
+  if (!json || !n) json = vacia, n = sizeof vacia - 1;
+  ResultadoConfig r = cargarConfig(g_suelta, json, n);
+  if (!r.ok()) {
+    if (detalle && cap) copiarTexto(detalle, cap, r.detalle ? r.detalle : "");
+    return static_cast<int>(r.error);
+  }
+  const DatosVida& vida = g_suelta.vida;
+  const int i = vida.indiceCara(nombre);
+  if (i < 0) return -1;
+  // Lo mismo que el editor del simulador (sim_editor_rostro): la neutral, la
+  // cara encima, y las fases de la micro-vida en el instante t.
+  CuadroRostro c;
+  const int neutral = vida.indiceCara("neutral");
+  if (neutral >= 0) vida.caras[neutral].aplicar(c.r);
+  vida.caras[i].aplicar(c.r);
+  c.r.limitar();
+  c.tiempo = t;
+  c.faseSpin = t * 3.2f * c.r[param::SPIN];
+  c.faseOrbita = t * 4.5f * c.r[param::ORBIT];
+  const float ph = t * 1.15f - piso(t * 1.15f);
+  auto g = [](float x) { return exponencial(-x * x); };
+  c.latido = g((ph - 0.1f) * 22) + 0.65f * g((ph - 0.3f) * 22);
+  c.pulso = 1 + c.r[param::PULSE] * (0.09f + 0.09f * seno(t * 9) * seno(t * 2.3f));
+  c.glitch = c.r[param::GLITCH] * (seno(t * 23) > 0.6f ? 1.0f : 0.35f);
+  c.semillaGlitch = piso(t * 8);
+  c.progreso = t * 0.15f - piso(t * 0.15f);
+  c.colorOjos = g_suelta.hayColorOjos ? g_suelta.colorOjos : paleta::NARANJA;
+  c.brillo = vida.brilloMax;
+  if (vida.caras[i].particula >= 0) {
+    Particula& p = c.particulas[0];
+    p.viva = true;
+    p.tipo = static_cast<TipoParticula>(vida.caras[i].particula);
+    p.x = 0.33f, p.y = 0.3f, p.vida = 2, p.edad = 0.6f, p.tamano = 0.06f;
+  }
+  // Por franjas, con poca memoria: el anfitrión puede ser una app.
+  static uint16_t franja[MAX_ANCHO * 32];
+  Lienzo lienzo;
+  lienzo.iniciar(franja, ancho, alto, 32);
+  const VistaRostro v = VistaRostro::para(ancho, alto, redonda != 0);
+  for (int y0 = 0; y0 < alto; y0 += lienzo.filasPorFranja()) {
+    lienzo.empezarFranja(y0);
+    dibujarRostro(lienzo, v, c);
+    const int filas = lienzo.filasFranja();
+    for (int k = 0; k < filas * ancho; k++) {
+      const uint32_t px = de565(franja[k]);
+      uint8_t* s = rgba + (static_cast<size_t>(y0) * ancho + k) * 4;
+      s[0] = static_cast<uint8_t>(px >> 16), s[1] = static_cast<uint8_t>(px >> 8), s[2] = static_cast<uint8_t>(px), s[3] = 255;
+    }
+  }
+  return 0;
+}
+int sintetica_vida_base(int tipo, int indice, const char** nombre, const char** json) {
+  const DatoVidaBase* l = tipo == 0 ? CARAS_VIDA_BASE : COMPORTAMIENTOS_BASE;
+  const int n = tipo == 0 ? CANTIDAD_CARAS_VIDA_BASE : tipo == 1 ? CANTIDAD_COMPORTAMIENTOS_BASE : 0;
+  if (indice >= 0 && indice < n) {
+    if (nombre) *nombre = l[indice].nombre;
+    if (json) *json = l[indice].json;
+  }
+  return n;
 }
 const char* sintetica_qr(void) { return g_sistema.contenidoQr(); }
 int sintetica_imagen_visible(void) { return g_sistema.imagenVisible(); }

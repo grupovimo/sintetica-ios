@@ -26,6 +26,9 @@ constexpr int MAX_ANIMACIONES = 6;
 constexpr int MAX_PISTAS = 6;
 constexpr int MAX_CLAVES = 8;
 constexpr uint32_t MAX_DURACION_MS = 60000;
+constexpr int MAX_RECORDATORIOS = 12;
+constexpr int LARGO_RECORDATORIO = 41;  // 40 bytes UTF-8 + terminador
+constexpr int LARGO_PALABRA = 17;       // 16 bytes UTF-8 + terminador
 
 // Paleta de la marca, tema Pantalla (manual de marca, tokens.json).
 namespace paleta {
@@ -109,6 +112,8 @@ enum class Evento : uint8_t {
   BichoCerca,
   Volvio,      // la primera interacción después de una ausencia (lo genera el motor)
   Hito,        // un hito de la relación (lo genera el motor)
+  Recordatorio,  // se disparó un recordatorio (lo genera el sistema)
+  Pomodoro,      // terminó un tramo del pomodoro (lo genera el sistema)
   Cantidad
 };
 // El evento "padre" (sacudida-fuerte → sacudida, caricia → tacto): si no hay
@@ -196,6 +201,43 @@ struct ElementoLista {
   uint8_t indice = 0;  // expresión (dibujo), espacio de imagen (0-7), animación o cara paramétrica
 };
 
+// Un aviso a una hora ("recordatorios"), compacto: el broche no tiene PSRAM.
+struct Recordatorio {
+  uint16_t minuto = 0;     // minuto del día (0-1439)
+  uint8_t dias = 0x7F;     // bit 0 lunes … bit 6 domingo
+  bool sonido = true;
+  bool activo = true;
+  int8_t caraVida = -1;    // la expresión (Config::Cara): índice en vida.caras
+  int8_t caraDibujo = -1;  // o en expresiones
+  char texto[LARGO_RECORDATORIO] = {};
+};
+// "dias": "LMXJV" → máscara (bit 0 lunes … bit 6 domingo); vacío = todos.
+// false si tiene letras que no son de L M X J V S D o alguna repetida.
+bool leerDias(const char* s, uint8_t* mascara);
+
+// "voz": la guarda y la valida (los modelos con parlante llegan después).
+struct Voz {
+  enum class Tipo : uint8_t { Grave, Media, Aguda, Robot };
+  uint8_t volumen = 70;    // centésimos (0 = silencio)
+  uint8_t microfono = 60;  // centésimos
+  Tipo tipo = Tipo::Media;
+  bool conversar = false;
+  char palabra[LARGO_PALABRA] = {};  // vacío = su nombre
+};
+
+// "pomodoro": los tramos, en minutos.
+struct TramosPomodoro {
+  uint8_t trabajo = 25;   // 1-120
+  uint8_t descanso = 5;   // 1-60
+};
+
+// "protector": después de `espera` segundos sin que pase nada, muestra la
+// imagen de ese espacio (pantalla completa, en loop).
+struct Protector {
+  int8_t imagen = -1;     // espacio 0-7; -1 = sin protector
+  uint16_t espera = 10;   // segundos, 3-3600
+};
+
 struct Config {
   int version = 1;
   char nombre[LARGO_NOMBRE] = {};
@@ -217,6 +259,11 @@ struct Config {
   uint8_t nAnimaciones = 0;
   Animacion animaciones[MAX_ANIMACIONES];
   DatosVida vida;
+  uint8_t nRecordatorios = 0;
+  Recordatorio recordatorios[MAX_RECORDATORIOS];
+  Voz voz;
+  TramosPomodoro pomodoro;
+  Protector protector;
 
   int indiceExpresion(const char* nombre) const;
   int indiceAnimacion(const char* nombre) const;

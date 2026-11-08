@@ -49,11 +49,8 @@
 	<string>Para encontrar tu robot, vincularlo y cambiarle la cara.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Para escanear el QR que muestra tu robot.</string>
-	<key>UIAppFonts</key>
-	<array>
-		<string>Fraunces.ttf</string>
-		<string>JetBrainsMono.ttf</string>
-	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

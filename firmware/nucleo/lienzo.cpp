@@ -206,6 +206,20 @@ void Lienzo::fila(int y, const uint16_t* rgb565) {
   copiarBytes(px_ + (y - y0_) * ancho_, rgb565, sizeof(uint16_t) * static_cast<size_t>(ancho_));
 }
 
+void Lienzo::filaMezclada(int y, const uint16_t* rgb565, float alfa) {
+  if (y < yIni() || y >= yFin()) return;
+  const int a = static_cast<int>(limitar(alfa, 0, 1) * 256 + 0.5f);
+  uint16_t* d = px_ + (y - y0_) * ancho_;
+  for (int x = 0; x < ancho_; x++) {
+    const uint32_t f = de565(d[x]), n = de565(rgb565[x]);
+    auto canal = [&](int sh) {
+      const int cf = (f >> sh) & 0xFF, cn = (n >> sh) & 0xFF;
+      return static_cast<uint32_t>((cf * (256 - a) + cn * a) >> 8) << sh;
+    };
+    d[x] = a565(canal(16) | canal(8) | canal(0));
+  }
+}
+
 void Lienzo::rectangulo(int x, int y, int w, int h, uint32_t rgb) {
   const uint16_t c = a565(rgb);
   for (int j = maxi(yIni(), y); j < mini(yFin(), y + h); j++)

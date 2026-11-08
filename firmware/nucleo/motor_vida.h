@@ -68,7 +68,7 @@ bool decodificarMemoria(const uint8_t* d, size_t n, Memoria* m);
 // Un registro de lo que pasó, para depurar (se exporta desde la app).
 struct EntradaRegistro {
   uint32_t segundos = 0;   // desde que arrancó
-  uint8_t tipo = 0;        // 0 evento, 1 comportamiento, 2 dormir/despertar, 3 hito
+  uint8_t tipo = 0;        // 0 evento, 1 comportamiento, 2 dormir/despertar, 3 hito, 4 recordatorio
   uint8_t dato = 0;        // el evento, el comportamiento o 1/0
 };
 constexpr int MAX_REGISTRO = 32;
@@ -92,6 +92,7 @@ class MotorVida {
   // Fija una cara (nombre de la config; nullptr o "" vuelve a lo automático).
   bool fijar(const char* nombre);
   void fijar(int expresion);  // compatibilidad: índice de un dibujo (-1 = automático)
+  void fijar(Config::Cara c) { fija_ = c; }
   // La cara de base (la que eligió el dueño en la lista): reemplaza a la
   // neutral, no se duerme sola y las reacciones siguen funcionando.
   void base(Config::Cara c) { base_ = c; }
@@ -111,6 +112,14 @@ class MotorVida {
 
   // Lo que se dibuja.
   const CuadroRostro& cuadro() const { return cuadro_; }
+  // La cara de imagen que se ve (índice en config.vida.caras, -1 = la SDF):
+  // la de la capa (un reflejo o un paso de un comportamiento) si es de imagen;
+  // si no, la "persona" (fija > estado > base > la de config.cara.expresion),
+  // y las demás caras (paramétricas) la mueven con sus parámetros.
+  int caraImagen() const;
+  // Qué caras de imagen se pueden mostrar (bit i = vida.imagenes[i]: tiene su
+  // sprite del ojo). El sistema lo actualiza cuando cambian la config o los sprites.
+  void imagenesDisponibles(uint8_t mascara) { dispImagenes_ = mascara; }
   // Si hay que dibujar un dibujo de formas (una cara propia del usuario):
   // su índice y su opacidad (para el fundido). -1 = solo el rostro.
   int dibujo() const { return dibujo_; }
@@ -137,6 +146,8 @@ class MotorVida {
   // Los tres mejores del último sorteo del selector (nombre, puntaje).
   int candidatos(const char** nombres, float* puntajes, int max) const;
   int registro(EntradaRegistro* salida, int max) const;
+  // Anota algo que pasó fuera del motor (el sistema: 4 = recordatorio, con su índice).
+  void anotarRegistro(uint8_t tipo, uint8_t dato) { anotar(tipo, dato); }
   // El broche: de noche, después de dormirse, puede apagar la pantalla hasta
   // la mañana. segundosHastaDespertar: -1 si no se sabe la hora.
   bool quiereSuenoProfundo() const;
@@ -183,6 +194,7 @@ class MotorVida {
   void cambioDeCapa(int cara, float peso);
   bool enHorarioDormir() const;
   int caraEstado();
+  bool esImagen(int cara) const;
   int idxOvejas() const;
 
   const Config* config_ = nullptr;
@@ -212,6 +224,8 @@ class MotorVida {
   float opDibujo_ = 0;
   int dibujoObjetivo_ = -1;
   int8_t animoCaras_[6] = {-1, -1, -1, -1, -1, -1};
+  uint8_t dispImagenes_ = 0xFF;
+  int personaImagen_ = -1;  // la cara de imagen de la persona (sin la capa)
   float animoPesos_[6] = {};
   float grunonHasta_ = 0, ofendidoHasta_ = 0;
 

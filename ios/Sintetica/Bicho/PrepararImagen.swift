@@ -1,3 +1,4 @@
+import AVFoundation
 import ImageIO
 import UIKit
 
@@ -23,23 +24,33 @@ enum PrepararImagen {
 
     /// Un GIF a la pantalla: cada cuadro recortado como una foto, en una
     /// animación "sani" (o un QOI si tiene un solo cuadro), y el primer cuadro
-    /// recortado para la miniatura. Si no entra en un espacio, se saltea uno de
-    /// cada dos cuadros y el que queda dura lo de los dos, como la web.
+    /// recortado para la miniatura.
     static func gif(_ datos: Data, ancho: Int, alto: Int, redonda: Bool) throws -> (bytes: [UInt8], primero: UIImage) {
         guard let fuente = CGImageSourceCreateWithData(datos as CFData, nil), CGImageSourceGetCount(fuente) > 0 else {
             throw ErrorImagen.noEsGif
         }
-        var cuadros: [Animacion.Cuadro] = []
-        var primero: UIImage?
+        var cuadros: [(UIImage, Int)] = []
         for i in 0 ..< CGImageSourceGetCount(fuente) {
             guard let cg = CGImageSourceCreateImageAtIndex(fuente, i, nil) else { continue }
-            let recortada = recortar(UIImage(cgImage: cg), ancho: ancho, alto: alto, redonda: redonda)
-            if primero == nil { primero = recortada }
             let props = CGImageSourceCopyPropertiesAtIndex(fuente, i, nil) as? [CFString: Any]
             let gif = props?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
             let segundos = (gif?[kCGImagePropertyGIFUnclampedDelayTime] as? Double) ?? (gif?[kCGImagePropertyGIFDelayTime] as? Double) ?? 0.1
             // Como los navegadores: menos de 20 ms se toma como 100.
-            cuadros.append(Animacion.Cuadro(qoi: qoi(recortada), ms: segundos < 0.02 ? 100 : Int(segundos * 1000)))
+            cuadros.append((UIImage(cgImage: cg), segundos < 0.02 ? 100 : Int(segundos * 1000)))
+        }
+        return try empaquetar(cuadros, ancho: ancho, alto: alto, redonda: redonda)
+    }
+
+    /// Los cuadros (ya en orden, con su duración) recortados a la pantalla. Si
+    /// no entran en un espacio (o son más de 64), se saltea uno de cada dos y el
+    /// que queda dura lo de los dos, como la web.
+    static func empaquetar(_ fuentes: [(UIImage, Int)], ancho: Int, alto: Int, redonda: Bool) throws -> (bytes: [UInt8], primero: UIImage) {
+        var primero: UIImage?
+        var cuadros: [Animacion.Cuadro] = []
+        for (img, ms) in fuentes {
+            let recortada = recortar(img, ancho: ancho, alto: alto, redonda: redonda)
+            if primero == nil { primero = recortada }
+            cuadros.append(Animacion.Cuadro(qoi: qoi(recortada), ms: ms))
         }
         guard let primero, !cuadros.isEmpty else { throw ErrorImagen.noEsGif }
         if cuadros.count == 1 { return (cuadros[0].qoi, primero) }
@@ -55,12 +66,50 @@ enum PrepararImagen {
         return (sani, primero)
     }
 
+    /// Un video corto: hasta 6 segundos desde el principio, a 12 cuadros por
+    /// segundo como mucho (como web/src/lib/imagenes.ts).
+    static let segundosVideo = 6.0
+    static func cuadrosDeVideo(_ url: URL, ancho: Int, alto: Int) async throws -> [(UIImage, Int)] {
+        let activo = AVURLAsset(url: url)
+        let duracion = (try? await activo.load(.duration)).map { CMTimeGetSeconds($0) } ?? segundosVideo
+        let dura = min(duracion.isFinite && duracion > 0 ? duracion : segundosVideo, segundosVideo)
+        let paso = max(1.0 / 12, dura / Double(Animacion.maxCuadros))
+        let ms = Int((paso * 1000).rounded())
+        let generador = AVAssetImageGenerator(asset: activo)
+        generador.appliesPreferredTrackTransform = true
+        generador.maximumSize = CGSize(width: ancho * 2, height: alto * 2)
+        generador.requestedTimeToleranceBefore = CMTime(value: 1, timescale: 60)
+        generador.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 60)
+        var cuadros: [(UIImage, Int)] = []
+        var t = 0.0
+        while t < dura - 0.001, cuadros.count < Animacion.maxCuadros {
+            let (cg, _) = try await generador.image(at: CMTime(seconds: t, preferredTimescale: 600))
+            cuadros.append((UIImage(cgImage: cg), ms))
+            t += paso
+        }
+        guard !cuadros.isEmpty else { throw ErrorImagen.videoVacio }
+        return cuadros
+    }
+
+    /// Una imagen del robot (QOI o animación) en sus cuadros, como imágenes.
+    static func cuadrosDe(_ bytes: [UInt8]) -> [(UIImage, Int)] {
+        Animacion.cuadros(bytes).compactMap { c in Qoi.imagen(c.qoi).map { (UIImage(cgImage: $0), c.ms) } }
+    }
+
+    /// La misma imagen del robot a otro tamaño (para la vista previa al doble).
+    static func reescalar(_ bytes: [UInt8], ancho: Int, alto: Int, redonda: Bool) -> [UInt8]? {
+        let c = cuadrosDe(bytes)
+        guard !c.isEmpty else { return nil }
+        return try? empaquetar(c.map { ($0.0, max(20, $0.1)) }, ancho: ancho, alto: alto, redonda: redonda).bytes
+    }
+
     enum ErrorImagen: LocalizedError {
-        case noEsGif, muyPesado
+        case noEsGif, muyPesado, videoVacio
         var errorDescription: String? {
             switch self {
-            case .noEsGif: "No pude leer el GIF."
-            case .muyPesado: "El GIF es demasiado pesado para la pantalla: probá con uno más simple."
+            case .noEsGif: "No pude leer la imagen."
+            case .muyPesado: "Muy pesado: probá uno más corto."
+            case .videoVacio: "El video está vacío."
             }
         }
     }

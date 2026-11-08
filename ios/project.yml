@@ -27,11 +27,15 @@ targets:
         group: Nucleo C++
         # cgo/ es para Go (la API y el bicho virtual): repite el núcleo entero.
         excludes: ["cgo/**"]
+      # Lo de fábrica del motor de vida (expresiones, comportamientos, reglas).
+      - path: ../shared/formato/vida
+        group: Vida
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sinteticalabs.app
         PRODUCT_NAME: Sintetica
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "0.2.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_OBJC_BRIDGING_HEADER: Sintetica/Nucleo/Puente.h
         HEADER_SEARCH_PATHS: ["$(SRCROOT)/../firmware/api", "$(SRCROOT)/../firmware/nucleo"]

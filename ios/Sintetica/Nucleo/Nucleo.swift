@@ -96,6 +96,40 @@ enum Nucleo {
     static var version: String { String(cString: sintetica_version()) }
     static var imagenVisible: Int { Int(sintetica_imagen_visible()) }
 
+    /// Valida una config con el mismo núcleo del robot. nil = válida; si no, por qué.
+    static func validar(_ json: String) -> String? {
+        var detalle = [CChar](repeating: 0, count: 256)
+        let n = json.utf8.count
+        let r = json.withCString { sintetica_validar_config($0, n, &detalle, 256) }
+        if r == 0 { return nil }
+        let d = String(cString: detalle)
+        return d.isEmpty ? "El robot no aceptaría esta config." : d
+    }
+
+    /// Dibuja una cara paramétrica sin tocar la instancia (miniaturas, el
+    /// laboratorio y el dock). nil si no hay una cara paramétrica con ese nombre.
+    static func dibujarExpresion(config: String?, nombre: String, ancho: Int, alto: Int, redonda: Bool, t: Double) -> CGImage? {
+        var rgba = [UInt8](repeating: 0, count: ancho * alto * 4)
+        var detalle = [CChar](repeating: 0, count: 128)
+        let texto = config ?? ""
+        let n = texto.utf8.count
+        let r: Int32 = texto.withCString { c in
+            nombre.withCString { nom in
+                sintetica_dibujar_expresion(n > 0 ? c : nil, n, nom, Int32(ancho), Int32(alto), redonda ? 1 : 0, Float(t), &rgba, &detalle, 128)
+            }
+        }
+        if r > 0, config != nil { return dibujarExpresion(config: nil, nombre: nombre, ancho: ancho, alto: alto, redonda: redonda, t: t) }
+        guard r == 0 else { return nil }
+        return imagenRGBA(rgba, ancho: ancho, alto: alto)
+    }
+
+    static func imagenRGBA(_ rgba: [UInt8], ancho w: Int, alto h: Int) -> CGImage? {
+        guard let proveedor = CGDataProvider(data: Data(rgba) as CFData) else { return nil }
+        return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
+                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                       provider: proveedor, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+    }
+
     /// El último cuadro como imagen (RGBA de 8 bits).
     static func imagen() -> CGImage? {
         let w = ancho, h = alto

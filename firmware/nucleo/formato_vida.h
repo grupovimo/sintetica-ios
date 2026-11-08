@@ -10,7 +10,8 @@ bool nombreValido(const char* s);
 // Una expresión sin "formas" es paramétrica.
 bool esCaraParametrica(const Json& j, int obj);
 ResultadoConfig leerCaraVida(const Json& j, int obj, Config& c, const char* nombre, bool propia);
-// semilla, personalidad, horario, dueno, cumple, limites_marca y comportamientos.
+// semilla, personalidad, horario, dueno, cumple, limites_marca, comportamientos,
+// recordatorios, voz, pomodoro y protector.
 ResultadoConfig leerVidaConfig(const Json& j, int raiz, Config& c);
 // Las expresiones paramétricas y los comportamientos base (shared/formato/vida).
 ResultadoConfig cargarVidaBase(Config& c);

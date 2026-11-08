@@ -30,6 +30,7 @@ bool DecodificadorQoi::empezar(Leer leer, void* contexto) {
     leidos += static_cast<uint32_t>(n);
   }
   if (!leer_ || !leerCabecera(cab, sizeof cab, &ancho_, &alto_)) return false;
+  canales_ = cab[12];
   posicion_ = 14;
   enBuf_ = leidoBuf_ = 0;
   llenarBytes(indice_, 0, sizeof indice_);
@@ -91,6 +92,17 @@ bool DecodificadorQoi::siguienteFila(uint16_t* rgb565) {
     uint8_t r, g, b;
     if (!pixel(&r, &g, &b)) return false;
     if (rgb565) rgb565[x] = a565(r, g, b);
+  }
+  fila_++;
+  return true;
+}
+
+bool DecodificadorQoi::siguienteFilaRgba(uint8_t* rgba) {
+  if (fila_ >= alto_) return false;
+  for (uint32_t x = 0; x < ancho_; x++) {
+    uint8_t r, g, b;
+    if (!pixel(&r, &g, &b)) return false;
+    rgba[x * 4] = r, rgba[x * 4 + 1] = g, rgba[x * 4 + 2] = b, rgba[x * 4 + 3] = a_;
   }
   fila_++;
   return true;

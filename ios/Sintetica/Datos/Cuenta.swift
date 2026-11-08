@@ -80,7 +80,7 @@ struct BichoNube: Identifiable, Sendable {
 struct FirmwareNube: Identifiable, Sendable { let id: Int; let version: String; let tamano: Int }
 
 /// Un evento en vivo (SSE).
-struct EventoNube { let tipo: String; let datos: [String: Any] }
+struct EventoNube { let tipo: String; let datos: [String: Any]; var bicho = "" }
 extension EventoNube: @unchecked Sendable {}
 
 /// La API de SintéticaOS (docs/nube.md).
@@ -88,7 +88,7 @@ struct ApiSintetica: Sendable {
     let servidor: String
     var token = ""
 
-    private func pedido(_ ruta: String, _ metodo: String = "GET", _ cuerpo: [String: Any]? = nil, encabezados: [String: String] = [:]) throws -> URLRequest {
+    func pedido(_ ruta: String, _ metodo: String = "GET", _ cuerpo: [String: Any]? = nil, encabezados: [String: String] = [:]) throws -> URLRequest {
         guard let url = URL(string: servidor.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + ruta) else {
             throw ErrorApi(estado: 0, mensaje: "El servidor no es una URL válida.", detalle: servidor)
         }
@@ -104,7 +104,7 @@ struct ApiSintetica: Sendable {
         return r
     }
 
-    private func pedir(_ ruta: String, _ metodo: String = "GET", _ cuerpo: [String: Any]? = nil, encabezados: [String: String] = [:]) async throws -> [String: Any] {
+    func pedir(_ ruta: String, _ metodo: String = "GET", _ cuerpo: [String: Any]? = nil, encabezados: [String: String] = [:]) async throws -> [String: Any] {
         let r = try pedido(ruta, metodo, cuerpo, encabezados: encabezados)
         let (datos, resp): (Data, URLResponse)
         do { (datos, resp) = try await URLSession.shared.data(for: r) } catch {

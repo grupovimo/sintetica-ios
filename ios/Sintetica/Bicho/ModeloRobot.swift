@@ -1,0 +1,544 @@
+import Foundation
+import Observation
+import UIKit
+
+/// Un robot abierto en la consola: su estado en vivo, su config y sus
+/// imágenes. Habla por la nube si está en la cuenta (la config manda la nube:
+/// si no, la sincronización pisaría lo cambiado por BLE), por BLE si solo está
+/// vinculado a este celu, o con el núcleo del celu ("probar sin robot").
+/// Como web/src/lib/bicho.svelte.ts y web/src/lib/consola/guardado.svelte.ts.
+@MainActor
+@Observable
+final class ModeloRobot {
+    enum Fase: Equatable { case conectando, lista, error(String, revincular: Bool) }
+    enum Via: Equatable { case demo, ble, nube }
+    enum Guardado: Equatable { case listo, guardando, guardado, error }
+    struct Aviso: Equatable { let texto: String; let icono: String; let cuando: Date }
+    enum Fuente { case datos(Data), video(URL) }
+
+    let id: String
+    private(set) var via: Via = .nube
+    var fase: Fase = .conectando
+    var robot: RobotNube?
+    var estado: Estado?
+    var config = ConfigDoc()
+    private(set) var versionConfig = 0
+    var espacios: [EspacioImagen] = []
+    var miniaturas: [Int: [UIImage]] = [:]
+    var duraciones: [Int: [Int]] = [:]
+    var subiendo = -1
+    var progreso: Double?
+    var errorImagenes = ""
+    var aviso: Aviso?
+    var guardado: Guardado = .listo
+    var errorGuardado = ""
+    private(set) var cliente: ClienteBicho?
+
+    @ObservationIgnored private var pendiente: ConfigDoc?
+    @ObservationIgnored private var reloj: Task<Void, Never>?
+    @ObservationIgnored private var escucha: Task<Void, Never>?
+    @ObservationIgnored private var espejo: Task<Void, Never>?
+    @ObservationIgnored private var oyente: UUID?
+    @ObservationIgnored private var crcCargado: [Int: UInt32] = [:]
+    @ObservationIgnored private var ultimaFijada = ""
+    @ObservationIgnored var pausaEspejo = Date.distantPast
+    @ObservationIgnored private let conexion = UUID().uuidString
+    /// El núcleo guarda al anfitrión con una referencia débil: el modelo lo mantiene vivo.
+    @ObservationIgnored private let anfitrion = AnfitrionEnMemoria()
+
+    init(id: String) {
+        self.id = id
+        if id.hasPrefix(ID_DEMO) { via = .demo }
+    }
+
+    private var api: ApiSintetica { Cuenta.compartida.api }
+    var esDemo: Bool { via == .demo }
+    var esNube: Bool { via == .nube }
+    var esBle: Bool { via == .ble }
+    var vinculado: Bool { Vinculados.compartidos.buscar(id) != nil }
+
+    var perfil: String {
+        if let p = robot?.perfil, !p.isEmpty { return p }
+        if let p = estado?.perfil, !p.isEmpty { return p }
+        return id == ID_DEMO_BROCHE ? "broche" : ""
+    }
+
+    var pantalla: Pantalla { pantallaDe(perfil: perfil, estado: estado) }
+    var producto: ModeloProducto { ModeloProducto.de(perfil: perfil, virtual: robot?.virtual ?? esDemo, pantalla: pantalla) }
+    var conectado: Bool { esNube ? (robot?.conectado ?? false) : fase == .lista }
+
+    var nombre: String {
+        if let a = robot?.apodo, !a.isEmpty { return a }
+        if let n = config.nombre, !n.isEmpty { return n }
+        if let n = estado?.nombre, !n.isEmpty, n != "bicho" { return n }
+        return "Tu robot"
+    }
+
+    var textoGuardado: String {
+        switch guardado {
+        case .listo: "Al día"
+        case .guardando: "Guardando…"
+        case .guardado: conectado || !esNube ? "Guardado y enviado" : "Guardado · le llega al volver"
+        case .error: "No se guardó"
+        }
+    }
+
+    /// Tiene una cara fijada de verdad (no un recordatorio, el reloj, una imagen…).
+    var caraFija: Bool { estado?.fija == true && esCara(estado?.expresion ?? "") }
+
+    // MARK: - Abrir y cerrar
+
+    func abrir() async {
+        fase = .conectando
+        cerrarConexiones()
+        do {
+            if esDemo {
+                try await abrirDemo()
+            } else if Cuenta.compartida.activa, let r = try? await api.robot(id) {
+                via = .nube
+                try await abrirNube(r)
+            } else if vinculado {
+                via = .ble
+                try await abrirBle()
+                if case .error = fase { return }
+            } else {
+                throw ErrorBicho.rechazo(Cuenta.compartida.activa ? "No está en tu cuenta." : "Entrá a tu cuenta.")
+            }
+            fase = .lista
+            arrancarEspejo()
+        } catch {
+            fase = .error(error.localizedDescription, revincular: false)
+        }
+    }
+
+    private func abrirDemo() async throws {
+        let c = ClienteBicho(TransporteVirtual(broche: id == ID_DEMO_BROCHE))
+        try await c.conectar()
+        cliente = c
+        estado = c.estado
+        config = ConfigDoc(texto: try await c.pedirConfig())
+        escuchar(c)
+        await cargarImagenes()
+    }
+
+    private func abrirNube(_ r: RobotNube) async throws {
+        robot = r
+        estado = r.estado
+        let c = try await api.config(id)
+        versionConfig = c.version
+        config = ConfigDoc(texto: c.texto)
+        iniciarVistaPrevia()
+        oyente = EnVivo.compartido.escuchar { [weak self] e in self?.recibir(e) }
+        await cargarImagenes()
+    }
+
+    private func abrirBle() async throws {
+        guard let v = Vinculados.compartidos.buscar(id) else { throw ErrorBicho.rechazo("No está vinculado.") }
+        let p = try await Central.compartida.buscar(id: id)
+        let c = ClienteBicho(TransporteBle(p))
+        try await c.conectar()
+        do {
+            try await c.autenticar(v.clave)
+        } catch {
+            c.cerrar()
+            fase = .error("Ya no reconoce a este celu.", revincular: true)
+            return
+        }
+        cliente = c
+        estado = c.estado
+        config = ConfigDoc(texto: try await c.pedirConfig())
+        iniciarVistaPrevia()
+        escuchar(c)
+        await cargarImagenes()
+    }
+
+    private func cerrarConexiones() {
+        escucha?.cancel()
+        espejo?.cancel()
+        if let o = oyente { EnVivo.compartido.dejar(o) }
+        oyente = nil
+        cliente?.cerrar()
+        cliente = nil
+    }
+
+    func cerrar() {
+        reloj?.cancel()
+        if let c = pendiente {
+            pendiente = nil
+            Task { _ = await self.guardarYa(c) }
+        }
+        cerrarConexiones()
+    }
+
+    // MARK: - En vivo
+
+    private func escuchar(_ c: ClienteBicho) {
+        let flujo = c.transporte.difusor.escuchar()
+        escucha = Task { [weak self] in
+            for await (car, b) in flujo {
+                guard let self else { return }
+                if car == .estado, let e = try? leerEstado(b) { self.estado = e }
+                self.avisar(avisosDeMarco(car: car.rawValue, b))
+            }
+        }
+    }
+
+    private func recibir(_ e: EventoNube) {
+        guard e.bicho == id else { return }
+        switch e.tipo {
+        case "estado":
+            if let x = estadoDeJSON(e.datos) { estado = x; robot?.estado = x }
+        case "conexion":
+            robot?.conectado = e.datos["conectado"] as? Bool ?? false
+        case "config":
+            let v = (e.datos["version"] as? NSNumber)?.intValue ?? 0
+            if v != versionConfig, pendiente == nil, guardado != .guardando { Task { await recargarConfig() } }
+        case "imagenes":
+            Task { await cargarImagenes() }
+        case "bicho":
+            if let b = e.datos["bicho"] as? [String: Any] { robot = RobotNube(b); if let x = robot?.estado { estado = x } }
+        case "mcp":
+            let cliente = (e.datos["cliente"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Tu IA"
+            let h = (e.datos["herramienta"] as? String ?? "").replacingOccurrences(of: "_", with: " ")
+            mostrarAviso("\(cliente): \(h)", icono: "sparkles", segundos: 5)
+        case "marco":
+            if let c = (e.datos["car"] as? NSNumber)?.intValue, let s = e.datos["datos"] as? String, let d = Data(base64Encoded: s) {
+                avisar(avisosDeMarco(car: c, [UInt8](d)))
+            }
+        default:
+            break
+        }
+    }
+
+    private func avisar(_ l: [AvisoRobot]) {
+        for a in l {
+            switch a {
+            case let .recordatorio(i):
+                let r = config.recordatorios
+                mostrarAviso(i < r.count ? r[i].texto : "Recordatorio", icono: "alarm.fill", segundos: 120)
+            case .pomodoro:
+                mostrarAviso(estado?.expresion == "pomodoro:trabajo" ? "A trabajar" : "Tanda terminada", icono: "timer", segundos: 15)
+            }
+        }
+    }
+
+    func mostrarAviso(_ texto: String, icono: String, segundos: Double) {
+        let a = Aviso(texto: texto, icono: icono, cuando: Date())
+        aviso = a
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(segundos))
+            if self?.aviso == a { self?.aviso = nil }
+        }
+    }
+
+    // MARK: - La vista previa (el mismo núcleo, en el celu)
+
+    private func iniciarVistaPrevia() {
+        let p = pantalla
+        let ident = id.count == 12 ? id : "000000000000"
+        Nucleo.iniciar(ancho: p.ancho * 2, alto: p.alto * 2, identificador: ident, anfitrion: anfitrion, redonda: p.redonda)
+        Nucleo.vistaPrevia()
+        aplicarEnVistaPrevia(config.texto)
+        ultimaFijada = ""
+    }
+
+    /// Le pasa una config al núcleo del celu (en el robot de prueba, es él mismo).
+    func aplicarEnVistaPrevia(_ texto: String) {
+        for e in escriturasDeConfig(texto, tamanoBloque: 512) { Nucleo.bleEscribir(Car.config.rawValue, Data(e)) }
+    }
+
+    /// La vista previa copia la cara que muestra el robot de verdad.
+    private func arrancarEspejo() {
+        guard !esDemo else { return }
+        espejo = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                if Date() > self.pausaEspejo, let e = self.estado?.expresion, !e.isEmpty, esCara(e), e != self.ultimaFijada {
+                    self.ultimaFijada = e
+                    Nucleo.bleEscribir(Car.comando.rawValue, Data(Comando.expresion(e)))
+                } else if let e = self.estado?.expresion, !esCara(e), !self.ultimaFijada.isEmpty {
+                    // No es una cara: se suelta y la vista previa lo arma sola.
+                    self.ultimaFijada = ""
+                    Nucleo.bleEscribir(Car.comando.rawValue, Data(Comando.expresion("")))
+                }
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+        }
+    }
+
+    /// Para probar algo en la vista previa sin que el espejo lo pise.
+    func pausarEspejo(_ segundos: Double = 12) {
+        pausaEspejo = Date().addingTimeInterval(segundos)
+        ultimaFijada = ""
+        if !esDemo { Nucleo.bleEscribir(Car.comando.rawValue, Data(Comando.expresion(""))) }
+    }
+
+    func tocar(_ apretado: Bool) { Nucleo.tacto(apretado) }
+
+    // MARK: - Guardar (solo, 600 ms después del último cambio)
+
+    func cambiar(_ f: (inout ConfigDoc) -> Void) {
+        var c = pendiente ?? config
+        f(&c)
+        c.aV2()
+        pendiente = c
+        config = c
+        aplicarEnVistaPrevia(c.texto)
+        guardado = .guardando
+        errorGuardado = ""
+        reloj?.cancel()
+        reloj = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            if Task.isCancelled { return }
+            await self?.mandarPendiente()
+        }
+    }
+
+    private func mandarPendiente() async {
+        guard let c = pendiente else { return }
+        pendiente = nil
+        let error = await guardarYa(c)
+        if pendiente != nil { return }  // llegó otro cambio mientras guardaba: lo manda ese
+        if let error {
+            guardado = .error
+            errorGuardado = error
+            await recargarConfig()
+        } else {
+            guardado = .guardado
+        }
+    }
+
+    /// Guarda ya una config entera (el laboratorio, el encendido): lo pendiente
+    /// ya está adentro (config incluye los cambios sin mandar).
+    func guardarAhora(_ c: ConfigDoc) async -> String? {
+        reloj?.cancel()
+        pendiente = nil
+        guardado = .guardando
+        let e = await guardarYa(c)
+        guardado = e == nil ? .guardado : .error
+        errorGuardado = e ?? ""
+        if e == nil { aplicarEnVistaPrevia(config.texto) }
+        return e
+    }
+
+    /// Valida con el núcleo (el mismo del robot) y la manda. Devuelve el error o nil.
+    func guardarYa(_ doc: ConfigDoc) async -> String? {
+        var c = doc
+        c.aV2()
+        let texto = c.texto
+        if let e = Nucleo.validar(texto) { return e }
+        do {
+            switch via {
+            case .nube: versionConfig = try await api.guardarConfig(id, texto)
+            case .ble, .demo:
+                guard let cliente else { return "Sin conexión." }
+                try await cliente.mandarConfig(texto)
+            }
+            if pendiente == nil { config = c }
+            if via == .ble, var v = Vinculados.compartidos.buscar(id), let n = c.nombre, n != v.nombre {
+                v.nombre = n
+                Vinculados.compartidos.guardar(v)
+            }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func recargarConfig() async {
+        do {
+            switch via {
+            case .nube:
+                let c = try await api.config(id)
+                versionConfig = c.version
+                config = ConfigDoc(texto: c.texto)
+            case .ble, .demo:
+                guard let cliente else { return }
+                config = ConfigDoc(texto: try await cliente.pedirConfig())
+            }
+            if !esDemo { aplicarEnVistaPrevia(config.texto) }
+        } catch {}
+    }
+
+    // MARK: - Comandos
+
+    /// expresion, evento o reproducir. Devuelve el error o nil.
+    @discardableResult
+    func comando(_ c: [String: String]) async -> String? {
+        do {
+            switch via {
+            case .nube: try await api.comando(id, c)
+            case .ble, .demo:
+                guard let cliente else { return "Sin conexión." }
+                if let e = c["evento"] { try await cliente.evento(e) }
+                if let x = c["expresion"] { try await cliente.fijarExpresion(x.isEmpty ? nil : x) }
+                if let r = c["reproducir"] { try await cliente.reproducir(r.isEmpty ? nil : r) }
+            }
+            if !esNube, let e = cliente?.estado { estado = e }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// Prueba un comportamiento en el robot.
+    func probarComportamiento(_ n: String) async -> String? {
+        do {
+            switch via {
+            case .nube: _ = try await api.marco(id, car: Car.comando.rawValue, datos: Comando.comportamiento(n), conexion: conexion)
+            case .ble, .demo:
+                guard let cliente else { return "Sin conexión." }
+                try await cliente.probarComportamiento(n)
+            }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    // MARK: - Imágenes
+
+    func cargarImagenes() async {
+        switch via {
+        case .nube:
+            guard let l = try? await api.imagenes(id) else { return }
+            espacios = l.sorted { $0.espacio < $1.espacio }
+            for e in espacios where crcCargado[e.espacio] != e.crc {
+                guard let bytes = try? await api.imagen(id, e.espacio) else { continue }
+                crcCargado[e.espacio] = e.crc
+                await mostrarImagen(e.espacio, bytes, previa: nil)
+            }
+        case .ble, .demo:
+            guard let c = cliente, let l = try? await c.listarImagenes() else { return }
+            espacios = l.sorted { $0.espacio < $1.espacio }
+            for e in espacios where crcCargado[e.espacio] != e.crc {
+                // Otro celu la cambió: no la tenemos.
+                guard let mandada = CacheImagenes.mandada(id, e.espacio), crc32(mandada) == e.crc else { continue }
+                crcCargado[e.espacio] = e.crc
+                await mostrarImagen(e.espacio, mandada, previa: esDemo ? nil : CacheImagenes.vistaPrevia(id, e.espacio))
+            }
+        }
+        let hay = Set(espacios.map(\.espacio))
+        for k in miniaturas.keys where !hay.contains(k) { miniaturas[k] = nil; duraciones[k] = nil; crcCargado[k] = nil }
+    }
+
+    /// La miniatura (con sus cuadros) y la copia al doble en la vista previa.
+    private func mostrarImagen(_ espacio: Int, _ bytes: [UInt8], previa: [UInt8]?) async {
+        let p = pantalla
+        let demo = esDemo
+        let r = await Task.detached(priority: .userInitiated) { () -> ([UIImage], [Int], [UInt8]?) in
+            let c = PrepararImagen.cuadrosDe(bytes)
+            let doble = demo ? nil : (previa ?? PrepararImagen.reescalar(bytes, ancho: p.ancho * 2, alto: p.alto * 2, redonda: p.redonda))
+            return (c.map { $0.0 }, c.map { $0.1 }, doble)
+        }.value
+        miniaturas[espacio] = r.0
+        duraciones[espacio] = r.1
+        if let doble = r.2 {
+            for w in escriturasDeImagen(espacio, doble, tamanoBloque: 512) { Nucleo.bleEscribir(Car.imagen.rawValue, Data(w)) }
+        }
+    }
+
+    func subir(_ espacio: Int, _ fuente: Fuente) async {
+        subiendo = espacio
+        errorImagenes = ""
+        progreso = 0
+        defer { subiendo = -1; progreso = nil }
+        let p = pantalla
+        let demo = esDemo
+        do {
+            var cuadros: [(UIImage, Int)] = []
+            switch fuente {
+            case let .video(url): cuadros = try await PrepararImagen.cuadrosDeVideo(url, ancho: p.ancho, alto: p.alto)
+            case let .datos(d):
+                if PrepararImagen.esGif(d) {
+                    let g = try PrepararImagen.gif(d, ancho: p.ancho, alto: p.alto, redonda: p.redonda)
+                    cuadros = PrepararImagen.cuadrosDe(g.bytes)
+                } else {
+                    guard let img = UIImage(data: d) else { throw PrepararImagen.ErrorImagen.noEsGif }
+                    cuadros = [(img, 0)]
+                }
+            }
+            let fuentes = cuadros
+            let listo = try await Task.detached(priority: .userInitiated) { () -> ([UInt8], UIImage, [UInt8]?) in
+                let r = try PrepararImagen.empaquetar(fuentes, ancho: p.ancho, alto: p.alto, redonda: p.redonda)
+                var doble: [UInt8]?
+                if !demo { doble = try? PrepararImagen.empaquetar(fuentes, ancho: p.ancho * 2, alto: p.alto * 2, redonda: p.redonda).bytes }
+                return (r.bytes, r.primero, doble)
+            }.value
+            switch via {
+            case .nube: try await api.subirImagen(id, espacio, listo.0)
+            case .ble, .demo:
+                guard let c = cliente else { throw ErrorBicho.rechazo("Sin conexión.") }
+                try await c.subirImagen(espacio, listo.0) { [weak self] v in self?.progreso = v }
+                CacheImagenes.guardar(id, espacio, mandada: listo.0, vistaPrevia: listo.2 ?? listo.0, miniatura: listo.1)
+            }
+            crcCargado[espacio] = nil
+            if !config.enLista(espacio) { cambiar { $0.mostrar(espacio, true) } }
+            await cargarImagenes()
+        } catch {
+            errorImagenes = error.localizedDescription
+        }
+    }
+
+    func borrar(_ espacio: Int) async {
+        do {
+            switch via {
+            case .nube: try await api.borrarImagen(id, espacio)
+            case .ble, .demo:
+                try await cliente?.borrarImagen(espacio)
+                CacheImagenes.borrar(id, espacio)
+            }
+        } catch { errorImagenes = error.localizedDescription }
+        if !esDemo { Nucleo.bleEscribir(Car.imagen.rawValue, Data(ComandoImagen.borrar(espacio))) }
+        if config.enLista(espacio) || config.protector == espacio {
+            cambiar { c in
+                c.mostrar(espacio, false)
+                if c.protector == espacio { c.ponerProtector(nil) }
+            }
+        }
+        await cargarImagenes()
+    }
+
+    // MARK: - Ajustes
+
+    func ponerApodo(_ n: String) async -> String? {
+        let v = cortarBytes(n.trimmingCharacters(in: .whitespaces), 24)
+        if esNube {
+            do { robot?.apodo = try await api.ponerApodo(id, v) } catch { return error.localizedDescription }
+        }
+        if !v.isEmpty { cambiar { $0.nombre = v } }
+        return nil
+    }
+
+    /// Lo saca de la cuenta (nube), lo desvincula (BLE) o lo reinicia (prueba).
+    func quitar() async -> String? {
+        do {
+            switch via {
+            case .nube: try await api.quitar(id)
+            case .ble:
+                try? await cliente?.desvincular()
+                Vinculados.compartidos.olvidar(id)
+            case .demo: try? await cliente?.desvincular()
+            }
+            cerrar()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    // MARK: - Encender (la primera vez)
+
+    private var claveEncendido: String { "encendido:\(id)" }
+    var debeEncender: Bool {
+        !UserDefaults.standard.bool(forKey: claveEncendido) && config.raiz["dueno"] == nil && !config.tienePreset
+    }
+
+    func marcarEncendido() { UserDefaults.standard.set(true, forKey: claveEncendido) }
+}
+
+/// "recordatorio:…", "pomodoro:…", "reloj:…", "imagen:…" y "protector:…" no son
+/// caras: la vista previa los arma sola con la misma config y hora.
+func esCara(_ e: String) -> Bool {
+    !["recordatorio:", "pomodoro:", "reloj:", "imagen:", "protector:"].contains { e.hasPrefix($0) }
+}

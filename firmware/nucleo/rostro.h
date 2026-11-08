@@ -102,8 +102,25 @@ struct VistaRostro {
   }
 };
 
+// Cómo va la cara entera en un cuadro (inclinación, escala con la
+// respiración, deriva y temblor): de un píxel a las coordenadas del rostro es
+// p = rot(-ftilt) · ((px - origen) / unidad - (dx, dy)) / (ex, ey), con y hacia arriba.
+struct MarcoRostro {
+  float cRot = 1, sRot = 0;  // rot(-ftilt)
+  float ex = 1, ey = 1;      // escalas de x e y (con fscale)
+  float dx = 0, dy = 0;      // corrimiento (deriva y temblor)
+};
+MarcoRostro marcoRostro(const CuadroRostro& c);
+
+class CacheSprites;
+
 // Dibuja el cuadro en la franja actual del lienzo (limpia la franja antes).
-void dibujarRostro(Lienzo& lienzo, const VistaRostro& vista, const CuadroRostro& c);
+// Con una cara de imagen (sprites cargados): los ojos y la boca de la SDF se
+// apagan en `ocultarOjos` (0 a 1) y los sprites se dibujan encima con
+// `opSprites` (0 a 1), antes de las partículas. Así se pasa de una a otra con
+// un fundido, nunca con un corte.
+void dibujarRostro(Lienzo& lienzo, const VistaRostro& vista, const CuadroRostro& c, const CacheSprites* sprites = nullptr,
+                   float opSprites = 0, float ocultarOjos = 0);
 
 // La distancia de la cara (los dos ojos y la boca) a un punto, en unidades.
 // Negativa adentro. Para los tests y las herramientas.
