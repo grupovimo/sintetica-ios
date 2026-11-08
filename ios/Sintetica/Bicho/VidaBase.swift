@@ -21,7 +21,8 @@ enum VidaBase {
 
     /// Los JSON sueltos del bundle (los dibujos del manual y las animaciones de ejemplo).
     private static let sueltos: [[String: Any]] = {
-        let urls = Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? []
+        var urls: [URL] = []
+        for d in ["caras", "animaciones"] { urls += Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: d) ?? [] }
         return urls.compactMap { u in
             guard let d = try? Data(contentsOf: u) else { return nil }
             return (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]

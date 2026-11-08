@@ -32,11 +32,12 @@ targets:
         group: Vida
         buildPhase: resources
       # Los dibujos del manual y las animaciones de ejemplo.
+      # Como carpetas: quedan en caras/ y animaciones/ adentro del bundle.
       - path: ../shared/formato/caras
-        group: Caras
+        type: folder
         buildPhase: resources
       - path: ../shared/formato/animaciones
-        group: Animaciones
+        type: folder
         buildPhase: resources
     settings:
       base:
