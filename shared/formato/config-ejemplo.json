@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "nombre": "Toto",
+  "cara": { "ojos": "pastilla", "color": "#FF6A33", "tamano": 1.0 },
+  "personalidad": { "energia": 0.6, "timidez": 0.3, "sueno": "23:30-08:00" },
+  "expresiones": {
+    "contento": {
+      "formas": [
+        { "forma": "arco", "puntos": [[-0.4, 0.1125], [-0.3125, -0.175], [-0.2125, 0.1125]], "trazo": 0.1 },
+        { "forma": "arco", "puntos": [[0.2125, 0.1125], [0.3125, -0.175], [0.4, 0.1125]], "trazo": 0.1 }
+      ]
+    }
+  },
+  "animaciones": {
+    "saludo": {
+      "duracion": 1400,
+      "sobre": "contento",
+      "pistas": [
+        {
+          "forma": { "forma": "corazon", "x": 0, "y": -0.36, "tamano": 0.5 },
+          "claves": [
+            { "t": 0, "y": 0.1, "escala": 0.3, "opacidad": 0, "curva": "rebote" },
+            { "t": 500, "escala": 1, "opacidad": 1 },
+            { "t": 1100, "opacidad": 1, "curva": "entrada" },
+            { "t": 1400, "y": -0.1, "opacidad": 0 }
+          ]
+        }
+      ]
+    }
+  },
+  "reglas": [
+    { "si": "doble-toque", "entonces": ["animacion:saludo"] },
+    { "si": "sacudida", "entonces": ["expresion:mareado", "sonido:boing"] },
+    { "si": "bateria<15", "entonces": ["expresion:bateria-baja"] }
+  ],
+  "modo": "mascota"
+}

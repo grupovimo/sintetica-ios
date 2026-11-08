@@ -1,0 +1,98 @@
+# Compila la app de iOS de Sintética, corre sus tests, la firma y la sube a
+# TestFlight. Este repo es una copia que publica herramientas/publicar-ios.sh
+# desde el repo de Sintética: no se edita acá. Cada push es una compilación
+# nueva en TestFlight; el número de build es BUILD_BASE + el número de corrida.
+name: testflight
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  subir:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v5
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.3'
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Tests en el simulador
+        run: |
+          set -o pipefail
+          SIM=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [0-9]+[^(]*' | sed 's/ *$//')
+          xcodebuild -project Sintetica.xcodeproj -scheme Sintetica -configuration Debug \
+            -destination "platform=iOS Simulator,name=$SIM" CODE_SIGNING_ALLOWED=NO \
+            test | tee test.log | xcbeautify --renderer github-actions
+      - name: Clave de App Store Connect
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$ASC_KEY_P8" | base64 --decode > "$RUNNER_TEMP/asc/clave.p8"
+      - name: Certificado de distribución y perfil de App Store
+        env:
+          P12: ${{ secrets.DIST_P12 }}
+          P12_CLAVE: ${{ secrets.DIST_P12_CLAVE }}
+          PERFIL_APP: ${{ secrets.PERFIL_APP }}
+        run: |
+          LLAVERO="$RUNNER_TEMP/firma.keychain-db"
+          CLAVE_LLAVERO=$(openssl rand -hex 16)
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security create-keychain -p "$CLAVE_LLAVERO" "$LLAVERO"
+          security set-keychain-settings -lut 3600 "$LLAVERO"
+          security unlock-keychain -p "$CLAVE_LLAVERO" "$LLAVERO"
+          security import "$RUNNER_TEMP/dist.p12" -P "$P12_CLAVE" -A -t cert -f pkcs12 -k "$LLAVERO"
+          security set-key-partition-list -S apple-tool:,apple: -k "$CLAVE_LLAVERO" "$LLAVERO" >/dev/null
+          security list-keychains -d user -s "$LLAVERO" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/dist.p12"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          printf '%s' "$PERFIL_APP" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/sintetica-app.mobileprovision
+      - name: Archive firmado (en Release, como se prueba)
+        run: |
+          set -o pipefail
+          xcodebuild -project Sintetica.xcodeproj -scheme Sintetica -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Sintetica.xcarchive" \
+            CURRENT_PROJECT_VERSION=$(( ${{ vars.BUILD_BASE || 0 }} + ${{ github.run_number }} )) \
+            archive | tee archive.log | xcbeautify --renderer github-actions
+      - name: Subir a TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          cat > "$RUNNER_TEMP/exportar.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>M6935MSNQB</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key><dict>
+              <key>com.sinteticalabs.app</key><string>Sintetica App Store</string>
+            </dict>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Sintetica.xcarchive" \
+            -exportPath "$RUNNER_TEMP/exportado" -exportOptionsPlist "$RUNNER_TEMP/exportar.plist" \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/clave.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | tee exportar.log | xcbeautify --renderer github-actions
+      - if: failure()
+        run: grep -hE 'error:|Error|No profiles|provisioning' test.log archive.log exportar.log 2>/dev/null | sort -u | head -80
+      - if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/asc" ~/Library/MobileDevice/Provisioning\ Profiles/sintetica-*.mobileprovision
+          security delete-keychain "$RUNNER_TEMP/firma.keychain-db" 2>/dev/null || true

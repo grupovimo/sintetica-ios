@@ -1,0 +1,116 @@
+// GENERADO por firmware/herramientas/embeber_caras.py desde shared/formato/vida.
+// No editar a mano.
+#pragma once
+
+namespace sintetica {
+
+struct DatoVidaBase {
+  const char* nombre;
+  const char* json;
+};
+
+constexpr int CANTIDAD_CARAS_VIDA_BASE = 37;
+inline const DatoVidaBase CARAS_VIDA_BASE[CANTIDAD_CARAS_VIDA_BASE] = {
+    {"neutral", R"json({})json"},
+    {"contento", R"json({"ojo":{"w":0.13,"h":0.2,"smile":0.85},"gy":0.04,"movimiento":"rebote"})json"},
+    {"emocionado", R"json({"ojo":{"w":0.13,"h":0.15,"star":0.8},"fscale":1.08,"mo":0.04,"mw":0.06,"movimiento":"saltitos","particula":"chispa"})json"},
+    {"risa", R"json({"ojo":{"w":0.13,"lt":0.5,"lb":0.5,"smile":1},"mo":0.09,"mw":0.08,"movimiento":"risa"})json"},
+    {"sospecha", R"json({"ojo":{"w":0.12,"lt":0.42,"lb":0.22},"gx":0.16,"ftilt":-0.04,"movimiento":"mirada-lado"})json"},
+    {"sorpresa", R"json({"ojo":{"w":0.15,"h":0.17},"mo":0.07,"mw":0.06,"ey":0.04,"sep":0.32,"movimiento":"salto","particula":"exclamacion","parpadeo":"menos"})json"},
+    {"miedo", R"json({"ojo":{"w":0.08,"h":0.14,"pupil":1},"shake":0.5,"fscale":0.9,"movimiento":"encogerse","parpadeo":"mas"})json"},
+    {"dormido", R"json({"ojo":{"w":0.12,"lt":0.5,"lb":0.5},"gy":-0.06,"ftilt":0.1,"movimiento":"dormir","particula":"zzz","parpadeo":"no"})json"},
+    {"bostezo", R"json({"ojo":{"w":0.12,"lt":0.4,"lb":0.1},"mo":0.16,"mw":0.09,"gy":0.03,"ftilt":0.05,"parpadeo":"no"})json"},
+    {"enojado", R"json({"ojo":{"w":0.13,"h":0.2,"lt":0.36,"lta":0.55},"gy":-0.03,"sep":0.28,"hue":0.6,"movimiento":"temblor"})json"},
+    {"grunon", R"json({"ojo":{"w":0.12,"h":0.19,"lt":0.3,"lta":0.35},"gy":-0.08,"hue":0.25,"mcurve":-0.5,"mw":0.06,"movimiento":"resoplido"})json"},
+    {"triste", R"json({"ojo":{"h":0.22,"lt":0.3,"lta":-0.5},"gy":-0.09,"sep":0.31,"mcurve":-0.4,"movimiento":"lagrima","particula":"lagrima"})json"},
+    {"verguenza", R"json({"ojo":{"w":0.1,"h":0.18,"lb":0.12},"gx":0.14,"gy":-0.08,"blush":1,"fscale":0.95,"movimiento":"achicarse"})json"},
+    {"guino", R"json({"izq":{"w":0.12,"h":0.24},"der":{"w":0.13,"lt":0.5,"lb":0.5,"smile":0.9},"ftilt":-0.08,"movimiento":"picaro"})json"},
+    {"enamorado", R"json({"ojo":{"heart":1,"w":0.14,"h":0.14},"beat":1,"blush":0.5,"movimiento":"latido","particula":"corazon"})json"},
+    {"mareado", R"json({"izq":{"h":0.26},"der":{"h":0.17,"w":0.09},"spin":1,"ftilt":0.06,"movimiento":"bamboleo","particula":"estrella"})json"},
+    {"escuchando", R"json({"ojo":{"w":0.115,"h":0.25},"pulse":1,"gy":0.03,"ey":0.03,"movimiento":"escuchar"})json"},
+    {"hablando", R"json({"pulse":0.5,"mw":0.06,"movimiento":"hablar"})json"},
+    {"pensando", R"json({"izq":{"lb":0.25},"der":{"lt":0.28,"lta":0.25},"gx":-0.14,"gy":0.14,"ftilt":0.08,"orbit":0.12,"movimiento":"pensar","particula":"burbuja"})json"},
+    {"confundido", R"json({"izq":{"h":0.26,"tilt":0.25},"der":{"h":0.18,"tilt":-0.3,"lt":0.15},"ftilt":-0.1,"movimiento":"duda","particula":"pregunta"})json"},
+    {"curioso", R"json({"izq":{"w":0.13,"h":0.29},"der":{"h":0.19,"lt":0.18},"gx":0.08,"ftilt":-0.13,"fscale":1.1,"movimiento":"acercarse"})json"},
+    {"aburrido", R"json({"ojo":{"h":0.21,"lt":0.3},"gy":-0.05,"gx":-0.06,"mcurve":-0.15,"movimiento":"suspiro"})json"},
+    {"orgulloso", R"json({"ojo":{"w":0.12,"lb":0.2},"gy":0.1,"ey":0.03,"mcurve":0.3,"ftilt":0.04})json"},
+    {"concentrado", R"json({"ojo":{"lt":0.2,"lb":0.15,"pupil":0.7},"movimiento":"quieto","parpadeo":"menos"})json"},
+    {"bateria-baja", R"json({"ojo":{"w":0.09,"h":0.13,"lt":0.35},"dim":0.55,"gy":-0.1,"hue":0.5,"movimiento":"cabeceo"})json"},
+    {"cargando", R"json({"izq":{"w":0.12,"h":0.12,"ring":1},"der":{"w":0.12,"h":0.18,"smile":0.35},"movimiento":"carga"})json"},
+    {"actualizando", R"json({"ojo":{"w":0.06,"h":0.06},"orbit":1,"sep":0.26,"movimiento":"orbita","parpadeo":"no"})json"},
+    {"sin-conexion", R"json({"ojo":{"cross":0.25},"movimiento":"buscar"})json"},
+    {"ko", R"json({"ojo":{"w":0.1,"h":0.1,"cross":1},"ftilt":0.35,"ey":-0.06,"movimiento":"caer","parpadeo":"no"})json"},
+    {"glitch", R"json({"glitch":1,"izq":{"lt":0.2},"der":{"h":0.27},"movimiento":"glitch"})json"},
+    {"cansado", R"json({"ojo":{"h":0.2,"lt":0.32,"lb":0.06},"gy":-0.06,"dim":0.2,"parpadeo":"mas"})json"},
+    {"ofendido", R"json({"ojo":{"lt":0.28,"lta":-0.2},"gx":0.27,"ftilt":0.12,"mcurve":-0.3})json"},
+    {"estornudo", R"json({"ojo":{"w":0.13,"lt":0.5,"lb":0.5},"mo":0.05,"mw":0.05,"shake":1,"parpadeo":"no"})json"},
+    {"espiar", R"json({"izq":{"lt":0.5,"lb":0.5},"der":{"w":0.11,"lt":0.22},"gx":0.1,"parpadeo":"no"})json"},
+    {"estirarse", R"json({"ojo":{"h":0.26},"ey":0.03,"fscale":1.06,"movimiento":"estirarse"})json"},
+    {"sonando", R"json({"ojo":{"w":0.12,"lt":0.5,"lb":0.5,"smile":0.5},"gy":-0.06,"ftilt":0.1,"mcurve":0.45,"movimiento":"dormir","parpadeo":"no"})json"},
+    {"pesadilla", R"json({"ojo":{"w":0.12,"lt":0.5,"lb":0.5},"gy":-0.06,"mcurve":-0.45,"shake":0.12,"movimiento":"dormir","parpadeo":"no"})json"},
+};
+
+constexpr int CANTIDAD_COMPORTAMIENTOS_BASE = 55;
+inline const DatoVidaBase COMPORTAMIENTOS_BASE[CANTIDAD_COMPORTAMIENTOS_BASE] = {
+    {"mirar-alrededor", R"json({"cuando":"curiosidad>0.3","afinidad":{"curiosidad":0.6,"energia":0.3},"enfriamiento":30,"pasos":[{"mirada":"alrededor","dura":[2.5,4.5]},{"mirada":"estimulo","cara":"curioso","peso":0.4,"dura":[1,2]}]})json"},
+    {"investigar", R"json({"cuando":"curiosidad>0.6","afinidad":{"curiosidad":0.8},"enfriamiento":120,"pasos":[{"cara":"curioso","mirada":"lado","dura":[1.2,2]},{"cara":"confundido","peso":0.8,"particula":"pregunta","dura":[1.5,2.5]},{"cara":"curioso","mirada":"frente","dura":1}]})json"},
+    {"pensar-en-algo", R"json({"cuando":"curiosidad>0.4","afinidad":{"curiosidad":0.4,"picardia":-0.2},"enfriamiento":240,"pasos":[{"cara":"pensando","particula":"burbuja","dura":[2.5,4]},{"cara":"contento","peso":0.4,"dura":1}]})json"},
+    {"bostezar", R"json({"cuando":"sueno>0.5","enfriamiento":180,"pasos":[{"cara":"bostezo","dura":2,"parpadeo":"no"},{"cara":"cansado","parpadeo":"lento","dura":1.5}]})json"},
+    {"cabecear", R"json({"cuando":"sueno>0.75","enfriamiento":120,"pasos":[{"cara":"cansado","peso":0.8,"mirada":"abajo","dura":2},{"cara":"dormido","peso":0.9,"dura":[1.5,2.5]},{"cara":"sorpresa","peso":0.7,"parpadeo":"rapido","dura":0.6},{"cara":"sospecha","peso":0.6,"mirada":"alrededor","dura":1.5}]})json"},
+    {"suspirar", R"json({"cuando":"aburrimiento>0.6","afinidad":{"sociabilidad":0.3},"enfriamiento":120,"pasos":[{"cara":"aburrido","mirada":"abajo","dura":2.5,"estado":"aburrimiento-0.03"}]})json"},
+    {"llamar-la-atencion", R"json({"cuando":"aburrimiento>0.45,rasgo.sociabilidad>0.55","afinidad":{"sociabilidad":1},"enfriamiento":300,"pasos":[{"cara":"contento","peso":0.5,"mirada":"frente","parpadeo":"rapido","dura":0.8},{"cara":"emocionado","peso":0.7,"dura":1,"sonido":"llamar"},{"mirada":"frente","dura":1.5}]})json"},
+    {"ofenderse", R"json({"cuando":"ignorado>240,rasgo.sociabilidad>0.4","afinidad":{"malGenio":0.5,"sociabilidad":0.5},"enfriamiento":600,"pasos":[{"cara":"ofendido","dura":[4,6]},{"cara":"ofendido","mirada":"reojo","dura":2},{"cara":"ofendido","dura":3}]})json"},
+    {"tararear", R"json({"cuando":"animo>0.6","afinidad":{"energia":0.3,"sociabilidad":0.2},"enfriamiento":240,"pasos":[{"cara":"contento","peso":0.8,"particula":"nota","cuantas":2,"dura":[3,5],"sonido":"tarareo"},{"cara":"contento","peso":0.6,"particula":"nota","dura":2}]})json"},
+    {"estornudar", R"json({"base":0.25,"probabilidad":0.05,"enfriamiento":1800,"pasos":[{"cara":"sorpresa","peso":0.4,"parpadeo":"no","dura":1},{"cara":"estornudo","dura":0.35,"sonido":"achis"},{"cara":"sorpresa","dura":1.2}]})json"},
+    {"hipo", R"json({"base":0.25,"probabilidad":0.04,"enfriamiento":3600,"pasos":[{"cara":"sorpresa","peso":0.5,"dura":[0.3,0.8],"veces":[3,6],"sonido":"hip"}]})json"},
+    {"sonar-despierto", R"json({"cuando":"estres<0.3,aburrimiento>0.2,ignorado>3","afinidad":{"curiosidad":0.3,"energia":-0.3},"enfriamiento":300,"pasos":[{"cara":"pensando","peso":0.5,"mirada":"perdida","particula":"burbuja","dura":[4,7]}]})json"},
+    {"practicar-caras", R"json({"cuando":"rasgo.picardia>0.45","afinidad":{"picardia":1},"enfriamiento":900,"pasos":[{"cara":"sorpresa","peso":0.8,"dura":0.7},{"cara":"guino","dura":0.8},{"cara":"enojado","peso":0.7,"dura":0.7},{"cara":"risa","dura":0.9},{"cara":"orgulloso","dura":1}]})json"},
+    {"fingir-dormir", R"json({"cuando":"rasgo.picardia>0.55,ignorado>2","afinidad":{"picardia":1},"enfriamiento":1200,"pasos":[{"cara":"dormido","dura":[4,7]},{"cara":"espiar","dura":1.5},{"cara":"dormido","dura":2},{"cara":"guino","dura":1}]})json"},
+    {"glitch-espontaneo", R"json({"base":0.3,"probabilidad":0.15,"enfriamiento":600,"pasos":[{"cara":"glitch","dura":0.3},{"cara":"confundido","particula":"pregunta","dura":1.5}]})json"},
+    {"acomodarse", R"json({"base":0.35,"enfriamiento":30,"pasos":[{"cara":"estirarse","peso":0.4,"parpadeo":"lento","dura":1.2}]})json"},
+    {"estirarse", R"json({"base":0.2,"afinidad":{"energia":-0.3},"enfriamiento":900,"pasos":[{"cara":"estirarse","dura":1.5},{"cara":"bostezo","peso":0.5,"dura":1}]})json"},
+    {"contar-ovejas", R"json({"tipo":"rutina","interrumpible":true,"pasos":[{"cara":"cansado","peso":0.5,"mirada":"ovejas","dura":4,"veces":3},{"cara":"dormido","peso":0.6,"mirada":"ovejas","dura":3},{"cara":"dormido","dura":2}]})json"},
+    {"despertar", R"json({"tipo":"rutina","pasos":[{"cara":"espiar","dura":1.5},{"cara":"cansado","dura":1.5},{"cara":"bostezo","dura":2},{"cara":"estirarse","dura":1.5},{"mirada":"alrededor","dura":2.5}]})json"},
+    {"sonar", R"json({"tipo":"rutina","pasos":[{"cara":"dormido","mirada":"rem","dura":[6,10]},{"cara":"sonando","mirada":"rem","dura":[5,9]},{"cara":"dormido","mirada":"rem","dura":[5,8]}]})json"},
+    {"pesadilla", R"json({"tipo":"rutina","pasos":[{"cara":"dormido","mirada":"rem","dura":[6,10]},{"cara":"pesadilla","mirada":"rem","dura":[4,7]},{"cara":"dormido","dura":[5,8]}]})json"},
+    {"festejar", R"json({"tipo":"reaccion","pasos":[{"cara":"emocionado","particula":"estrella","cuantas":3,"dura":2,"sonido":"festejo"},{"cara":"enamorado","particula":"corazon","cuantas":2,"dura":2}]})json"},
+    {"toque", R"json({"tipo":"reaccion","pasos":[{"cara":"contento","peso":0.55,"mirada":"estimulo","parpadeo":"doble","dura":1.6}]})json"},
+    {"toque-timido", R"json({"tipo":"reaccion","pasos":[{"cara":"verguenza","mirada":"abajo","dura":2}]})json"},
+    {"despertar-forzado", R"json({"tipo":"reaccion","pasos":[{"cara":"sorpresa","parpadeo":"rapido","dura":1},{"cara":"grunon","dura":2.5}]})json"},
+    {"despertar-con-amor", R"json({"tipo":"reaccion","pasos":[{"cara":"sorpresa","peso":0.6,"dura":0.8},{"cara":"contento","dura":2}]})json"},
+    {"caricia", R"json({"tipo":"reaccion","pasos":[{"cara":"contento","peso":0.7,"dura":1},{"cara":"contento","dura":2,"sonido":"ronroneo"}]})json"},
+    {"caricia-amor", R"json({"tipo":"reaccion","pasos":[{"cara":"contento","dura":1},{"cara":"enamorado","peso":0.8,"particula":"corazon","cuantas":2,"dura":2,"sonido":"ronroneo"}]})json"},
+    {"caricia-calma", R"json({"tipo":"reaccion","pasos":[{"cara":"grunon","peso":0.5,"dura":1},{"cara":"contento","peso":0.6,"dura":2}]})json"},
+    {"cosquillas", R"json({"tipo":"reaccion","pasos":[{"cara":"risa","dura":2,"sonido":"risa"},{"cara":"enojado","peso":0.5,"dura":1.2}]})json"},
+    {"molesto", R"json({"tipo":"reaccion","pasos":[{"cara":"risa","peso":0.6,"dura":0.8},{"cara":"enojado","dura":2.5}]})json"},
+    {"bamboleo", R"json({"tipo":"reaccion","pasos":[{"cara":"mareado","peso":0.4,"dura":1.2},{"cara":"risa","peso":0.7,"dura":1.5}]})json"},
+    {"mareo", R"json({"tipo":"reaccion","pasos":[{"cara":"mareado","particula":"estrella","cuantas":3,"dura":2.5},{"cara":"grunon","dura":3}]})json"},
+    {"miedo-sacudida", R"json({"tipo":"reaccion","pasos":[{"cara":"miedo","dura":2.5},{"cara":"triste","peso":0.6,"dura":2}]})json"},
+    {"boca-abajo", R"json({"tipo":"reaccion","pasos":[{"cara":"miedo","particula":"exclamacion","cuantas":2,"dura":1.5,"sonido":"ayuda"},{"cara":"triste","dura":3},{"cara":"cansado","dura":3}]})json"},
+    {"ko", R"json({"tipo":"reaccion","pasos":[{"cara":"ko","dura":2},{"cara":"mareado","peso":0.6,"dura":1.5}]})json"},
+    {"curiosear", R"json({"tipo":"reaccion","pasos":[{"cara":"curioso","mirada":"alrededor","dura":2}]})json"},
+    {"dudar", R"json({"tipo":"reaccion","pasos":[{"cara":"sospecha","dura":1},{"cara":"curioso","peso":0.7,"mirada":"alrededor","dura":1.5}]})json"},
+    {"escuchar", R"json({"tipo":"reaccion","pasos":[{"cara":"escuchando","mirada":"estimulo","dura":2.5}]})json"},
+    {"saludar", R"json({"tipo":"reaccion","pasos":[{"cara":"emocionado","mirada":"frente","dura":1.5},{"cara":"contento","dura":1.5}]})json"},
+    {"susto", R"json({"tipo":"reaccion","pasos":[{"cara":"miedo","peso":0.6,"parpadeo":"rapido","dura":1}]})json"},
+    {"bailar", R"json({"tipo":"reaccion","pasos":[{"cara":"contento","particula":"nota","cuantas":3,"dura":4}]})json"},
+    {"notificacion", R"json({"tipo":"reaccion","pasos":[{"cara":"sorpresa","peso":0.6,"mirada":"frente","particula":"exclamacion","dura":1.5}]})json"},
+    {"llamada", R"json({"tipo":"reaccion","pasos":[{"cara":"sorpresa","particula":"exclamacion","dura":0.5,"veces":4}]})json"},
+    {"cansancio", R"json({"tipo":"reaccion","pasos":[{"cara":"cansado","dura":1.5},{"cara":"bostezo","dura":2}]})json"},
+    {"apagarse", R"json({"tipo":"reaccion","pasos":[{"cara":"bateria-baja","dura":2},{"cara":"ko","peso":0.6,"dura":2},{"cara":"dormido","dura":3}]})json"},
+    {"alivio", R"json({"tipo":"reaccion","pasos":[{"cara":"contento","peso":0.6,"parpadeo":"lento","dura":1},{"cara":"cargando","dura":3}]})json"},
+    {"carga-completa", R"json({"tipo":"reaccion","pasos":[{"cara":"contento","particula":"chispa","cuantas":3,"dura":1.5}]})json"},
+    {"buscar-red", R"json({"tipo":"reaccion","pasos":[{"cara":"sin-conexion","mirada":"alrededor","dura":3}]})json"},
+    {"saludar-app", R"json({"tipo":"reaccion","pasos":[{"cara":"contento","mirada":"frente","dura":0.8},{"cara":"guino","dura":0.8},{"cara":"contento","dura":1.2}]})json"},
+    {"espejo", R"json({"tipo":"reaccion","pasos":[{"cara":"curioso","mirada":"frente","dura":1},{"cara":"orgulloso","dura":1.5}]})json"},
+    {"otro-bicho", R"json({"tipo":"reaccion","pasos":[{"cara":"sorpresa","peso":0.6,"mirada":"lado","dura":1},{"cara":"contento","dura":1.5}]})json"},
+    {"saludar-al-volver", R"json({"tipo":"reaccion","pasos":[{"cara":"sorpresa","peso":0.9,"particula":"exclamacion","dura":0.8},{"cara":"emocionado","dura":1.5},{"cara":"contento","dura":2}]})json"},
+    {"saludar-con-amor", R"json({"tipo":"reaccion","pasos":[{"cara":"sorpresa","peso":0.9,"dura":0.8},{"cara":"emocionado","dura":1.5},{"cara":"enamorado","particula":"corazon","cuantas":3,"dura":2}]})json"},
+    {"volver-ofendido", R"json({"tipo":"reaccion","pasos":[{"cara":"ofendido","mirada":"reojo","dura":3},{"cara":"ofendido","dura":2},{"cara":"contento","peso":0.6,"dura":1.5}]})json"},
+};
+
+inline const char* const REGLAS_VIDA_BASE = R"json([{"si":"despertado","y":"afecto>0.7","entonces":["reflejo:sorpresa","comportamiento:despertar-con-amor"]},{"si":"despertado","entonces":["reflejo:sorpresa","comportamiento:despertar-forzado","estado.animo-0.05"]},{"si":"tacto","y":"rasgo.timidez>0.65","entonces":["comportamiento:toque-timido","estado.animo+0.02"]},{"si":"tacto","entonces":["comportamiento:toque","estado.animo+0.03"]},{"si":"caricia","y":"estres>0.5,rasgo.malGenio>0.5","entonces":["comportamiento:caricia-calma","estado.estres-0.2","estado.animo+0.05"]},{"si":"caricia","y":"afecto>0.6","entonces":["comportamiento:caricia-amor","estado.animo+0.08","estado.estres-0.15"]},{"si":"caricia","entonces":["comportamiento:caricia","estado.animo+0.08","estado.estres-0.15"]},{"si":"doble-toque","entonces":["expresion:sospecha","estado.curiosidad+0.1"]},{"si":"muchos-toques","y":"rasgo.malGenio>0.5","entonces":["comportamiento:molesto","estado.estres+0.15"]},{"si":"muchos-toques","entonces":["comportamiento:cosquillas","estado.animo+0.05","estado.estres+0.05"]},{"si":"sacudida-suave","entonces":["comportamiento:bamboleo","estado.animo+0.03","estado.energia+0.03"]},{"si":"sacudida-fuerte","y":"rasgo.timidez>0.6","entonces":["reflejo:miedo","comportamiento:miedo-sacudida","estado.estres+0.5","estado.animo-0.12"]},{"si":"sacudida-fuerte","entonces":["reflejo:mareado","comportamiento:mareo","estado.estres+0.4","estado.animo-0.1"]},{"si":"sacudida","entonces":["comportamiento:mareo","estado.estres+0.3"]},{"si":"boca-abajo","entonces":["reflejo:miedo","comportamiento:boca-abajo","estado.estres+0.3"]},{"si":"caida","entonces":["reflejo:sorpresa","comportamiento:ko","estado.estres+0.6"]},{"si":"levantado","y":"rencor","entonces":["comportamiento:dudar","estado.curiosidad+0.15"]},{"si":"levantado","entonces":["comportamiento:curiosear","estado.curiosidad+0.2"]},{"si":"voz","entonces":["comportamiento:escuchar","estado.animo+0.03","estado.curiosidad+0.1"]},{"si":"nombre","entonces":["comportamiento:saludar","estado.animo+0.2"]},{"si":"ruido","y":"rasgo.timidez>0.6","entonces":["reflejo:miedo","comportamiento:susto","estado.estres+0.35"]},{"si":"ruido","entonces":["reflejo:sorpresa","estado.estres+0.2","estado.curiosidad+0.1"]},{"si":"musica","entonces":["comportamiento:bailar","estado.animo+0.08"]},{"si":"silencio","entonces":["estado.aburrimiento+0.1"]},{"si":"notificacion","entonces":["comportamiento:notificacion","estado.curiosidad+0.1"]},{"si":"llamada","entonces":["comportamiento:llamada"]},{"si":"bateria-baja","entonces":["comportamiento:cansancio","estado.energia-0.2","estado.animo-0.05"]},{"si":"bateria-critica","entonces":["comportamiento:apagarse","estado.energia-0.3"]},{"si":"enchufado","entonces":["comportamiento:alivio","estado.estres-0.1","estado.animo+0.05"]},{"si":"cargado","entonces":["comportamiento:carga-completa","estado.animo+0.05"]},{"si":"sin-wifi","entonces":["comportamiento:buscar-red"]},{"si":"app-abierta","entonces":["comportamiento:saludar-app","estado.animo+0.05"]},{"si":"vinculado","entonces":["expresion:guino","estado.animo+0.1"]},{"si":"cambio-de-cara","entonces":["comportamiento:espejo","estado.curiosidad+0.1"]},{"si":"bicho-cerca","entonces":["comportamiento:otro-bicho","estado.curiosidad+0.2","estado.animo+0.05"]},{"si":"volvio","y":"ausencia>72","entonces":["comportamiento:volver-ofendido"]},{"si":"volvio","y":"afecto>0.6","entonces":["comportamiento:saludar-con-amor","estado.animo+0.15"]},{"si":"volvio","entonces":["comportamiento:saludar-al-volver","estado.animo+0.1"]},{"si":"hito","entonces":["comportamiento:festejar","estado.animo+0.2"]},{"si":"bateria<15","entonces":["expresion:bateria-baja"]}])json";
+
+inline const char* const PERSONALIDADES_BASE = R"json({"equilibrado":{"energia":0.5,"sociabilidad":0.5,"picardia":0.45,"timidez":0.3,"curiosidad":0.55,"malGenio":0.25},"timido":{"energia":0.4,"sociabilidad":0.35,"picardia":0.2,"timidez":0.9,"curiosidad":0.5,"malGenio":0.15},"picaro":{"energia":0.65,"sociabilidad":0.6,"picardia":0.95,"timidez":0.15,"curiosidad":0.6,"malGenio":0.3},"dormilon":{"energia":0.15,"sociabilidad":0.45,"picardia":0.3,"timidez":0.35,"curiosidad":0.3,"malGenio":0.3},"carinoso":{"energia":0.5,"sociabilidad":0.95,"picardia":0.4,"timidez":0.3,"curiosidad":0.45,"malGenio":0.05},"curioso":{"energia":0.65,"sociabilidad":0.5,"picardia":0.45,"timidez":0.2,"curiosidad":0.95,"malGenio":0.2},"grunon":{"energia":0.45,"sociabilidad":0.25,"picardia":0.3,"timidez":0.2,"curiosidad":0.35,"malGenio":0.9},"electrico":{"energia":0.95,"sociabilidad":0.7,"picardia":0.65,"timidez":0.1,"curiosidad":0.75,"malGenio":0.35}})json";
+
+}  // namespace sintetica

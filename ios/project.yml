@@ -1,0 +1,71 @@
+# Proyecto de Xcode generado con XcodeGen:
+#   brew install xcodegen && cd ios && xcodegen && open Sintetica.xcodeproj
+name: Sintetica
+options:
+  bundleIdPrefix: com.sinteticalabs
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CLANG_CXX_LANGUAGE_STANDARD: c++17
+    GCC_ENABLE_CPP_EXCEPTIONS: NO
+    GCC_ENABLE_CPP_RTTI: NO
+    DEVELOPMENT_TEAM: M6935MSNQB
+targets:
+  Sintetica:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sintetica
+      # El núcleo de SintéticaOS: el mismo C++ del firmware.
+      - path: ../firmware/nucleo
+        group: Nucleo C++
+        excludes: ["*.md"]
+      - path: ../firmware/api
+        group: Nucleo C++
+        # cgo/ es para Go (la API y el bicho virtual): repite el núcleo entero.
+        excludes: ["cgo/**"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sinteticalabs.app
+        PRODUCT_NAME: Sintetica
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_OBJC_BRIDGING_HEADER: Sintetica/Nucleo/Puente.h
+        HEADER_SEARCH_PATHS: ["$(SRCROOT)/../firmware/api", "$(SRCROOT)/../firmware/nucleo"]
+        INFOPLIST_FILE: Sintetica/Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+      configs:
+        # Para TestFlight (el CI de grupovimo/sintetica-ios): firma manual.
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: Sintetica App Store
+  SinteticaTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SinteticaTests
+      - path: ../shared/protocolo/vectores.json
+        buildPhase: resources
+      - path: ../shared/formato/config-ejemplo.json
+        buildPhase: resources
+    dependencies:
+      - target: Sintetica
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS: ["$(SRCROOT)/../firmware/api", "$(SRCROOT)/../firmware/nucleo"]
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Sintetica.app/Sintetica"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  Sintetica:
+    build:
+      targets:
+        Sintetica: all
+        SinteticaTests: [test]
+    test:
+      targets: [SinteticaTests]

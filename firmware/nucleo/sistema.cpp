@@ -1,0 +1,1362 @@
+#include "sistema.h"
+
+#include "emparejamiento.h"
+#include "fuentes.h"
+#include "texto.h"
+
+namespace sintetica {
+
+namespace {
+constexpr const char* CLAVE_CONFIG = "config";
+constexpr const char* CLAVE_AJUSTES = "ajustes";
+constexpr const char* CLAVE_SERIE = "serie";
+constexpr const char* CLAVE_CODIGO = "codigo";
+constexpr const char* CLAVE_CLAVES = "claves";
+constexpr const char* CLAVE_IMAGENES = "imagenes";
+constexpr const char* CLAVE_RED = "red";
+constexpr const char* CLAVE_NUBE = "nube";
+constexpr const char* CLAVE_VIDA = "vida";
+
+// Por la nube los trozos pueden ser más grandes que por BLE.
+constexpr size_t TROZO_NUBE = 1024;
+uint8_t g_trozo[TROZO_NUBE + 16];
+
+void claveImagen(char* destino, int espacio) {
+  copiarTexto(destino, 6, "img0");
+  destino[3] = static_cast<char>('0' + espacio);
+}
+
+uint16_t g_filaImagen[MAX_ANCHO];
+constexpr uint32_t QR_POR_BOTON_MS = 120000;  // el QR del botón dura 2 min
+constexpr uint8_t FALLOS_MAXIMOS = 5;
+constexpr uint32_t BLOQUEO_MS = 30000;
+// Sin letras ni números que se confundan (0/O, 1/I/L).
+const char ALFABETO_CODIGO[] = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+
+const char CONFIG_VACIA[] = "{\"version\":1}";
+
+bool esUrlNube(const char* u) {
+  return iguales(u, "mqtt://", 7) || iguales(u, "mqtts://", 8);
+}
+}  // namespace
+
+void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
+  hal_ = hal;
+  perfil_ = perfil;
+  vistaPrevia_ = false;
+  apagado_ = false;
+  botonApretado_ = false;
+  ignorarSoltar_ = false;
+  posLista_ = 0;
+  largoUltimoEstado_ = 0;  // que se notifique el estado del arranque
+  receptor_.reiniciar();
+  autenticado_ = false;
+  fallos_ = 0;
+  leerIdentidad();
+  lienzo_.iniciar(pixeles, perfil.ancho, perfil.alto, perfil.filasFranja);
+  vista_ = Vista::para(perfil.ancho, perfil.alto, perfil.redonda);
+  // El resplandor de los ojos cuesta: el broche (sin FPU) no lo dibuja.
+  vistaRostro_ = VistaRostro::para(perfil.ancho, perfil.alto, perfil.redonda, perfil.boton != Perfil::Boton::Broche);
+  horaRef_ = horaRefMs_ = 0;
+  ultimaBateria_ = ultimoCargando_ = -1;
+  sinWifiDesde_ = 0;
+  avisoSinWifi_ = false;
+  depurar_ = false;
+
+  ResultadoConfig r = cargarBase(config_);
+  if (!r.ok()) log(r.detalle);
+
+  // Configuración guardada.
+  cargarGuardada();
+
+  canal_ = Canal::Ble;
+  wifi_ = nube_ = false;
+  ota_ = Ota::Ninguna;
+  animPedida_ = animVisible_ = -1;
+  leerRed();
+
+  const uint32_t ahora = hal_.ahoraMs();
+  arranque_ = ahora;
+  ultimoCuadro_ = ahora;
+  motor_.iniciar(&config_, hal_.semilla ? hal_.semilla() : ahora, ahora);
+  SalidasVida sv;
+  sv.ctx = this;
+  sv.sonido = [](void* c, const char* n) {
+    auto* s = static_cast<Sistema*>(c);
+    if (s->hal_.sonido) s->hal_.sonido(n);
+  };
+  sv.led = [](void* c, uint32_t rgb) {
+    auto* s = static_cast<Sistema*>(c);
+    if (s->hal_.led) s->hal_.led(rgb);
+  };
+  sv.animacion = [](void* c, int i) { static_cast<Sistema*>(c)->reproducir(i, true); };
+  sv.guardar = [](void* c, const uint8_t* d, size_t n) {
+    auto* s = static_cast<Sistema*>(c);
+    if (s->hal_.guardar) s->hal_.guardar(CLAVE_VIDA, d, n);
+  };
+  motor_.salidas(sv);
+  leerMemoria();
+  leerAjustes();
+  leerImagenes();
+  azar_.sembrar(hal_.semilla ? hal_.semilla() : ahora);
+  subiendo_ = -1;
+  mostrandoImagen_ = -1;
+  imagenSucia_ = true;
+  proximaVueltaCara_ = vueltaCaraHasta_ = 0;
+  ultimaRotacion_ = ahora;
+  aplicarLista(ahora);
+  log("SintéticaOS listo");
+}
+
+size_t Sistema::leerGuardada(char* buf) const {
+  const int n = hal_.leer ? hal_.leer(CLAVE_CONFIG, reinterpret_cast<uint8_t*>(buf), MAX_CONFIG_BYTES) : -1;
+  if (n <= 0) return 0;
+  buf[n] = 0;
+  return static_cast<size_t>(n);
+}
+
+void Sistema::cargarGuardada() {
+  // El texto no queda en RAM: se lee de la flash cuando hace falta.
+  char* buf = receptor_.prestar();
+  const size_t n = buf ? leerGuardada(buf) : 0;
+  crcConfig_ = 0;
+  if (n == 0) {
+    cargarBase(config_);
+    return;
+  }
+  ResultadoConfig r = cargarConfig(config_, buf, n);
+  if (!r.ok()) {
+    log("config guardada inválida; uso la base");
+    log(r.detalle);
+    return;
+  }
+  crcConfig_ = protocolo::crc32(reinterpret_cast<const uint8_t*>(buf), n);
+}
+
+void Sistema::leerIdentidad() {
+  const char* id = hal_.identificador ? hal_.identificador() : nullptr;
+  copiarTexto(id_, sizeof id_, id && id[0] ? id : "000000000000");
+
+  serie_[0] = 0;
+  int n = hal_.leer ? hal_.leer(CLAVE_SERIE, reinterpret_cast<uint8_t*>(serie_), sizeof serie_ - 1) : -1;
+  serie_[n > 0 ? n : 0] = 0;
+
+  // El código del QR se genera una vez, en el primer arranque, y queda fijo.
+  n = hal_.leer ? hal_.leer(CLAVE_CODIGO, reinterpret_cast<uint8_t*>(codigo_), 6) : -1;
+  if (n != 6) {
+    for (int i = 0; i < 6; i++) {
+      uint32_t r = hal_.semilla ? hal_.semilla() : hal_.ahoraMs() * 2654435761u + static_cast<uint32_t>(i);
+      codigo_[i] = ALFABETO_CODIGO[r % (sizeof ALFABETO_CODIGO - 1)];
+    }
+    if (hal_.guardar) hal_.guardar(CLAVE_CODIGO, reinterpret_cast<const uint8_t*>(codigo_), 6);
+  }
+  codigo_[6] = 0;
+
+  uint8_t b[4 * 16];
+  n = hal_.leer ? hal_.leer(CLAVE_CLAVES, b, sizeof b) : -1;
+  nClaves_ = n > 0 ? static_cast<uint8_t>(n / 16) : 0;
+  copiarBytes(claves_, b, nClaves_ * 16u);
+  emparejando_ = nClaves_ == 0;  // sin ningún celu vinculado, muestra el QR
+  emparejarHasta_ = 0;
+  armarQr();
+}
+
+void Sistema::armarQr() {
+  copiarTexto(qr_, sizeof qr_, PREFIJO_QR);
+  size_t n = largo(qr_);
+  n += copiarTexto(qr_ + n, sizeof qr_ - n, id_);
+  n += copiarTexto(qr_ + n, sizeof qr_ - n, "/");
+  copiarTexto(qr_ + n, sizeof qr_ - n, codigo_);
+}
+
+void Sistema::fijarSerie(const char* serie) {
+  copiarTexto(serie_, sizeof serie_, serie);
+  if (hal_.guardar) hal_.guardar(CLAVE_SERIE, reinterpret_cast<const uint8_t*>(serie_), largo(serie_));
+}
+
+void Sistema::guardarClaves() {
+  if (hal_.guardar) hal_.guardar(CLAVE_CLAVES, &claves_[0][0], nClaves_ * 16u);
+}
+
+bool Sistema::bloqueado(uint32_t ahora) const {
+  return fallos_ >= FALLOS_MAXIMOS && static_cast<int32_t>(ahora - bloqueoHasta_) < 0;
+}
+
+void Sistema::falla(uint32_t ahora) {
+  if (fallos_ < 255) fallos_++;
+  if (fallos_ >= FALLOS_MAXIMOS) bloqueoHasta_ = ahora + BLOQUEO_MS;
+}
+
+void Sistema::bleConexion(bool conectado) {
+  autenticado_ = vistaPrevia_;
+  receptor_.reiniciar();
+  log(conectado ? "celu conectado" : "celu desconectado");
+}
+
+void Sistema::leerAjustes() {
+  nombre_[0] = 0;
+  fijaGuardada_[0] = 0;
+  uint8_t b[64];
+  int n = hal_.leer ? hal_.leer(CLAVE_AJUSTES, b, sizeof b) : -1;
+  // [versión=2][n][nombre][n][expresión fija][posición en la lista] (la v1 no tenía la posición)
+  if (n < 3 || (b[0] != 1 && b[0] != 2)) return;
+  size_t i = 1;
+  size_t nn = b[i++];
+  if (i + nn >= static_cast<size_t>(n)) return;
+  copiarTexto(nombre_, sizeof nombre_, reinterpret_cast<const char*>(b + i), nn);
+  i += nn;
+  size_t ne = b[i++];
+  if (i + ne > static_cast<size_t>(n)) return;
+  copiarTexto(fijaGuardada_, sizeof fijaGuardada_, reinterpret_cast<const char*>(b + i), ne);
+  i += ne;
+  if (!motor_.fijar(fijaGuardada_)) fijaGuardada_[0] = 0;
+  if (b[0] == 2 && i < static_cast<size_t>(n)) posLista_ = b[i];
+}
+
+void Sistema::guardarAjustes() {
+  if (!hal_.guardar) return;
+  uint8_t b[64];
+  size_t i = 0;
+  b[i++] = 2;
+  size_t nn = largo(nombre_), ne = largo(fijaGuardada_);
+  b[i++] = static_cast<uint8_t>(nn);
+  copiarBytes(b + i, nombre_, nn);
+  i += nn;
+  b[i++] = static_cast<uint8_t>(ne);
+  copiarBytes(b + i, fijaGuardada_, ne);
+  i += ne;
+  b[i++] = posLista_;
+  hal_.guardar(CLAVE_AJUSTES, b, i);
+}
+
+void Sistema::leerMemoria() {
+  uint8_t b[LARGO_MEMORIA];
+  const int n = hal_.leer ? hal_.leer(CLAVE_VIDA, b, sizeof b) : -1;
+  Memoria m;
+  if (n == static_cast<int>(LARGO_MEMORIA) && decodificarMemoria(b, LARGO_MEMORIA, &m)) motor_.restaurarMemoria(m);
+}
+
+void Sistema::evento(Evento e) { motor_.evento(e, hal_.ahoraMs()); }
+
+void Sistema::hora(uint32_t epochUtc, int zonaMinutos) {
+  if (hal_.fijarHora) hal_.fijarHora(epochUtc, zonaMinutos);
+  horaRef_ = static_cast<uint32_t>(static_cast<int64_t>(epochUtc) + static_cast<int64_t>(zonaMinutos) * 60);
+  horaRefMs_ = hal_.ahoraMs();
+}
+
+uint32_t Sistema::epoch() const {
+  const uint32_t e = hal_.epoch ? hal_.epoch() : 0;
+  if (e) return e;
+  if (!horaRef_) return 0;
+  return horaRef_ + (hal_.ahoraMs() - horaRefMs_) / 1000u;
+}
+
+int Sistema::minutoDelDia() const {
+  const int m = hal_.minutoDelDia ? hal_.minutoDelDia() : -1;
+  if (m >= 0) return m;
+  const uint32_t e = epoch();
+  return e ? static_cast<int>((e % 86400u) / 60u) : -1;
+}
+
+Contexto Sistema::contexto() const {
+  Contexto c;
+  c.minutoDelDia = minutoDelDia();
+  c.epoch = epoch();
+  c.bateria = hal_.bateria ? hal_.bateria() : -1;
+  c.cargando = hal_.cargando ? hal_.cargando() : -1;
+  return c;
+}
+
+int Sistema::fpsSugerido() const {
+  if (apagado_) return 1;
+  if (motor_.dormido()) return 5;
+  return 30;
+}
+
+// Convierte lo que pasa alrededor (batería, cargador, WiFi) en eventos.
+void Sistema::vigilar(uint32_t ahora) {
+  const Contexto c = contexto();
+  if (c.bateria >= 0 && ultimaBateria_ >= 0) {
+    if (c.bateria < 20 && ultimaBateria_ >= 20) evento(Evento::BateriaBaja);
+    if (c.bateria < 5 && ultimaBateria_ >= 5) evento(Evento::BateriaCritica);
+    if (c.bateria >= 100 && ultimaBateria_ < 100 && c.cargando == 1) evento(Evento::Cargado);
+  }
+  if (c.cargando >= 0 && ultimoCargando_ >= 0 && c.cargando != ultimoCargando_)
+    evento(c.cargando ? Evento::Enchufado : Evento::Desenchufado);
+  ultimaBateria_ = c.bateria;
+  ultimoCargando_ = c.cargando;
+  // Sin WiFi un minuto (teniéndolo configurado): lo busca con la mirada.
+  if (redConfigurada_ && !wifi_ && !vistaPrevia_) {
+    if (!sinWifiDesde_) sinWifiDesde_ = ahora;
+    if (!avisoSinWifi_ && ahora - sinWifiDesde_ >= 60000) {
+      avisoSinWifi_ = true;
+      evento(Evento::SinWifi);
+    }
+  } else {
+    sinWifiDesde_ = 0;
+    avisoSinWifi_ = false;
+  }
+}
+
+void Sistema::leerImagenes() {
+  for (auto& m : imagenes_) m = MetaImagen();
+  uint8_t b[MAX_IMAGENES * 8];
+  const int n = hal_.leer ? hal_.leer(CLAVE_IMAGENES, b, sizeof b) : -1;
+  if (n != static_cast<int>(sizeof b)) return;
+  for (int i = 0; i < MAX_IMAGENES; i++) {
+    imagenes_[i].largo = protocolo::leer32(b + i * 8);
+    imagenes_[i].crc = protocolo::leer32(b + i * 8 + 4);
+  }
+}
+
+void Sistema::guardarImagenes() {
+  if (!hal_.guardar) return;
+  uint8_t b[MAX_IMAGENES * 8];
+  for (int i = 0; i < MAX_IMAGENES; i++) {
+    protocolo::escribir32(b + i * 8, imagenes_[i].largo);
+    protocolo::escribir32(b + i * 8 + 4, imagenes_[i].crc);
+  }
+  hal_.guardar(CLAVE_IMAGENES, b, sizeof b);
+}
+
+int Sistema::leerParaQoi(void* contexto, uint32_t desplazamiento, uint8_t* destino, size_t n) {
+  auto* s = static_cast<Sistema*>(contexto);
+  if (!s->hal_.leerTrozo) return -1;
+  char clave[6];
+  claveImagen(clave, s->imagenLeyendo_);
+  return s->hal_.leerTrozo(clave, s->baseImagen_ + desplazamiento, destino, n);
+}
+
+// Lee exactamente n bytes de un archivo (la lectura puede venir de a partes).
+bool Sistema::leerArchivo(const char* clave, uint32_t desplazamiento, uint8_t* destino, size_t n) {
+  if (!hal_.leerTrozo) return false;
+  size_t leidos = 0;
+  while (leidos < n) {
+    const int m = hal_.leerTrozo(clave, desplazamiento + static_cast<uint32_t>(leidos), destino + leidos, n - leidos);
+    if (m <= 0) return false;
+    leidos += static_cast<size_t>(m);
+  }
+  return true;
+}
+
+// Un QOI del tamaño de la pantalla, o una animación cuyos cuadros lo son.
+bool Sistema::imagenValida(const char* clave, uint32_t largo, const char** porQue) {
+  const uint32_t w = static_cast<uint32_t>(perfil_.ancho), h = static_cast<uint32_t>(perfil_.alto);
+  *porQue = "tiene que ser un QOI del tamaño de la pantalla";
+  uint8_t cab[14];
+  if (!leerArchivo(clave, 0, cab, animacion::CABECERA)) return false;
+  if (!animacion::es(cab, animacion::CABECERA)) {
+    uint32_t qw = 0, qh = 0;
+    return leerArchivo(clave, 0, cab, sizeof cab) && DecodificadorQoi::leerCabecera(cab, sizeof cab, &qw, &qh) &&
+           qw == w && qh == h;
+  }
+  *porQue = "la animación no es válida o no es del tamaño de la pantalla";
+  int cuadros = 0;
+  uint32_t aw = 0, ah = 0;
+  if (!animacion::leerCabecera(cab, animacion::CABECERA, &cuadros, &aw, &ah) || aw != w || ah != h) return false;
+  const uint32_t tabla = static_cast<uint32_t>(animacion::CABECERA + animacion::POR_CUADRO * cuadros);
+  for (int i = 0; i < cuadros; i++) {
+    uint8_t e[animacion::POR_CUADRO];
+    if (!leerArchivo(clave, static_cast<uint32_t>(animacion::CABECERA + animacion::POR_CUADRO * i), e, sizeof e))
+      return false;
+    const animacion::Cuadro c = animacion::leerCuadro(e);
+    if (c.ms < animacion::MIN_MS || c.desplazamiento < tabla || c.largo < 22 || c.desplazamiento > largo ||
+        c.largo > largo - c.desplazamiento)
+      return false;
+    uint32_t qw = 0, qh = 0;
+    if (!leerArchivo(clave, c.desplazamiento, cab, sizeof cab) ||
+        !DecodificadorQoi::leerCabecera(cab, sizeof cab, &qw, &qh) || qw != w || qh != h)
+      return false;
+  }
+  return true;
+}
+
+// Al empezar a mostrar una imagen: si es animada, su primer cuadro.
+bool Sistema::prepararImagen(int espacio, uint32_t ahora) {
+  imagenPreparada_ = espacio;
+  animCuadros_ = animCuadro_ = 0;
+  baseImagen_ = 0;
+  char clave[6];
+  claveImagen(clave, espacio);
+  uint8_t cab[animacion::CABECERA];
+  if (!leerArchivo(clave, 0, cab, sizeof cab)) return false;
+  if (!animacion::es(cab, sizeof cab)) return true;
+  int cuadros = 0;
+  uint32_t w = 0, h = 0;
+  if (!animacion::leerCabecera(cab, sizeof cab, &cuadros, &w, &h)) return false;
+  animCuadros_ = static_cast<uint8_t>(cuadros);
+  return cargarCuadro(espacio, 0, ahora);
+}
+
+bool Sistema::cargarCuadro(int espacio, int cuadro, uint32_t ahora) {
+  char clave[6];
+  claveImagen(clave, espacio);
+  uint8_t e[animacion::POR_CUADRO];
+  if (!leerArchivo(clave, static_cast<uint32_t>(animacion::CABECERA + animacion::POR_CUADRO * cuadro), e, sizeof e))
+    return false;
+  const animacion::Cuadro c = animacion::leerCuadro(e);
+  animCuadro_ = static_cast<uint8_t>(cuadro);
+  baseImagen_ = c.desplazamiento;
+  animProximo_ = ahora + (c.ms < animacion::MIN_MS ? animacion::MIN_MS : c.ms);
+  return true;
+}
+
+// Decodifica la imagen en la franja actual del lienzo. false si no se puede leer.
+bool Sistema::dibujarImagen(int espacio) {
+  const int y0 = lienzo_.franja();
+  if (y0 == 0) {
+    imagenLeyendo_ = espacio;
+    if (!qoi_.empezar(leerParaQoi, this) || qoi_.ancho() != static_cast<uint32_t>(lienzo_.ancho()) ||
+        qoi_.alto() != static_cast<uint32_t>(lienzo_.alto()))
+      return false;
+  }
+  for (int y = y0; y < y0 + lienzo_.filasFranja(); y++) {
+    if (!qoi_.siguienteFila(g_filaImagen)) return false;
+    lienzo_.fila(y, g_filaImagen);
+  }
+  return true;
+}
+
+// La imagen que corresponde mostrar ahora, o -1 si va una cara.
+int Sistema::imagenParaMostrar(uint32_t ahora) {
+  if (apagado_ || emparejando_ || motor_.hayFija() || animPedida_ >= 0 || largoLista() == 0) return -1;
+  const ElementoLista e = elementoLista(posLista_);
+  if (e.tipo != ElementoLista::Tipo::Imagen || imagenes_[e.indice].largo == 0 || subiendo_ == e.indice) return -1;
+  // Cada tanto vuelve la cara un par de segundos: nunca una imagen quieta del todo.
+  if (proximaVueltaCara_ == 0)
+    proximaVueltaCara_ = ahora + azar_.entre(tiemposImagen::VUELTA_MIN_MS, tiemposImagen::VUELTA_MAX_MS);
+  if (static_cast<int32_t>(ahora - proximaVueltaCara_) >= 0) {
+    vueltaCaraHasta_ = ahora + tiemposImagen::VUELTA_DURA_MS;
+    proximaVueltaCara_ = vueltaCaraHasta_ + azar_.entre(tiemposImagen::VUELTA_MIN_MS, tiemposImagen::VUELTA_MAX_MS);
+  }
+  if (static_cast<int32_t>(ahora - vueltaCaraHasta_) < 0) return -1;
+  return e.indice;
+}
+
+void Sistema::bleImagen(uint8_t op, const uint8_t* d, size_t n) {
+  using namespace protocolo;
+  const uint8_t car = CarImagen;
+  char clave[6];
+  switch (op) {
+    case ImgInicio: {
+      if (n != 10 || d[1] >= MAX_IMAGENES) return responder(car, op, Malformado);
+      const uint32_t largo = leer32(d + 2);
+      if (largo < 22 || largo > limiteImagen(perfil_.ancho, perfil_.alto)) return responder(car, op, MuyGrande);
+      subiendo_ = d[1];
+      subidaLargo_ = largo;
+      subidaCrc_ = leer32(d + 6);
+      subidaRecibido_ = 0;
+      subidaCrcAcum_ = 0;
+      imagenes_[subiendo_] = MetaImagen();
+      guardarImagenes();
+      imagenSucia_ = true;
+      imagenPreparada_ = -1;
+      return responder(car, op, Ok);
+    }
+    case ImgBloque: {
+      if (subiendo_ < 0) return responder(car, op, SinInicio);
+      if (n < 5) return responder(car, op, Malformado);
+      const uint32_t off = leer32(d + 1);
+      const size_t m = n - 5;
+      claveImagen(clave, subiendo_);
+      if (off != subidaRecibido_ || subidaRecibido_ + m > subidaLargo_ || !hal_.escribirTrozo ||
+          !hal_.escribirTrozo(clave, off, d + 5, m)) {
+        if (hal_.borrar) hal_.borrar(clave);
+        subiendo_ = -1;
+        return responder(car, op, off != subidaRecibido_ ? FueraDeOrden : MuyGrande);
+      }
+      subidaCrcAcum_ = crc32(d + 5, m, subidaCrcAcum_);
+      subidaRecibido_ += static_cast<uint32_t>(m);
+      return;  // los bloques buenos no se confirman uno por uno
+    }
+    case ImgFin: {
+      if (subiendo_ < 0) return responder(car, op, SinInicio);
+      const int espacio = subiendo_;
+      subiendo_ = -1;
+      claveImagen(clave, espacio);
+      if (subidaRecibido_ != subidaLargo_ || subidaCrcAcum_ != subidaCrc_) {
+        if (hal_.borrar) hal_.borrar(clave);
+        return responder(car, op, subidaRecibido_ != subidaLargo_ ? FueraDeOrden : CrcDistinto);
+      }
+      const char* porQue = "";
+      if (!imagenValida(clave, subidaLargo_, &porQue)) {
+        if (hal_.borrar) hal_.borrar(clave);
+        return responder(car, op, ImagenInvalida, porQue);
+      }
+      imagenes_[espacio].largo = subidaLargo_;
+      imagenes_[espacio].crc = subidaCrc_;
+      guardarImagenes();
+      imagenSucia_ = true;
+      imagenPreparada_ = -1;
+      log("imagen guardada");
+      return responder(car, op, Ok);
+    }
+    case ImgBorrar: {
+      if (n != 2 || d[1] >= MAX_IMAGENES) return responder(car, op, Malformado);
+      claveImagen(clave, d[1]);
+      if (hal_.borrar) hal_.borrar(clave);
+      imagenes_[d[1]] = MetaImagen();
+      guardarImagenes();
+      imagenSucia_ = true;
+      imagenPreparada_ = -1;
+      return responder(car, op, Ok);
+    }
+    case ImgListar: {
+      uint8_t b[3 + MAX_IMAGENES * 9];
+      size_t i = 3;
+      uint8_t mascara = 0;
+      for (int k = 0; k < MAX_IMAGENES; k++) {
+        if (!imagenes_[k].largo) continue;
+        mascara |= static_cast<uint8_t>(1u << k);
+        b[i++] = static_cast<uint8_t>(k);
+        escribir32(b + i, imagenes_[k].largo);
+        escribir32(b + i + 4, imagenes_[k].crc);
+        i += 8;
+      }
+      b[0] = op | Respuesta;
+      b[1] = Ok;
+      b[2] = mascara;
+      enviar(car, b, i);
+      return;
+    }
+    case ImgPedir: {
+      if (n != 2 || d[1] >= MAX_IMAGENES) return responder(car, op, Malformado);
+      if (!imagenes_[d[1]].largo) return responder(car, op, NoExiste);
+      return enviarImagen(d[1]);
+    }
+    default:
+      return responder(car, op, Malformado);
+  }
+}
+
+int Sistema::largoLista() const {
+  // Sin lista propia, el broche recorre las caras; la mascota no tiene lista.
+  if (config_.nLista > 0) return config_.nLista;
+  return perfil_.boton == Perfil::Boton::Broche ? config_.nExpresiones : 0;
+}
+
+ElementoLista Sistema::elementoLista(int i) const {
+  if (config_.nLista > 0) return config_.lista[i % config_.nLista];
+  ElementoLista e;
+  e.indice = static_cast<uint8_t>(i % config_.nExpresiones);
+  return e;
+}
+
+void Sistema::aplicarLista(uint32_t ahora) {
+  const int n = largoLista();
+  if (n == 0) {
+    motor_.base(Config::Cara());
+    return;
+  }
+  if (posLista_ >= n) posLista_ = 0;
+  const ElementoLista e = elementoLista(posLista_);
+  // Las imágenes y las animaciones se dibujan aparte; mientras tanto la cara de
+  // base es la neutral.
+  if (e.tipo == ElementoLista::Tipo::Cara) {
+    motor_.base(e.indice);
+  } else if (e.tipo == ElementoLista::Tipo::CaraVida) {
+    Config::Cara c;
+    c.vida = static_cast<int8_t>(e.indice);
+    motor_.base(c);
+  } else {
+    motor_.base(Config::Cara());
+  }
+  animListaDesde_ = ahora;
+}
+
+void Sistema::siguiente() {
+  const int n = largoLista();
+  if (n == 0) return;
+  posLista_ = static_cast<uint8_t>((posLista_ + 1) % n);
+  ultimaRotacion_ = hal_.ahoraMs();
+  aplicarLista(ultimaRotacion_);
+  guardarAjustes();
+}
+
+void Sistema::dormir() {
+  apagado_ = true;
+  guardarAjustes();
+  log("a dormir");
+}
+
+void Sistema::tacto(bool apretado) {
+  const uint32_t ahora = hal_.ahoraMs();
+  if (perfil_.boton == Perfil::Boton::Mascota) {
+    gestos_.tacto(apretado, ahora);
+    return;
+  }
+  botonBroche(apretado, ahora);
+}
+
+void Sistema::botonBroche(bool apretado, uint32_t ahora) {
+  if (apretado == botonApretado_) return;
+  botonApretado_ = apretado;
+  if (apretado) {
+    botonDesde_ = ahora;
+    qrPorBoton_ = false;
+    // Dormido, un toque lo despierta (en la placa, arranca de nuevo).
+    ignorarSoltar_ = apagado_;
+    if (apagado_) {
+      apagado_ = false;
+      motor_.interaccion(ahora);
+      log("despierto");
+    }
+    return;
+  }
+  if (ignorarSoltar_) {
+    ignorarSoltar_ = false;
+    return;
+  }
+  const uint32_t dur = ahora - botonDesde_;
+  if (qrPorBoton_) return;
+  if (dur < tiemposBroche::TOQUE_MS) {
+    motor_.interaccion(ahora);
+    siguiente();
+  } else if (dur >= tiemposBroche::DORMIR_MS) {
+    dormir();
+  }
+}
+
+void Sistema::dibujarPantalla(uint32_t ahora) {
+  (void)ahora;
+  if (apagado_) {
+    lienzo_.limpiar(0x000000);
+    return;
+  }
+  if (emparejando_) {
+    dibujarEmparejamiento(lienzo_, serie_, qr_, "ESPERANDO VÍNCULO", perfil_.redonda);
+    return;
+  }
+  if (animVisible_ >= 0) {
+    lienzo_.limpiar(paleta::PANTALLA);
+    const Animacion& a = config_.animaciones[animVisible_];
+    if (a.sobre >= 0) dibujarExpresion(lienzo_, vista_, config_.expresiones[a.sobre], motor_.estado());
+    dibujarAnimacion(lienzo_, vista_, a, animT_, motor_.estado());
+    if (depurar_) dibujarDepuracion();
+    return;
+  }
+  // El rostro paramétrico siempre; un dibujo propio del usuario (formas) va
+  // encima con fundido, nunca con un corte.
+  const int dibujo = motor_.dibujo();
+  const float op = motor_.opacidadDibujo();
+  if (dibujo >= 0 && op >= 0.999f) {
+    lienzo_.limpiar(paleta::PANTALLA);
+  } else {
+    dibujarRostro(lienzo_, vistaRostro_, motor_.cuadro());
+  }
+  if (dibujo >= 0 && op > 0.001f) {
+    lienzo_.opacidad(op);
+    if (op < 0.999f) {
+      // Tapar el rostro de a poco.
+      lienzo_.opacidad(op);
+      lienzo_.pildora(lienzo_.ancho() / 2.0f, (lienzo_.franja() + lienzo_.filasFranja() / 2.0f), lienzo_.ancho() + 4.0f,
+                      lienzo_.filasFranja() + 4.0f, 0, paleta::PANTALLA);
+    }
+    dibujarExpresion(lienzo_, vista_, config_.expresiones[dibujo], motor_.estado());
+    lienzo_.opacidad(1);
+  }
+  if (depurar_) dibujarDepuracion();
+}
+
+void Sistema::dibujarDepuracion() {
+  // Arriba a la izquierda: el comportamiento, el estado interno en barras y los fps.
+  const float x = perfil_.redonda ? 52 : 6;
+  float y = perfil_.redonda ? 52 : 4;
+  char linea[48];
+  const char* c = motor_.nombreComportamiento();
+  size_t n = copiarTexto(linea, sizeof linea, c[0] ? c : "-");
+  for (size_t i = 0; i < n; i++)
+    if (linea[i] >= 'a' && linea[i] <= 'z') linea[i] = static_cast<char>(linea[i] - 32);
+  dibujarTexto(lienzo_, fuentes::MONO_9, linea, x, y + 9, paleta::TINTA);
+  y += 13;
+  const float* e = motor_.estadoInterno();
+  for (int i = 0; i < N_ESTADO; i++) {
+    lienzo_.rectangulo(static_cast<int>(x), static_cast<int>(y + i * 5), 40, 3, paleta::LINEA);
+    lienzo_.rectangulo(static_cast<int>(x), static_cast<int>(y + i * 5), static_cast<int>(40 * limitar(e[i], 0, 1)), 3,
+                       i == 6 ? 0xFF3820 : paleta::NARANJA);
+  }
+  y += N_ESTADO * 5 + 2;
+  const int f = static_cast<int>(fps_ + 0.5f);
+  linea[0] = static_cast<char>('0' + (f / 10) % 10), linea[1] = static_cast<char>('0' + f % 10);
+  copiarTexto(linea + 2, sizeof linea - 2, " FPS");
+  dibujarTexto(lienzo_, fuentes::MONO_9, linea, x, y + 9, paleta::TINTA_SUAVE);
+}
+
+void Sistema::tick() {
+  const uint32_t ahora = hal_.ahoraMs();
+  const uint32_t dtCuadro = ahora - ultimoCuadro_;
+  ultimoCuadro_ = ahora;
+  if (dtCuadro > 0 && dtCuadro < 2000) fps_ = mezclar(fps_, 1000.0f / dtCuadro, 0.1f);
+  gestos_.tick(ahora);
+  Evento e;
+  while (gestos_.sacar(&e)) evento(e);
+  // Inclinado: los ojos "caen" hacia donde está la gravedad.
+  float gx, gy;
+  if (gestos_.inclinacion(&gx, &gy)) motor_.seguir(-gx / 0.7f, -gy / 0.7f, ahora);
+  vigilar(ahora);
+  motor_.tick(ahora, contexto());
+  // El broche, de noche y ya dormido, apaga la pantalla hasta la mañana.
+  if (perfil_.boton == Perfil::Boton::Broche && !apagado_ && !vistaPrevia_ && motor_.quiereSuenoProfundo()) dormir();
+
+  // Manteniendo el botón del broche para dormirlo: se le cierran los ojos.
+  if (perfil_.boton == Perfil::Boton::Broche && botonApretado_ && !ignorarSoltar_ &&
+      ahora - botonDesde_ >= tiemposBroche::DORMIR_MS && !qrPorBoton_)
+    motor_.reaccionar(config_.resolverCara("dormido"), ahora, 150);
+  // Mantener el botón (5 s la mascota, 8 s el broche) muestra el QR para vincular otro celu.
+  bool qr = gestos_.sacarMantenido();
+  if (perfil_.boton == Perfil::Boton::Broche && botonApretado_ && !ignorarSoltar_ && !qrPorBoton_ &&
+      ahora - botonDesde_ >= tiemposBroche::QR_MS) {
+    qrPorBoton_ = true;
+    qr = true;
+  }
+  if (qr) {
+    emparejando_ = true;
+    emparejarHasta_ = ahora + QR_POR_BOTON_MS;
+  }
+  // La lista rota sola cada tantos minutos.
+  if (config_.rotarMinutos && largoLista() > 1 &&
+      ahora - ultimaRotacion_ >= static_cast<uint32_t>(config_.rotarMinutos) * 60000u)
+    siguiente();
+  if (emparejando_ && emparejarHasta_ && nClaves_ > 0 && static_cast<int32_t>(ahora - emparejarHasta_) >= 0)
+    emparejando_ = false;
+
+  if (vistaPrevia_) emparejando_ = false;
+  elegirAnimacion(ahora);
+  int imagen = imagenParaMostrar(ahora);
+  if (imagen >= 0 && imagen != imagenPreparada_ && !prepararImagen(imagen, ahora)) {
+    // No se pudo leer: se marca vacía para no intentarlo en cada cuadro.
+    imagenes_[imagen] = MetaImagen();
+    imagen = -1;
+    log("no pude leer la imagen; la saco");
+  }
+  if (imagen >= 0 && imagen == mostrandoImagen_ && animCuadros_ > 1 && static_cast<int32_t>(ahora - animProximo_) >= 0) {
+    // Una animación: el cuadro que sigue.
+    if (cargarCuadro(imagen, (animCuadro_ + 1) % animCuadros_, ahora)) imagenSucia_ = true;
+  }
+  if (imagen < 0) imagenPreparada_ = -1;
+  if (imagen >= 0 && imagen == mostrandoImagen_ && !imagenSucia_) {
+    // La imagen ya está en la pantalla: no hace falta redibujarla.
+    notificarEstadoSiCambio();
+    return;
+  }
+  mostrandoImagen_ = imagen;
+  imagenSucia_ = false;
+  bool imagenOk = imagen >= 0;
+  // De a una franja: en placas sin PSRAM no entra la pantalla entera.
+  for (int y0 = 0; y0 < lienzo_.alto(); y0 += lienzo_.filasPorFranja()) {
+    lienzo_.empezarFranja(y0);
+    if (imagenOk) imagenOk = dibujarImagen(imagen);
+    if (!imagenOk) dibujarPantalla(ahora);
+    if (hal_.presentarFranja) hal_.presentarFranja(lienzo_.pixeles(), lienzo_.ancho(), y0, lienzo_.filasFranja());
+  }
+  if (!hal_.presentarFranja && hal_.presentar && lienzo_.filasPorFranja() >= lienzo_.alto())
+    hal_.presentar(lienzo_.pixeles(), lienzo_.ancho(), lienzo_.alto());
+  if (imagen >= 0 && !imagenOk) {
+    // No se pudo leer: se marca vacía para no intentarlo en cada cuadro.
+    imagenes_[imagen] = MetaImagen();
+    mostrandoImagen_ = -1;
+    log("no pude leer la imagen; la saco");
+  }
+  notificarEstadoSiCambio();
+}
+
+size_t Sistema::estadoBle(uint8_t* salida, size_t cap) const {
+  protocolo::EstadoPublico p;
+  const int bat = hal_.bateria ? hal_.bateria() : -1;
+  p.bateria = bat < 0 ? 255 : static_cast<uint8_t>(bat);
+  p.humor = static_cast<int8_t>(motor_.humor() * 100);
+  p.modo = static_cast<uint8_t>(config_.modo);
+  p.dormido = motor_.dormido();
+  p.fija = motor_.hayFija();
+  p.emparejando = emparejando_;
+  p.autenticado = autenticado_;
+  p.expresion = animVisible_ >= 0 ? visible_ : motor_.nombreVisible();
+  p.nombre = nombre();
+  p.serie = serie_;
+  p.id = id_;
+  p.ancho = static_cast<uint16_t>(perfil_.ancho);
+  p.alto = static_cast<uint16_t>(perfil_.alto);
+  p.redonda = perfil_.redonda;
+  p.wifi = wifi_;
+  p.nube = nube_;
+  p.redConfigurada = redConfigurada_;
+  p.actualizando = ota_ != Ota::Ninguna;
+  p.version = perfil_.version ? perfil_.version : "";
+  p.perfil = perfil_.nombre ? perfil_.nombre : "";
+  p.crcConfig = crcConfig_;
+  p.encendido = (hal_.ahoraMs() - arranque_) / 1000u;
+  return protocolo::codificarEstado(p, salida, cap);
+}
+
+void Sistema::notificarEstadoSiCambio() {
+  if (!hal_.notificar && !hal_.notificarNube) return;
+  uint8_t b[protocolo::MAX_ESTADO];
+  size_t n = estadoBle(b, sizeof b);
+  // El humor cambia de a poco y el tiempo encendido, siempre (los últimos 4
+  // bytes): no notificar por eso solo.
+  bool igual = n == largoUltimoEstado_;
+  for (size_t i = 0; igual && i + 4 < n; i++) igual = i == 2 || b[i] == ultimoEstado_[i];
+  if (igual) return;
+  copiarBytes(ultimoEstado_, b, n);
+  largoUltimoEstado_ = n;
+  if (hal_.notificar) hal_.notificar(protocolo::CarEstado, b, n);
+  if (hal_.notificarNube) hal_.notificarNube(protocolo::CarEstado, b, n);
+}
+
+void Sistema::enviar(uint8_t car, const uint8_t* b, size_t n) {
+  if (canal_ == Canal::Nube) {
+    if (hal_.notificarNube) hal_.notificarNube(car, b, n);
+  } else if (hal_.notificar) {
+    hal_.notificar(car, b, n);
+  }
+}
+
+size_t Sistema::tamanoTrozo() const {
+  return canal_ == Canal::Nube ? TROZO_NUBE : protocolo::MAX_NOTIFICACION - 9;
+}
+
+void Sistema::responder(uint8_t car, uint8_t op, protocolo::Codigo c, const char* detalle) {
+  uint8_t b[protocolo::MAX_NOTIFICACION];
+  size_t i = 0;
+  b[i++] = static_cast<uint8_t>(op | protocolo::Respuesta);
+  b[i++] = c;
+  if (detalle) {
+    size_t n = largo(detalle);
+    if (n > sizeof b - i) n = sizeof b - i;
+    copiarBytes(b + i, detalle, n);
+    i += n;
+  }
+  enviar(car, b, i);
+}
+
+void Sistema::enviarConfig() {
+  // Pedirla en medio de una transferencia la aborta (0x84 es el código de los
+  // trozos: no hay forma de responder "ocupado" sin confundir).
+  receptor_.reiniciar();
+  char* texto = receptor_.prestar();
+  size_t total = leerGuardada(texto);
+  if (total == 0) total = copiarTexto(texto, MAX_CONFIG_BYTES + 1, CONFIG_VACIA);
+  uint8_t* b = g_trozo;
+  const size_t porTrozo = canal_ == Canal::Nube ? TROZO_NUBE : protocolo::MAX_NOTIFICACION - 5;
+  for (size_t off = 0; off < total; off += porTrozo) {
+    size_t n = total - off < porTrozo ? total - off : porTrozo;
+    b[0] = protocolo::ConfigTrozo;
+    protocolo::escribir32(b + 1, static_cast<uint32_t>(off));
+    copiarBytes(b + 5, texto + off, n);
+    enviar(protocolo::CarConfig, b, 5 + n);
+  }
+  b[0] = protocolo::ConfigCierre;
+  protocolo::escribir32(b + 1, static_cast<uint32_t>(total));
+  protocolo::escribir32(b + 5, protocolo::crc32(reinterpret_cast<const uint8_t*>(texto), total));
+  enviar(protocolo::CarConfig, b, 9);
+}
+
+void Sistema::enviarImagen(int espacio) {
+  using namespace protocolo;
+  char clave[6];
+  claveImagen(clave, espacio);
+  const uint8_t ok[2] = {static_cast<uint8_t>(ImgPedir | Respuesta), Ok};
+  enviar(CarImagen, ok, 2);
+  const size_t porTrozo = canal_ == Canal::Nube ? TROZO_NUBE : MAX_NOTIFICACION - 5;
+  uint32_t off = 0, crc = 0;
+  while (off < imagenes_[espacio].largo && hal_.leerTrozo) {
+    const int m = hal_.leerTrozo(clave, off, g_trozo + 5, porTrozo);
+    if (m <= 0) break;
+    g_trozo[0] = ImgTrozo;
+    escribir32(g_trozo + 1, off);
+    enviar(CarImagen, g_trozo, 5 + static_cast<size_t>(m));
+    crc = crc32(g_trozo + 5, static_cast<size_t>(m), crc);
+    off += static_cast<uint32_t>(m);
+  }
+  g_trozo[0] = ImgCierre;
+  g_trozo[1] = static_cast<uint8_t>(espacio);
+  escribir32(g_trozo + 2, off);
+  escribir32(g_trozo + 6, crc);
+  enviar(CarImagen, g_trozo, 10);
+}
+
+void Sistema::leerRed() {
+  char ssid[33], clave[65];
+  redConfigurada_ = red(ssid, sizeof ssid, clave, sizeof clave);
+}
+
+bool Sistema::red(char* ssid, size_t cs, char* clave, size_t cc) const {
+  uint8_t b[2 + 32 + 64];
+  const int n = hal_.leer ? hal_.leer(CLAVE_RED, b, sizeof b) : -1;
+  if (n < 2) return false;
+  size_t k = protocolo::leerTextoCorto(b, static_cast<size_t>(n), ssid, cs);
+  if (!k || !ssid[0]) return false;
+  return protocolo::leerTextoCorto(b + k, static_cast<size_t>(n) - k, clave, cc) > 0;
+}
+
+bool Sistema::nube(char* url, size_t cu, char* usuario, size_t cus, char* clave, size_t cc) const {
+  uint8_t b[3 + 160 + 64 + 128];
+  const int n = hal_.leer ? hal_.leer(CLAVE_NUBE, b, sizeof b) : -1;
+  if (n < 3) return false;
+  size_t i = protocolo::leerTextoCorto(b, static_cast<size_t>(n), url, cu);
+  if (!i || !esUrlNube(url)) return false;
+  size_t k = protocolo::leerTextoCorto(b + i, static_cast<size_t>(n) - i, usuario, cus);
+  if (!k || !usuario[0]) return false;
+  i += k;
+  return protocolo::leerTextoCorto(b + i, static_cast<size_t>(n) - i, clave, cc) > 0;
+}
+
+void Sistema::conexiones(bool wifi, bool nube) {
+  if (wifi != wifi_ || nube != nube_) log(nube ? "conectado a la nube" : wifi ? "conectado al WiFi" : "sin red");
+  wifi_ = wifi;
+  nube_ = nube;
+}
+
+void Sistema::comandoRed(uint8_t op, const uint8_t* d, size_t n) {
+  using namespace protocolo;
+  const uint8_t car = CarComando;
+  switch (op) {
+    case CmdRed: {
+      char ssid[33], clave[65];
+      size_t i = leerTextoCorto(d + 1, n - 1, ssid, sizeof ssid);
+      size_t k = i ? leerTextoCorto(d + 1 + i, n - 1 - i, clave, sizeof clave) : 0;
+      if (!i || !k || !ssid[0] || 1 + i + k != n) return responder(car, op, Malformado, "ssid de 1 a 32 bytes, clave de 0 a 64");
+      if (!hal_.guardar || !hal_.guardar(CLAVE_RED, d + 1, n - 1)) return responder(car, op, FalloOta, "no pude guardar");
+      leerRed();
+      responder(car, op, Ok);
+      log("WiFi nuevo");
+      break;
+    }
+    case CmdNube: {
+      char url[161], usuario[65], clave[129];
+      size_t i = leerTextoCorto(d + 1, n - 1, url, sizeof url);
+      size_t k = i ? leerTextoCorto(d + 1 + i, n - 1 - i, usuario, sizeof usuario) : 0;
+      size_t m = k ? leerTextoCorto(d + 1 + i + k, n - 1 - i - k, clave, sizeof clave) : 0;
+      if (!i || !k || !m || 1 + i + k + m != n || !esUrlNube(url) || !usuario[0] || !clave[0])
+        return responder(car, op, Malformado, "url mqtt:// o mqtts://, usuario y clave");
+      if (!hal_.guardar || !hal_.guardar(CLAVE_NUBE, d + 1, n - 1)) return responder(car, op, FalloOta, "no pude guardar");
+      responder(car, op, Ok);
+      log("nube nueva");
+      break;
+    }
+    case CmdOlvidarRed: {
+      const uint8_t vacio[1] = {0};
+      if (hal_.guardar) {
+        hal_.guardar(CLAVE_RED, vacio, 1);
+        hal_.guardar(CLAVE_NUBE, vacio, 1);
+      }
+      leerRed();
+      responder(car, op, Ok);
+      log("me olvidé del WiFi y de la nube");
+      break;
+    }
+    default:
+      return;
+  }
+  if (hal_.redCambio) hal_.redCambio();
+}
+
+void Sistema::ota(uint8_t op, const uint8_t* d, size_t n) {
+  using namespace protocolo;
+  const uint8_t car = CarOta;
+  switch (op) {
+    case OtaInicio:
+    case OtaDescargar: {
+      if (ota_ != Ota::Ninguna) return responder(car, op, Ocupado);
+      ManifiestoOta m;
+      const size_t k = leerManifiesto(d + 1, n - 1, &m);
+      if (!k) return responder(car, op, Malformado);
+      if (!iguales(m.perfil, perfil_.nombre ? perfil_.nombre : "")) return responder(car, op, PerfilDistinto, perfil_.nombre);
+      if (op == OtaInicio) {
+        if (1 + k != n) return responder(car, op, Malformado);
+        if (!hal_.otaEmpezar || !hal_.otaEscribir || !hal_.otaTerminar) return responder(car, op, NoImplementado);
+        const Codigo c = static_cast<Codigo>(hal_.otaEmpezar(m));
+        if (c == Ok) {
+          ota_ = Ota::Subida;
+          otaTamano_ = m.tamano;
+          otaRecibido_ = 0;
+          otaPorcentaje_ = 0;
+          log("OTA: recibiendo");
+        }
+        return responder(car, op, c);
+      }
+      // Descargar: [manifiesto][u16 n][url]
+      if (1 + k + 2 > n) return responder(car, op, Malformado);
+      const size_t nu = static_cast<size_t>(d[1 + k]) | static_cast<size_t>(d[2 + k]) << 8;
+      char url[256];
+      if (nu == 0 || nu >= sizeof url || 1 + k + 2 + nu != n) return responder(car, op, Malformado);
+      copiarTexto(url, sizeof url, reinterpret_cast<const char*>(d + 3 + k), nu);
+      if (!hal_.otaDescargar) return responder(car, op, NoImplementado);
+      if (!wifi_) return responder(car, op, SinRed);
+      const Codigo c = static_cast<Codigo>(hal_.otaDescargar(m, url));
+      if (c == Ok) {
+        ota_ = Ota::Descarga;
+        otaPorcentaje_ = 0;
+        log("OTA: descargando");
+      }
+      return responder(car, op, c);
+    }
+    case OtaBloque: {
+      if (ota_ != Ota::Subida) return responder(car, op, SinInicio);
+      if (n < 5) return responder(car, op, Malformado);
+      const uint32_t off = leer32(d + 1);
+      const size_t m = n - 5;
+      Codigo c = off != otaRecibido_ ? FueraDeOrden : otaRecibido_ + m > otaTamano_ ? MuyGrande : Ok;
+      if (c == Ok) c = static_cast<Codigo>(hal_.otaEscribir(off, d + 5, m));
+      if (c != Ok) {
+        if (hal_.otaCancelar) hal_.otaCancelar();
+        ota_ = Ota::Ninguna;
+        return responder(car, op, c);
+      }
+      otaRecibido_ += static_cast<uint32_t>(m);
+      const uint8_t pct = static_cast<uint8_t>(static_cast<uint64_t>(otaRecibido_) * 99u / (otaTamano_ ? otaTamano_ : 1));
+      if (pct != otaPorcentaje_) {
+        otaPorcentaje_ = pct;
+        const uint8_t b[3] = {static_cast<uint8_t>(OtaProgreso | Respuesta), Ok, pct};
+        enviar(car, b, 3);
+      }
+      return;
+    }
+    case OtaFin: {
+      if (ota_ != Ota::Subida) return responder(car, op, SinInicio);
+      ota_ = Ota::Ninguna;
+      if (otaRecibido_ != otaTamano_) {
+        if (hal_.otaCancelar) hal_.otaCancelar();
+        return responder(car, op, FueraDeOrden);
+      }
+      const Codigo c = static_cast<Codigo>(hal_.otaTerminar());
+      log(c == Ok ? "OTA: lista, reinicio" : "OTA: rechazada");
+      return responder(car, op, c);
+    }
+    case OtaCancelar: {
+      if (ota_ != Ota::Ninguna && hal_.otaCancelar) hal_.otaCancelar();
+      ota_ = Ota::Ninguna;
+      return responder(car, op, Ok);
+    }
+    default:
+      return responder(car, op, Malformado);
+  }
+}
+
+void Sistema::otaProgreso(uint8_t codigo, uint8_t porcentaje, const char* detalle) {
+  using namespace protocolo;
+  uint8_t b[MAX_NOTIFICACION];
+  size_t i = 0;
+  b[i++] = static_cast<uint8_t>(OtaProgreso | Respuesta);
+  b[i++] = codigo;
+  b[i++] = porcentaje;
+  if (detalle) {
+    size_t m = largo(detalle);
+    if (m > sizeof b - i) m = sizeof b - i;
+    copiarBytes(b + i, detalle, m);
+    i += m;
+  }
+  if (codigo != Ok || porcentaje >= 100) ota_ = Ota::Ninguna;
+  otaPorcentaje_ = porcentaje;
+  if (hal_.notificar) hal_.notificar(CarOta, b, i);
+  if (hal_.notificarNube) hal_.notificarNube(CarOta, b, i);
+}
+
+void Sistema::reproducir(int animacion, bool unaVez) {
+  if (animacion < 0 || animacion >= config_.nAnimaciones) {
+    animPedida_ = -1;
+    return;
+  }
+  animPedida_ = animacion;
+  animUnaVez_ = unaVez;
+  animDesde_ = hal_.ahoraMs();
+}
+
+void Sistema::elegirAnimacion(uint32_t ahora) {
+  animVisible_ = -1;
+  if (apagado_ || emparejando_) return;
+  if (animPedida_ >= 0 && animPedida_ < config_.nAnimaciones) {
+    const Animacion& a = config_.animaciones[animPedida_];
+    const uint32_t pasado = ahora - animDesde_;
+    if (animUnaVez_ && pasado >= a.duracion) {
+      animPedida_ = -1;
+    } else {
+      animVisible_ = animPedida_;
+      animT_ = animUnaVez_ ? pasado : pasado % (a.duracion ? a.duracion : 1);
+    }
+  }
+  if (animVisible_ < 0 && motor_.expresionFija() < 0 && !motor_.dormido() && !motor_.reaccionando(ahora) &&
+      largoLista() > 0) {
+    const ElementoLista e = elementoLista(posLista_);
+    if (e.tipo == ElementoLista::Tipo::Animacion && e.indice < config_.nAnimaciones) {
+      const Animacion& a = config_.animaciones[e.indice];
+      animVisible_ = e.indice;
+      // En la lista se repite siempre.
+      animT_ = (ahora - animListaDesde_) % (a.duracion ? a.duracion : 1);
+    }
+  }
+  if (animVisible_ >= 0) {
+    const size_t k = copiarTexto(visible_, sizeof visible_, "animacion:");
+    copiarTexto(visible_ + k, sizeof visible_ - k, config_.animaciones[animVisible_].nombre);
+  }
+}
+
+void Sistema::enviarVida() {
+  // [0x9B][0][7 × estado][6 × rasgos][flags][n][comportamiento][n][visible][n cand][n][nombre][puntaje]...[fps]
+  using namespace protocolo;
+  uint8_t b[MAX_NOTIFICACION];
+  size_t i = 0;
+  b[i++] = static_cast<uint8_t>(CmdVida | Respuesta);
+  b[i++] = Ok;
+  const float* e = motor_.estadoInterno();
+  for (int k = 0; k < N_ESTADO; k++) b[i++] = static_cast<uint8_t>(limitar(e[k], 0, 1) * 255 + 0.5f);
+  const Personalidad p = motor_.rasgos();
+  for (int k = 0; k < N_RASGOS; k++) b[i++] = static_cast<uint8_t>(limitar(p[k], 0, 1) * 255 + 0.5f);
+  b[i++] = static_cast<uint8_t>((motor_.dormido() ? 1 : 0) | (motor_.sonando() ? 2 : 0) | (depurar_ ? 4 : 0));
+  auto texto = [&](const char* t) {
+    size_t m = largo(t);
+    if (m > 24) m = 24;
+    b[i++] = static_cast<uint8_t>(m);
+    copiarBytes(b + i, t, m);
+    i += m;
+  };
+  texto(motor_.nombreComportamiento());
+  texto(motor_.nombreVisible());
+  const char* nombres[3];
+  float puntajes[3];
+  const int nc = motor_.candidatos(nombres, puntajes, 3);
+  b[i++] = static_cast<uint8_t>(nc);
+  for (int k = 0; k < nc; k++) {
+    texto(nombres[k]);
+    b[i++] = static_cast<uint8_t>(limitar(puntajes[k], 0, 2.55f) * 100);
+  }
+  b[i++] = static_cast<uint8_t>(limitar(fps_, 0, 255));
+  enviar(CarComando, b, i);
+}
+
+void Sistema::enviarRegistro() {
+  using namespace protocolo;
+  EntradaRegistro r[28];
+  const int n = motor_.registro(r, 28);
+  uint8_t b[3 + 28 * 6];
+  size_t i = 0;
+  b[i++] = static_cast<uint8_t>(CmdRegistro | Respuesta);
+  b[i++] = Ok;
+  b[i++] = static_cast<uint8_t>(n);
+  for (int k = 0; k < n; k++) {
+    escribir32(b + i, r[k].segundos);
+    b[i + 4] = r[k].tipo;
+    b[i + 5] = r[k].dato;
+    i += 6;
+  }
+  enviar(CarComando, b, i);
+}
+
+void Sistema::bleEscribir(uint8_t car, const uint8_t* d, size_t n) {
+  canal_ = Canal::Ble;
+  procesar(car, d, n);
+}
+
+void Sistema::nubeEscribir(uint8_t car, const uint8_t* d, size_t n) {
+  canal_ = Canal::Nube;
+  procesar(car, d, n);
+  canal_ = Canal::Ble;
+}
+
+void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
+  using namespace protocolo;
+  if (n < 1) return;
+  const uint8_t op = d[0];
+  const uint32_t ahora = hal_.ahoraMs();
+
+  if (canal_ == Canal::Nube && car == CarComando &&
+      (op == CmdVincular || op == CmdAutenticar || op == CmdRed || op == CmdNube))
+    return responder(car, op, NoAutorizado, "eso solo se hace por BLE");
+
+  // Vincular y autenticar son lo único que se puede hacer sin estar autenticado.
+  if (car == CarComando && op == CmdVincular) {
+    if (bloqueado(ahora)) return responder(car, op, NoAutorizado, "demasiados intentos: esperá 30 s");
+    if (!emparejando_) return responder(car, op, NoEmparejando, "mantené el botón 5 s para ver el QR");
+    if (n != 7 || !iguales(reinterpret_cast<const char*>(d + 1), codigo_, 6)) {
+      falla(ahora);
+      return responder(car, op, NoAutorizado, "el código no coincide");
+    }
+    // Clave nueva para este celu; si ya hay 4, se olvida la más vieja.
+    if (nClaves_ == 4) {
+      for (int i = 0; i < 3; i++) copiarBytes(claves_[i], claves_[i + 1], 16);
+      nClaves_ = 3;
+    }
+    uint8_t* clave = claves_[nClaves_++];
+    for (int i = 0; i < 16; i += 4) {
+      uint32_t r = hal_.semilla ? hal_.semilla() : ahora * 2654435761u + static_cast<uint32_t>(i);
+      for (int k = 0; k < 4; k++) clave[i + k] = static_cast<uint8_t>(r >> (8 * k));
+    }
+    guardarClaves();
+    fallos_ = 0;
+    autenticado_ = true;
+    emparejando_ = false;
+    uint8_t r[18] = {static_cast<uint8_t>(op | Respuesta), Ok};
+    copiarBytes(r + 2, clave, 16);
+    enviar(car, r, sizeof r);
+    evento(Evento::Vinculado);
+    log("celu vinculado");
+    return;
+  }
+  if (car == CarComando && op == CmdAutenticar) {
+    if (bloqueado(ahora)) return responder(car, op, NoAutorizado, "demasiados intentos: esperá 30 s");
+    bool ok = false;
+    for (int k = 0; n == 17 && k < nClaves_; k++) {
+      uint8_t dif = 0;  // comparar todo, sin cortar en el primer byte distinto
+      for (int i = 0; i < 16; i++) dif |= claves_[k][i] ^ d[1 + i];
+      ok = ok || dif == 0;
+    }
+    if (!ok) {
+      falla(ahora);
+      return responder(car, op, NoAutorizado, "clave desconocida: hay que vincular de nuevo");
+    }
+    fallos_ = 0;
+    autenticado_ = true;
+    return responder(car, op, Ok);
+  }
+  if (canal_ != Canal::Nube && !autenticado_) return responder(car, op, NoAutorizado, "vinculá o autenticá primero");
+
+  if (car == CarConfig) {
+    switch (op) {
+      case ConfigInicio:
+        if (n != 9) return responder(car, op, Malformado);
+        return responder(car, op, receptor_.inicio(leer32(d + 1), leer32(d + 5)));
+      case ConfigBloque:
+        if (n < 5) return responder(car, op, Malformado);
+        {
+          Codigo c = receptor_.bloque(leer32(d + 1), d + 5, n - 5);
+          // Los bloques bien recibidos no se confirman uno por uno.
+          if (c != Ok) responder(car, op, c);
+        }
+        return;
+      case ConfigFin: {
+        Codigo c = receptor_.fin();
+        if (c != Ok) return responder(car, op, c);
+        ResultadoConfig r = cargarConfig(config_, receptor_.texto(), receptor_.largo());
+        if (!r.ok()) {
+          // config_ quedó con la base: se vuelve a la que estaba guardada.
+          receptor_.reiniciar();
+          cargarGuardada();
+          return responder(car, op, r.error == ErrorConfig::JsonInvalido ? JsonInvalido : ConfigInvalida, r.detalle);
+        }
+        crcConfig_ = crc32(reinterpret_cast<const uint8_t*>(receptor_.texto()), receptor_.largo());
+        animPedida_ = animVisible_ = -1;
+        if (hal_.guardar) hal_.guardar(CLAVE_CONFIG, reinterpret_cast<const uint8_t*>(receptor_.texto()), receptor_.largo());
+        receptor_.reiniciar();
+        // Un nombre nuevo en la config gana sobre el puesto por comando.
+        nombre_[0] = 0;
+        if (!config_.resolverCara(fijaGuardada_).existe()) fijaGuardada_[0] = 0;
+        guardarAjustes();
+        // El motor sigue con su estado y su memoria: solo cambian los datos.
+        motor_.reconfigurar(&config_);
+        motor_.fijar(fijaGuardada_);
+        aplicarLista(hal_.ahoraMs());
+        evento(Evento::CambioDeCara);
+        log("config nueva aplicada");
+        return responder(car, op, Ok);
+      }
+      case ConfigPedir:
+        return enviarConfig();
+      default:
+        return responder(car, op, Malformado);
+    }
+  }
+
+  if (car == CarComando) {
+    switch (op) {
+      case CmdExpresion: {
+        char nombre[LARGO_NOMBRE];
+        if (n - 1 >= LARGO_NOMBRE) return responder(car, op, NoExiste);
+        copiarTexto(nombre, sizeof nombre, reinterpret_cast<const char*>(d + 1), n - 1);
+        if (n > 1 && !config_.resolverCara(nombre).existe()) return responder(car, op, NoExiste);
+        motor_.fijar(n == 1 ? "" : nombre);
+        copiarTexto(fijaGuardada_, sizeof fijaGuardada_, n == 1 ? "" : nombre);
+        guardarAjustes();
+        responder(car, op, Ok);
+        // "Se mira en el espejo y prueba la cara nueva".
+        if (n > 1) evento(Evento::CambioDeCara);
+        return;
+      }
+      case CmdNombre: {
+        if (n < 2 || n - 1 > LARGO_NOMBRE - 1) return responder(car, op, Malformado);
+        copiarTexto(nombre_, sizeof nombre_, reinterpret_cast<const char*>(d + 1), n - 1);
+        guardarAjustes();
+        return responder(car, op, Ok);
+      }
+      case CmdDesvincular: {
+        nClaves_ = 0;
+        llenarBytes(claves_, 0, sizeof claves_);
+        guardarClaves();
+        emparejando_ = true;
+        emparejarHasta_ = 0;
+        responder(car, op, Ok);
+        autenticado_ = false;
+        return;
+      }
+      case CmdEvento: {
+        if (n != 2 || d[1] >= static_cast<uint8_t>(Evento::Cantidad)) return responder(car, op, Malformado);
+        evento(static_cast<Evento>(d[1]));
+        return responder(car, op, Ok);
+      }
+      case CmdRed:
+      case CmdNube:
+      case CmdOlvidarRed:
+        return comandoRed(op, d, n);
+      case CmdHora: {
+        if (n != 7) return responder(car, op, Malformado, "[u32 epoch][i16 zona en minutos]");
+        const int16_t zona = static_cast<int16_t>(d[5] | d[6] << 8);
+        if (zona < -840 || zona > 840) return responder(car, op, Malformado, "zona de -14 h a +14 h");
+        hora(leer32(d + 1), zona);
+        return responder(car, op, Ok);
+      }
+      case CmdVida: {
+        if (n == 2) depurar_ = d[1] != 0;
+        else if (n != 1) return responder(car, op, Malformado);
+        return enviarVida();
+      }
+      case CmdMemoria: {
+        uint8_t b[2 + LARGO_MEMORIA];
+        b[0] = static_cast<uint8_t>(op | Respuesta);
+        b[1] = Ok;
+        codificarMemoria(motor_.memoria(), b + 2, LARGO_MEMORIA);
+        enviar(car, b, sizeof b);
+        return;
+      }
+      case CmdRestaurar: {
+        Memoria m;
+        if (n != 1 + LARGO_MEMORIA || !decodificarMemoria(d + 1, LARGO_MEMORIA, &m))
+          return responder(car, op, Malformado, "memoria de 112 bytes con su CRC");
+        motor_.restaurarMemoria(m);
+        if (hal_.guardar) hal_.guardar(CLAVE_VIDA, d + 1, LARGO_MEMORIA);
+        log("memoria restaurada (mudanza)");
+        return responder(car, op, Ok);
+      }
+      case CmdRegistro:
+        return enviarRegistro();
+      case CmdComportamiento: {
+        char nombre[LARGO_VIDA];
+        if (n < 2 || n - 1 >= LARGO_VIDA) return responder(car, op, Malformado);
+        copiarTexto(nombre, sizeof nombre, reinterpret_cast<const char*>(d + 1), n - 1);
+        const int i = config_.vida.indiceComportamiento(nombre);
+        if (i < 0) return responder(car, op, NoExiste);
+        if (motor_.dormido()) motor_.despertar(ahora, true);
+        return responder(car, op, motor_.comportamiento(i, ahora) ? Ok : Ocupado);
+      }
+      case CmdReproducir: {
+        if (n == 1) {
+          reproducir(-1, false);
+          return responder(car, op, Ok);
+        }
+        char nombre[LARGO_NOMBRE];
+        if (n - 1 >= LARGO_NOMBRE) return responder(car, op, NoExiste);
+        copiarTexto(nombre, sizeof nombre, reinterpret_cast<const char*>(d + 1), n - 1);
+        const int idx = config_.indiceAnimacion(nombre);
+        if (idx < 0) return responder(car, op, NoExiste);
+        reproducir(idx, !config_.animaciones[idx].repetir);
+        return responder(car, op, Ok);
+      }
+      default:
+        return responder(car, op, Malformado);
+    }
+  }
+
+  if (car == CarImagen) return bleImagen(op, d, n);
+  if (car == CarOta) return ota(op, d, n);
+}
+
+}  // namespace sintetica

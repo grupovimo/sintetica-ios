@@ -1,0 +1,220 @@
+#include "sintetica_c.h"
+
+#include <stddef.h>
+#include <stdlib.h>
+
+#include "sistema.h"
+
+using namespace sintetica;
+
+static_assert(sizeof(sintetica_manifiesto) == sizeof(ManifiestoOta), "el manifiesto de C y el del núcleo son el mismo");
+static_assert(offsetof(sintetica_manifiesto, perfil) == offsetof(ManifiestoOta, perfil), "mismo orden");
+
+namespace {
+sintetica_hal g_hal;
+char g_visible[LARGO_NOMBRE + 12];
+Sistema g_sistema;
+uint16_t g_pixeles[640 * 640];
+int g_ancho = 0, g_alto = 0;
+
+// Las imágenes de la vista previa, en memoria ("img0" a "img7"). Con malloc:
+// al doble de la pantalla una foto puede pasar el megabyte (las apps tienen lugar).
+uint8_t* g_imagenes[MAX_IMAGENES];
+uint32_t g_capacidad[MAX_IMAGENES];
+uint32_t g_largos[MAX_IMAGENES];
+
+// Si el anfitrión no guarda nada (una vista previa), se guarda en memoria: así
+// pedir la config devuelve la última que llegó.
+struct Guardado {
+  char clave[16];
+  uint8_t* datos;
+  size_t n;
+};
+Guardado g_memoria[16];
+
+Guardado* buscarGuardado(const char* clave, bool crear) {
+  for (auto& g : g_memoria)
+    if (g.clave[0] && iguales(g.clave, clave)) return &g;
+  if (!crear) return nullptr;
+  for (auto& g : g_memoria) {
+    if (!g.clave[0]) {
+      copiarTexto(g.clave, sizeof g.clave, clave);
+      return &g;
+    }
+  }
+  return nullptr;
+}
+
+int espacioDe(const char* clave) {
+  return (clave[0] == 'i' && clave[1] == 'm' && clave[2] == 'g' && clave[3] >= '0' && clave[3] < '0' + MAX_IMAGENES && !clave[4])
+             ? clave[3] - '0'
+             : -1;
+}
+}  // namespace
+
+extern "C" {
+
+void sintetica_iniciar(const sintetica_hal* hal, int ancho, int alto) {
+  sintetica_iniciar_perfil(hal, ancho, alto, 0, 0);
+}
+
+void sintetica_iniciar_perfil(const sintetica_hal* hal, int ancho, int alto, int redonda, int botonBroche) {
+  g_hal = hal ? *hal : sintetica_hal{};
+  g_ancho = mini(maxi(ancho, 16), MAX_ANCHO);
+  g_alto = mini(maxi(alto, 16), MAX_ALTO);
+  Hal h;
+  h.ahoraMs = [] { return g_hal.ahora_ms ? g_hal.ahora_ms(g_hal.contexto) : 0u; };
+  h.identificador = [] { return g_hal.identificador; };
+  h.semilla = [] { return g_hal.semilla ? g_hal.semilla(g_hal.contexto) : 0x5157E71Cu; };
+  h.minutoDelDia = [] { return g_hal.minuto_del_dia ? g_hal.minuto_del_dia(g_hal.contexto) : -1; };
+  h.bateria = [] { return g_hal.bateria ? g_hal.bateria(g_hal.contexto) : -1; };
+  if (g_hal.epoch) h.epoch = [] { return g_hal.epoch(g_hal.contexto); };
+  h.guardar = [](const char* c, const uint8_t* d, size_t n) {
+    if (g_hal.guardar) return g_hal.guardar(g_hal.contexto, c, d, n) != 0;
+    Guardado* g = buscarGuardado(c, true);
+    if (!g) return false;
+    auto* p = static_cast<uint8_t*>(realloc(g->datos, n ? n : 1));
+    if (!p) return false;
+    copiarBytes(p, d, n);
+    g->datos = p, g->n = n;
+    return true;
+  };
+  h.leer = [](const char* c, uint8_t* d, size_t cap) {
+    if (g_hal.leer) return g_hal.leer(g_hal.contexto, c, d, cap);
+    const Guardado* g = buscarGuardado(c, false);
+    if (!g || g->n > cap) return -1;
+    copiarBytes(d, g->datos, g->n);
+    return static_cast<int>(g->n);
+  };
+  h.notificar = [](uint8_t car, const uint8_t* d, size_t n) {
+    if (g_hal.notificar) g_hal.notificar(g_hal.contexto, car, d, n);
+  };
+  h.registrar = [](const char* m) {
+    if (g_hal.registrar) g_hal.registrar(g_hal.contexto, m);
+  };
+  h.notificarNube = [](uint8_t car, const uint8_t* d, size_t n) {
+    if (g_hal.notificar_nube) g_hal.notificar_nube(g_hal.contexto, car, d, n);
+  };
+  h.redCambio = [] {
+    if (g_hal.red_cambio) g_hal.red_cambio(g_hal.contexto);
+  };
+  if (g_hal.ota_empezar)
+    h.otaEmpezar = [](const ManifiestoOta& m) {
+      return static_cast<uint8_t>(g_hal.ota_empezar(g_hal.contexto, reinterpret_cast<const sintetica_manifiesto*>(&m)));
+    };
+  if (g_hal.ota_escribir)
+    h.otaEscribir = [](uint32_t off, const uint8_t* d, size_t n) {
+      return static_cast<uint8_t>(g_hal.ota_escribir(g_hal.contexto, off, d, n));
+    };
+  if (g_hal.ota_terminar) h.otaTerminar = [] { return static_cast<uint8_t>(g_hal.ota_terminar(g_hal.contexto)); };
+  if (g_hal.ota_descargar)
+    h.otaDescargar = [](const ManifiestoOta& m, const char* url) {
+      return static_cast<uint8_t>(
+          g_hal.ota_descargar(g_hal.contexto, reinterpret_cast<const sintetica_manifiesto*>(&m), url));
+    };
+  h.otaCancelar = [] {
+    if (g_hal.ota_cancelar) g_hal.ota_cancelar(g_hal.contexto);
+  };
+  h.escribirTrozo = [](const char* c, uint32_t off, const uint8_t* d, size_t n) {
+    if (g_hal.escribir_trozo) return g_hal.escribir_trozo(g_hal.contexto, c, off, d, n) != 0;
+    const int e = espacioDe(c);
+    if (e < 0 || (off != 0 && off != g_largos[e])) return false;
+    if (off + n > g_capacidad[e]) {
+      const uint32_t nueva = static_cast<uint32_t>(off + n) * 2 + 4096;
+      auto* p = static_cast<uint8_t*>(realloc(g_imagenes[e], nueva));
+      if (!p) return false;
+      g_imagenes[e] = p;
+      g_capacidad[e] = nueva;
+    }
+    copiarBytes(g_imagenes[e] + off, d, n);
+    g_largos[e] = off + static_cast<uint32_t>(n);
+    return true;
+  };
+  h.leerTrozo = [](const char* c, uint32_t off, uint8_t* d, size_t n) {
+    if (g_hal.leer_trozo) return g_hal.leer_trozo(g_hal.contexto, c, off, d, n);
+    const int e = espacioDe(c);
+    if (e < 0 || !g_largos[e]) return -1;
+    if (off >= g_largos[e]) return 0;
+    const uint32_t m = mini(static_cast<int>(n), static_cast<int>(g_largos[e] - off));
+    copiarBytes(d, g_imagenes[e] + off, m);
+    return static_cast<int>(m);
+  };
+  h.borrar = [](const char* c) {
+    if (g_hal.borrar) return g_hal.borrar(g_hal.contexto, c) != 0;
+    const int e = espacioDe(c);
+    if (e >= 0) g_largos[e] = 0;
+    return true;
+  };
+  Perfil p;
+  p.ancho = g_ancho, p.alto = g_alto, p.redonda = redonda != 0;
+  p.boton = botonBroche ? Perfil::Boton::Broche : Perfil::Boton::Mascota;
+  if (g_hal.perfil) p.nombre = g_hal.perfil;
+  if (g_hal.version) p.version = g_hal.version;
+  g_sistema.iniciar(h, g_pixeles, p);
+}
+
+void sintetica_vista_previa(void) { g_sistema.modoVistaPrevia(); }
+void sintetica_tick(void) { g_sistema.tick(); }
+const uint16_t* sintetica_pixeles(void) { return g_pixeles; }
+int sintetica_ancho(void) { return g_ancho; }
+int sintetica_alto(void) { return g_alto; }
+
+void sintetica_pixeles_rgba(uint8_t* s) {
+  for (int i = 0; i < g_ancho * g_alto; i++) {
+    uint32_t c = de565(g_pixeles[i]);
+    s[i * 4] = static_cast<uint8_t>(c >> 16);
+    s[i * 4 + 1] = static_cast<uint8_t>(c >> 8);
+    s[i * 4 + 2] = static_cast<uint8_t>(c);
+    s[i * 4 + 3] = 255;
+  }
+}
+
+void sintetica_tacto(int apretado) { g_sistema.tacto(apretado != 0); }
+void sintetica_imu(float ax, float ay, float az) { g_sistema.imu(ax, ay, az); }
+void sintetica_evento(int e) {
+  if (e >= 0 && e < static_cast<int>(Evento::Cantidad)) g_sistema.evento(static_cast<Evento>(e));
+}
+
+void sintetica_ble_conexion(int conectado) { g_sistema.bleConexion(conectado != 0); }
+void sintetica_ble_escribir(int car, const uint8_t* d, size_t n) { g_sistema.bleEscribir(static_cast<uint8_t>(car), d, n); }
+size_t sintetica_ble_estado(uint8_t* s, size_t cap) { return g_sistema.estadoBle(s, cap); }
+
+int sintetica_cantidad_expresiones(void) { return g_sistema.config().nExpresiones; }
+const char* sintetica_nombre_expresion(int i) {
+  return (i >= 0 && i < g_sistema.config().nExpresiones) ? g_sistema.config().expresiones[i].nombre : "";
+}
+const char* sintetica_expresion_visible(void) {
+  const int a = g_sistema.animacionVisible();
+  if (a >= 0) {
+    const size_t k = copiarTexto(g_visible, sizeof g_visible, "animacion:");
+    copiarTexto(g_visible + k, sizeof g_visible - k, g_sistema.config().animaciones[a].nombre);
+    return g_visible;
+  }
+  return g_sistema.config().expresiones[g_sistema.motor().expresionVisible()].nombre;
+}
+
+void sintetica_nube_escribir(int car, const uint8_t* d, size_t n) { g_sistema.nubeEscribir(static_cast<uint8_t>(car), d, n); }
+void sintetica_conexiones(int wifi, int nube) { g_sistema.conexiones(wifi != 0, nube != 0); }
+int sintetica_red(char* ssid, size_t cs, char* clave, size_t cc) { return g_sistema.red(ssid, cs, clave, cc) ? 1 : 0; }
+int sintetica_nube(char* url, size_t cu, char* usuario, size_t cus, char* clave, size_t cc) {
+  return g_sistema.nube(url, cu, usuario, cus, clave, cc) ? 1 : 0;
+}
+void sintetica_ota_progreso(int codigo, int pct, const char* detalle) {
+  g_sistema.otaProgreso(static_cast<uint8_t>(codigo), static_cast<uint8_t>(limitar(static_cast<float>(pct), 0, 100)), detalle);
+}
+uint32_t sintetica_crc_config(void) { return g_sistema.crcConfig(); }
+int sintetica_quiere_dormir(void) { return g_sistema.quiereDormir() ? 1 : 0; }
+size_t sintetica_mensaje_ota(const sintetica_manifiesto* m, char* s, size_t cap) {
+  return m ? protocolo::mensajeOta(*reinterpret_cast<const ManifiestoOta*>(m), s, cap) : 0;
+}
+
+int sintetica_validar_config(const char* json, size_t n, char* detalle, size_t cap) {
+  static Config c;  // grande: fuera de la pila
+  ResultadoConfig r = cargarConfig(c, json, n);
+  if (detalle && cap) copiarTexto(detalle, cap, r.detalle ? r.detalle : "");
+  return static_cast<int>(r.error);
+}
+const char* sintetica_qr(void) { return g_sistema.contenidoQr(); }
+int sintetica_imagen_visible(void) { return g_sistema.imagenVisible(); }
+const char* sintetica_version(void) { return VERSION_SINTETICAOS; }
+}
