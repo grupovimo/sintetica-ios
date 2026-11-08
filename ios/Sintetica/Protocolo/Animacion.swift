@@ -37,8 +37,12 @@ enum Animacion {
     /// Los cuadros (una imagen suelta es un cuadro de 0 ms).
     static func cuadros(_ b: [UInt8]) -> [Cuadro] {
         guard esAnimacion(b) else { return [Cuadro(qoi: b, ms: 0)] }
-        func u16(_ p: Int) -> Int { Int(b[p]) | Int(b[p + 1]) << 8 }
-        func u32(_ p: Int) -> Int { (0 ..< 4).reduce(0) { $0 | Int(b[p + $1]) << (8 * $1) } }
+        func u16(_ p: Int) -> Int { Int(b[p]) | (Int(b[p + 1]) << 8) }
+        func u32(_ p: Int) -> Int {
+            var v = 0
+            for k in 0 ..< 4 { v |= Int(b[p + k]) << (8 * k) }
+            return v
+        }
         return (0 ..< Int(b[5])).map { i in
             let off = u32(12 + 10 * i)
             return Cuadro(qoi: Array(b[off ..< off + u32(16 + 10 * i)]), ms: u16(10 + 10 * i))
