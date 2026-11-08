@@ -110,7 +110,23 @@ struct Musica: Equatable {
     }
 }
 
-struct Charla: Equatable { var disponible: Bool, quedan: Int, porDia: Int }
+/// La charla: siempre está (sin IA charla el motor propio). quedan -1 = sin tope.
+struct Charla: Equatable {
+    var disponible = true, ia = false
+    var quedan = -1, porDia = 0
+    init(disponible: Bool = true, ia: Bool = false, quedan: Int = -1, porDia: Int = 0) {
+        self.disponible = disponible; self.ia = ia; self.quedan = quedan; self.porDia = porDia
+    }
+    init(_ o: [String: Any]) {
+        disponible = o["disponible"] as? Bool ?? true
+        ia = o["ia"] as? Bool ?? false
+        quedan = (o["quedan"] as? NSNumber)?.intValue ?? -1
+        porDia = (o["porDia"] as? NSNumber)?.intValue ?? 0
+        if o["sin_tope"] as? Bool == true { quedan = -1 }
+    }
+    var sinTope: Bool { quedan < 0 }
+    var puede: Bool { sinTope || quedan > 0 }
+}
 let MAX_CHARLA = 200
 
 /// Un hábito como lo ve la nube: su racha, si se hizo hoy y los últimos 60 días.
@@ -225,15 +241,11 @@ extension ApiSintetica {
     func desconectarSpotify() async throws { _ = try await pedirCrudo("/v1/musica/spotify", "DELETE") }
 
     // --- Charla con IA ---
-    func charla() async throws -> Charla {
-        let o = try await pedir("/v1/charla")
-        return Charla(disponible: o["disponible"] as? Bool ?? false, quedan: (o["quedan"] as? NSNumber)?.intValue ?? 0,
-                      porDia: (o["porDia"] as? NSNumber)?.intValue ?? 0)
-    }
+    func charla() async throws -> Charla { Charla(try await pedir("/v1/charla")) }
 
-    /// La respuesta del robot y cuántas quedan hoy.
-    func charlar(_ id: String, _ texto: String) async throws -> (texto: String, quedan: Int) {
+    /// La respuesta del robot, cuántas quedan hoy (-1 = sin tope) y de dónde salió ("motor" o "ia").
+    func charlar(_ id: String, _ texto: String) async throws -> (texto: String, quedan: Int, origen: String) {
         let o = try await pedir("/v1/bichos/\(id)/charla", "POST", ["texto": texto])
-        return (o["texto"] as? String ?? "", (o["quedan"] as? NSNumber)?.intValue ?? 0)
+        return (o["texto"] as? String ?? "", (o["quedan"] as? NSNumber)?.intValue ?? -1, o["origen"] as? String ?? "motor")
     }
 }

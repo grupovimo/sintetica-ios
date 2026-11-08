@@ -101,6 +101,7 @@ void sintetica_iniciar_perfil(const sintetica_hal* hal, int ancho, int alto, int
   if (g_hal.epoch) h.epoch = [] { return g_hal.epoch(g_hal.contexto); };
   if (g_hal.sonido) h.sonido = [](const char* nombre) { g_hal.sonido(g_hal.contexto, nombre); };
   if (g_hal.cargando) h.cargando = [] { return g_hal.cargando(g_hal.contexto); };
+  if (g_hal.audio) h.audio = [](const int16_t* m, size_t n) { g_hal.audio(g_hal.contexto, m, n); };
   h.guardar = [](const char* c, const uint8_t* d, size_t n) {
     if (g_hal.guardar) return g_hal.guardar(g_hal.contexto, c, d, n) != 0;
     Guardado* g = buscarGuardado(c, true);
@@ -368,4 +369,99 @@ void sintetica_mostrar_qr(void) { g_sistema.mostrarQr(); }
 const char* sintetica_globo(void) { return g_sistema.globoVisible() ? g_sistema.textoGlobo() : ""; }
 void sintetica_seguir(float x, float y) { g_sistema.seguir(x, y); }
 void sintetica_depurar(int si) { g_sistema.depurar(si != 0); }
+
+// ---------------------------------------------------------------- v1.10: la charla y la voz
+
+static_assert(sizeof(EstadoCharla) <= SINTETICA_LARGO_ESTADO_CHARLA, "el estado de la charla entra en el blob");
+
+namespace {
+void copiarSalida(const RespuestaCharla& r, sintetica_charla* s) {
+  if (!s) return;
+  *s = sintetica_charla{};
+  copiarTexto(s->intencion, sizeof s->intencion, r.nombre());
+  s->confianza = r.confianza;
+  s->no_entendi = r.noEntendi ? 1 : 0;
+  s->falta = r.falta ? 1 : 0;
+  s->accion = static_cast<int>(r.accion);
+  copiarTexto(s->accion_nombre, sizeof s->accion_nombre, nombreAccionCharla(r.accion));
+  s->dato = r.dato;
+  s->minuto = r.e.minuto;
+  s->en_minutos = r.e.enMinutos;
+  s->dia = r.e.dia;
+  s->semana = r.e.semana;
+  s->dias = r.e.dias;
+  copiarTexto(s->texto, sizeof s->texto, r.e.texto);
+  copiarTexto(s->frase, sizeof s->frase, r.frase);
+  copiarTexto(s->expresion, sizeof s->expresion, r.expresion);
+  copiarTexto(s->comportamiento, sizeof s->comportamiento, r.comportamiento);
+}
+bool textoCharlaValido(const char* t, size_t n) { return t && n > 0 && n <= MAX_ENTRADA_CHARLA && textoUtf8Valido(t, n); }
+VozPropia g_voz;
+char g_textoVoz[256];
+}  // namespace
+
+int sintetica_charlar(const char* texto, size_t n, sintetica_charla* salida) {
+  if (!textoCharlaValido(texto, n)) return -1;
+  RespuestaCharla r;
+  const bool entendio = g_sistema.charlar(texto, n, &r, false);
+  if (entendio && r.accion != AccionCharla::Ninguna) g_sistema.avisarCharla(r);
+  copiarSalida(r, salida);
+  return entendio ? 1 : 0;
+}
+
+int sintetica_decir(const char* texto, const char* expresion) {
+  const size_t n = texto ? largo(texto) : 0;
+  if (n < 1 || n >= static_cast<size_t>(LARGO_FRASE) || !textoUtf8Valido(texto, n)) return -1;
+  Config::Cara cara;
+  if (expresion && expresion[0]) {
+    cara = g_sistema.config().resolverCara(expresion);
+    if (!cara.existe()) return -2;
+  }
+  g_sistema.decir(texto, cara, !cara.existe());
+  return 0;
+}
+
+void sintetica_voz_propia(int si) { g_sistema.vozPropia(si != 0); }
+
+int sintetica_charlar_con(const sintetica_charla_ctx* c, const char* texto, size_t n, uint8_t* estado, sintetica_charla* salida) {
+  if (!textoCharlaValido(texto, n) || !estado) return -1;
+  ContextoCharla ctx;
+  if (c) {
+    ctx.dueno = c->dueno, ctx.robot = c->robot, ctx.preset = c->preset;
+    ctx.minuto = c->minuto_del_dia >= 0 && c->minuto_del_dia < 1440 ? c->minuto_del_dia : -1;
+    ctx.epoch = c->epoch;
+    ctx.clima = c->clima, ctx.climaManana = c->clima_manana;
+    ctx.agenda = c->agenda, ctx.agendaManana = c->agenda_manana;
+    ctx.musica = c->musica;
+    ctx.nHabitos = c->n_habitos < 0 ? 0 : c->n_habitos > MAX_HABITOS ? MAX_HABITOS : c->n_habitos;
+    for (int i = 0; i < ctx.nHabitos; i++) ctx.habitos[i] = c->habitos[i];
+    ctx.gustos = c->gustos;
+    ctx.diasJuntos = c->dias_juntos;
+    ctx.alarmaSonando = c->alarma_sonando != 0;
+    ctx.segundos = c->segundos;
+    ctx.semilla = c->semilla;
+  }
+  // El blob: en ceros es "sin contexto"; si no, el EstadoCharla tal cual.
+  EstadoCharla e;
+  bool vacio = true;
+  for (size_t i = 0; i < sizeof(EstadoCharla); i++)
+    if (estado[i]) vacio = false;
+  if (!vacio) copiarBytes(&e, estado, sizeof e);
+  if (e.ultima != -1 && !nombreIntencionCharla(e.ultima)[0]) e = EstadoCharla();
+  RespuestaCharla r;
+  charlar(texto, n, ctx, e, &r);
+  copiarBytes(estado, &e, sizeof e);
+  copiarSalida(r, salida);
+  return r.noEntendi ? 0 : 1;
+}
+
+uint32_t sintetica_voz_empezar(const char* texto, int tipo, int volumen, float energia, float animo) {
+  copiarTexto(g_textoVoz, sizeof g_textoVoz, texto ? texto : "");
+  Personalidad p;
+  const ParamsVoz pv = paramsVoz(tipo, volumen < 0 ? 0 : volumen > 100 ? 100 : volumen, p, energia, animo);
+  g_voz.empezar(g_textoVoz, pv);
+  return VozPropia::duracion(g_textoVoz, pv);
+}
+
+size_t sintetica_voz_generar(int16_t* muestras, size_t n) { return muestras ? g_voz.generar(muestras, n) : 0; }
 }

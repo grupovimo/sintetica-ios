@@ -433,10 +433,15 @@ final class ModeloRobot {
     }
 
     /// Un comando del paquete de vida: por la nube con su ruta, cerca con sus bytes.
-    private func mandarVida(ruta: String, cuerpo: [String: Any], bytes: [UInt8]) async -> String? {
+    private func mandarVida(ruta: String, cuerpo: [String: Any], bytes: [UInt8], soloMarco: Bool = false) async -> String? {
         do {
             switch via {
-            case .nube: _ = try await api.pedir("/v1/bichos/\(id)/\(ruta)", "POST", cuerpo)
+            case .nube:
+                if soloMarco {
+                    _ = try await api.marco(id, car: Car.comando.rawValue, datos: bytes, conexion: conexion)
+                } else {
+                    _ = try await api.pedir("/v1/bichos/\(id)/\(ruta)", "POST", cuerpo)
+                }
             case .ble, .demo:
                 guard let cliente else { return "Sin conexión." }
                 try await cliente.comandoCrudo(bytes)
@@ -449,6 +454,24 @@ final class ModeloRobot {
         } catch {
             return error.localizedDescription
         }
+    }
+
+    /// Que mire hacia ahí (x e y de -1 a 1): la vista previa y, si está conectado, él.
+    func mirar(_ x: Double, _ y: Double) {
+        let b = Comando.mirar(x: x, y: y)
+        if !esDemo { Nucleo.bleEscribir(Car.comando.rawValue, Data(b)) }
+        guard conectado else { return }
+        Task { _ = await mandarVida(ruta: "", cuerpo: [:], bytes: b, soloMarco: true) }
+    }
+
+    /// Una cara puesta desde la conversación (nil la suelta): en la vista previa y en él.
+    func caraDeConversacion(_ n: String?) {
+        if !esDemo {
+            pausarEspejo(n == nil ? 0 : 900)
+            Nucleo.bleEscribir(Car.comando.rawValue, Data(Comando.expresion(n ?? "")))
+        }
+        guard conectado else { return }
+        Task { await comando(["expresion": n ?? ""]) }
     }
 
     /// Lo dice en un globo en su pantalla (hasta 60 bytes).

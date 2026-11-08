@@ -124,6 +124,9 @@ class MotorVida {
   bool comportamiento(int indice, uint32_t ahora);
   // Lo despierta o lo duerme (el broche, los tests).
   void dormir(uint32_t ahora);
+  // Que se duerma porque se lo pidieron ("andá a dormir"): de día, una siesta
+  // de tantos segundos; de noche, hasta la mañana.
+  void siesta(uint32_t ahora, uint32_t segundos);
   void despertar(uint32_t ahora, bool forzado);
   // La memoria, para guardarla o restaurarla (mudanza).
   const Memoria& memoria() const { return mem_; }

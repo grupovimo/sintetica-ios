@@ -74,6 +74,10 @@ struct Hal {
   // Salidas opcionales.
   void (*sonido)(const char* nombre) = nullptr;
   void (*led)(uint32_t rgb) = nullptr;
+  // La voz propia (voz_propia.h): PCM de 16 bits, 16 kHz, mono, de a bloques,
+  // un poco adelantado (~150 ms). El perfil lo encola en su parlante. nullptr
+  // = sin parlante (el robot no habla en voz alta).
+  void (*audio)(const int16_t* muestras, size_t n) = nullptr;
   void (*registrar)(const char* mensaje) = nullptr;
 };
 

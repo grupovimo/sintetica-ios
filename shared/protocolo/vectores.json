@@ -263,6 +263,11 @@
       "hex": "44 04 06 50 52 20 23 31 32 07 6f 63 74 6f 63 61 74"
     },
     {
+      "nombre": "charlar hola",
+      "texto": "¡Hola, Toto!",
+      "hex": "4c 0d c2 a1 48 6f 6c 61 2c 20 54 6f 74 6f 21"
+    },
+    {
       "nombre": "ota cancelar",
       "hex": "35"
     }

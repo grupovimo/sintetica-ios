@@ -300,7 +300,9 @@ private struct Heroe: View {
     @State private var diciendo = false
     @State private var charla: Charla?
     @State private var charlando = false
-    @State private var respuesta: (yo: String, el: String)?
+    @State private var respuesta: (yo: String, el: String, origen: String)?
+    @State private var conversacion = Conversacion()
+    @State private var puedeHablar = false
 
     var body: some View {
         let m = modelo.producto
@@ -320,9 +322,11 @@ private struct Heroe: View {
             if let s = modelo.suena { SuenaAhora(suena: s, claro: true) }
             capacidades(m)
             acciones(conectado)
+            if puedeHablar { hablar }
             decile(conectado)
             if !mensaje.isEmpty { AvisoConsola(texto: mensaje) }
         }
+        .task { await mirarSiHabla() }
     }
 
     private func estadoTexto(_ m: ModeloProducto) -> String {
@@ -379,7 +383,7 @@ private struct Heroe: View {
                     Button { charlando = false } label: { Text("Decile algo") }.tecla(chica: true, hundida: !charlando)
                     Button { charlando = true } label: { Text("Charlar") }.tecla(chica: true, hundida: charlando)
                     Spacer(minLength: 0)
-                    if charlando { Grabado("\(c.quedan)/\(c.porDia) hoy").accessibilityLabel("Quedan \(c.quedan) de \(c.porDia) hoy") }
+                    if charlando, !c.sinTope { Grabado("\(c.quedan)/\(c.porDia) hoy").accessibilityLabel("Quedan \(c.quedan) de \(c.porDia) hoy") }
                 } else {
                     Grabado("Decile algo")
                 }
@@ -390,10 +394,15 @@ private struct Heroe: View {
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x2C2925)))
                         .frame(maxWidth: .infinity, alignment: .trailing)
-                    Text(r.el).font(Tipos.marca(17, .heavy)).foregroundStyle(Color.tinta)
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(Color.papel))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: r.origen == "ia" ? "sparkles" : "cpu")
+                            .font(.system(size: 13, weight: .bold)).foregroundStyle(Color.brasa)
+                            .accessibilityLabel(r.origen == "ia" ? "Con IA" : "Con su motor")
+                        Text(r.el).font(Tipos.marca(17, .heavy)).foregroundStyle(Color.tinta)
+                            .padding(.horizontal, 14).padding(.vertical, 10)
+                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.papel))
+                        Spacer(minLength: 0)
+                    }
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -404,16 +413,48 @@ private struct Heroe: View {
                     .onChange(of: frase) { _, v in let x = cortarBytes(v, tope); if x != v { frase = x } }
                     .disabled(!conectado && !charlando)
                 Button(action: enviar) { Text(diciendo ? "…" : charlando ? "Charlar" : "Decir") }.tecla(.naranja, chica: true)
-                    .disabled((!conectado && !charlando) || diciendo || vacio || (charlando && (charla?.quedan ?? 0) <= 0))
+                    .disabled((!conectado && !charlando) || diciendo || vacio || (charlando && !(charla?.puede ?? false)))
             }
         }
         .task {
-            guard modelo.esNube, let c = try? await Cuenta.compartida.api.charla(), c.disponible else { return }
-            charla = c
+            // Siempre está (sin IA, charla su motor propio); solo hace falta la nube.
+            guard modelo.esNube else { return }
+            let c = (try? await Cuenta.compartida.api.charla()) ?? Charla()
+            charla = c.disponible ? c : nil
         }
     }
 
     private func enviar() { if charlando { charlar() } else { decir() } }
+
+    /// Hablarle en tiempo real (con ElevenLabs): la tecla del micrófono.
+    private var hablar: some View {
+        let c = conversacion
+        let texto: String = c.estado == .conectando ? "…" : c.estado == .habla ? "Habla" : c.estado == .escucha ? "Te escucha" : "Hablale"
+        return HStack(spacing: 10) {
+            Button {
+                if c.activa { c.cortar() } else { Task { await c.empezar(id: modelo.id) } }
+            } label: {
+                Label(texto, systemImage: c.activa ? "stop.fill" : "mic.fill")
+            }
+            .tecla(c.activa ? .negra : .naranja)
+            .accessibilityLabel(c.activa ? "Cortar" : "Hablarle")
+            if c.activa {
+                Led(estado: c.estado == .habla ? .on : .verde)
+                Text("\(max(0, c.quedan)) s").font(Tipos.marca(13, .black).monospacedDigit()).foregroundStyle(Color.gris)
+            }
+            if !c.aviso.isEmpty { Text(c.aviso).font(Tipos.chico).foregroundStyle(Color.hueso).lineLimit(1) }
+            Spacer(minLength: 0)
+        }
+        .onDisappear { conversacion.cortar() }
+    }
+
+    /// Si se puede hablar en tiempo real (ElevenLabs conectado y con minutos).
+    private func mirarSiHabla() async {
+        conversacion.alCara = { [modelo] n in modelo.caraDeConversacion(n) }
+        conversacion.alMirar = { [modelo] x, y in modelo.mirar(x, y) }
+        guard modelo.esNube, let v = try? await Cuenta.compartida.api.vozEleven() else { return }
+        puedeHablar = v.conectado && v.topeMinutos > 0
+    }
 
     private func charlar() {
         let t = frase.trimmingCharacters(in: .whitespaces)
@@ -422,7 +463,7 @@ private struct Heroe: View {
         Task {
             do {
                 let r = try await Cuenta.compartida.api.charlar(modelo.id, t)
-                respuesta = (t, r.texto)
+                respuesta = (t, r.texto, r.origen)
                 charla?.quedan = r.quedan
                 frase = ""
             } catch let e as ErrorApi {

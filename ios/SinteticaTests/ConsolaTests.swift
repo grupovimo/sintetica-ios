@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 import XCTest
 @testable import Sintetica
@@ -713,5 +714,81 @@ final class ConsolaV19Tests: XCTestCase {
         XCTAssertEqual(Entrantes(["url": "https://x/v1/entrantes/abc", "token": "abc", "mercadoPago": true]).mercadoPago, true)
         XCTAssertEqual(TIPOS_ENTRANTE.count, 5)
         XCTAssertNotNil(ENTRANTES["pago"]?.cara)
+    }
+}
+
+/// Entrar con Telegram, la voz, la IA propia, la charla y la conversación.
+@MainActor
+final class VozYEntradaTests: XCTestCase {
+    func testEntrada() {
+        XCTAssertEqual(ApiSintetica.leerEntrada(["usuario": ["id": "1"], "token": "abc"]), .adentro("abc"))
+        XCTAssertEqual(ApiSintetica.leerEntrada(["estado": "confirmar"]), .confirmar)
+        XCTAssertEqual(ApiSintetica.leerEntrada(["estado": "pendiente", "vence": "x"]), .pendiente)
+        XCTAssertEqual(Cuenta.servidorGuardado(nil), "https://api-sintetica.grupovimo.com.ar")
+        XCTAssertEqual(Cuenta.servidorGuardado("http://192.168.1.10:8080"), Cuenta.servidorPorDefecto)  // el viejo de la Mac
+        XCTAssertEqual(Cuenta.servidorGuardado("http://10.0.0.5:8080"), "http://10.0.0.5:8080")  // uno elegido a mano
+    }
+
+    func testTopesYNumeros() {
+        XCTAssertEqual(escalon(ESCALONES_LETRAS, 5000), 3)
+        XCTAssertEqual(escalon(ESCALONES_LETRAS, 7000), 3)
+        XCTAssertEqual(escalon(ESCALONES_MINUTOS, 0), 0)
+        XCTAssertEqual(escalon(ESCALONES_IA, 0), 0)
+        XCTAssertEqual(miles(1500), "1,5 k")
+        XCTAssertEqual(miles(200_000), "200 k")
+        XCTAssertEqual(miles(999), "999")
+        XCTAssertEqual(megas(1_572_864), "1,5")
+        XCTAssertEqual(megas(1_048_576), "1")
+    }
+
+    func testVocesYPaquete() {
+        let e = VozEdge(["disponible": true, "prendida": true, "voz": "es-AR-ElenaNeural",
+                         "voces": [["id": "es-AR-ElenaNeural", "nombre": "Elena Online (Natural)", "idioma": "es-AR", "genero": "Female"]]])
+        XCTAssertEqual(nombreVozEdge(e.voces[0]), "Elena · AR")
+        let x = VozEleven(["conectado": true, "leer": true, "tope": 10000, "tope_minutos": 20, "segundos_hoy": 90])
+        XCTAssertEqual(x.topeMinutos, 20)
+        XCTAssertTrue(x.leer)
+        let p = PaqueteVoz(["estado": "listo", "version": 3, "voz": "edge:es-AR-ElenaNeural", "voz_nueva": "elevenlabs:abc", "frases": 98, "total": 100,
+                            "faltan": 0, "disponible": true, "progreso": ["hechas": 4, "de": 10]])
+        XCTAssertTrue(p.cambio)  // cambió la voz
+        XCTAssertEqual(p.etiqueta, "Listo")
+        XCTAssertEqual(p.hechas, 4)
+        XCTAssertFalse(PaqueteVoz(["estado": "nuevo"]).hay)
+    }
+
+    func testIAYCharla() {
+        XCTAssertEqual(IAPropia(["propia": true, "proveedor": "anthropic"]).cual, "tuya")
+        XCTAssertEqual(IAPropia(["servidor": true]).cual, "servidor")
+        XCTAssertEqual(IAPropia([:]).cual, "ninguna")
+        XCTAssertEqual(servicioDe(IAPropia(["propia": true, "proveedor": "compatible", "url_pista": "api.groq.com"])), "Groq")
+        XCTAssertEqual(servicioDe(IAPropia(["propia": true, "proveedor": "compatible", "url_pista": "mi.ia.com"])), "mi.ia.com")
+        let motor = Charla(["disponible": true, "ia": false, "quedan": -1, "sin_tope": true])
+        XCTAssertTrue(motor.sinTope)
+        XCTAssertTrue(motor.puede)
+        let ia = Charla(["disponible": true, "ia": true, "quedan": 0, "porDia": 60])
+        XCTAssertFalse(ia.sinTope)
+        XCTAssertFalse(ia.puede)
+    }
+
+    func testMensajesDeLaConversacion() {
+        XCTAssertEqual(MensajeConversacion(["type": "conversation_initiation_metadata",
+                                            "conversation_initiation_metadata_event": ["agent_output_audio_format": "pcm_22050"]]), .inicio(22050))
+        XCTAssertEqual(MensajeConversacion(["type": "ping", "ping_event": ["event_id": 7]]), .ping(7))
+        XCTAssertEqual(MensajeConversacion(["type": "audio", "audio_event": ["audio_base_64": "AQID"]]), .audio(Data([1, 2, 3])))
+        XCTAssertEqual(MensajeConversacion(["type": "interruption"]), .interrupcion)
+        let h = MensajeConversacion(["type": "client_tool_call",
+                                     "client_tool_call": ["tool_name": "mirar", "tool_call_id": "t1", "parameters": ["x": 50, "y": -20], "expects_response": false]])
+        XCTAssertEqual(h, .herramienta("mirar", "t1", ["x": "50", "y": "-20"], false))
+        XCTAssertEqual(MensajeConversacion(["type": "agent_response"]), .otro)
+        XCTAssertEqual(MensajeConversacion.muestras("ulaw_8000"), 16000)
+    }
+
+    func testPcm() throws {
+        let f = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false))
+        let pcm = Data([0x00, 0x40, 0x00, 0xC0])  // 16384 y -16384
+        let b = try XCTUnwrap(pcmAFlotante(pcm, formato: f))
+        XCTAssertEqual(b.frameLength, 2)
+        XCTAssertEqual(b.floatChannelData?[0][0] ?? 0, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(b.floatChannelData?[0][1] ?? 0, -0.5, accuracy: 0.0001)
     }
 }

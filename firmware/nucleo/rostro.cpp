@@ -67,6 +67,28 @@ float sdRB(V2 p, float bx, float by, float r) {
   return largo2(maxf(qx, 0), maxf(qy, 0)) + minf(maxf(qx, qy), 0.0f) - r;
 }
 
+// El punto de la caja redondeada más cerca de p (p afuera, a distancia d).
+V2 cercaRB(V2 p, float bx, float by, float r, float d) {
+  const float qx = absf(p.x) - bx + r, qy = absf(p.y) - by + r;
+  float nx, ny;
+  if (qx > 0 && qy > 0) {
+    const float l = largo2(qx, qy);
+    nx = qx / l, ny = qy / l;
+  } else if (qx > qy) {
+    nx = 1, ny = 0;
+  } else {
+    nx = 0, ny = 1;
+  }
+  return {p.x - signo(p.x) * nx * d, p.y - signo(p.y) * ny * d};
+}
+
+float distSegmento(V2 p, float ax, float ay, float bx, float by) {
+  const float vx = bx - ax, vy = by - ay;
+  const float l2 = vx * vx + vy * vy;
+  const float t = l2 > 0 ? limitar(((p.x - ax) * vx + (p.y - ay) * vy) / l2, 0, 1) : 0;
+  return largo2(p.x - ax - t * vx, p.y - ay - t * vy);
+}
+
 float sdHeart(V2 p) {
   p.x = absf(p.x);
   if (p.y + p.x > 1.0f) return raiz(dot2(p.x - 0.25f, p.y - 0.75f)) - 0.35355339f;
@@ -124,6 +146,10 @@ struct Ojo {
   float cerrado;             // 0 abierto, 1 línea
   float Rr, linY, finY;      // la línea del ojo cerrado
   float pupX, pupY, pupR;    // la pupila (en el sistema del ojo)
+  // Los bordes rectos que dejan los párpados (el corte de cada uno con el
+  // ojo, recortado por el otro): afuera, el resplandor mide hasta ahí.
+  bool hayT, hayB;
+  float t0x, t0y, t1x, t1y, b0x, b0y, b1x, b1y;
 };
 
 struct Prep {
@@ -138,6 +164,47 @@ struct Prep {
   float blush;
   float progreso;
 };
+
+// Dónde corta la recta de un párpado (por (0, k), normal n) al ojo sin
+// párpados: false si no lo corta (el párpado está abierto del todo).
+bool cuerda(const Ojo& o, float nx, float ny, float k, float* ax, float* ay, float* bx, float* by) {
+  const float dx = ny, dy = -nx;  // a lo largo de la recta
+  auto f = [&](float t) { return sdRB({t * dx, k + t * dy}, o.w, o.h, o.rr); };
+  if (f(0) >= -1e-5f) return false;
+  const float lejos = 2.0f * (o.w + o.h) + 0.1f;
+  float extremos[2];
+  for (int lado = 0; lado < 2; lado++) {
+    float adentro = 0, afuera = lado ? lejos : -lejos;
+    for (int i = 0; i < 24; i++) {
+      const float m = 0.5f * (adentro + afuera);
+      (f(m) < 0 ? adentro : afuera) = m;
+    }
+    extremos[lado] = 0.5f * (adentro + afuera);
+  }
+  *ax = extremos[0] * dx, *ay = k + extremos[0] * dy;
+  *bx = extremos[1] * dx, *by = k + extremos[1] * dy;
+  return true;
+}
+
+// Recorta el segmento a b al semiplano n·(p - (0, k)) <= 0.
+bool recortar(float nx, float ny, float k, float* ax, float* ay, float* bx, float* by) {
+  const float da = *ax * nx + (*ay - k) * ny, db = *bx * nx + (*by - k) * ny;
+  if (da > 0 && db > 0) return false;
+  if (da > 0 || db > 0) {
+    const float t = da / (da - db);
+    const float x = *ax + (*bx - *ax) * t, y = *ay + (*by - *ay) * t;
+    if (da > 0) *ax = x, *ay = y;
+    else *bx = x, *by = y;
+  }
+  return true;
+}
+
+void cuerdas(Ojo* o) {
+  o->hayT = cuerda(*o, o->nTx, o->nTy, o->kT, &o->t0x, &o->t0y, &o->t1x, &o->t1y) &&
+            recortar(o->nBx, o->nBy, o->kB, &o->t0x, &o->t0y, &o->t1x, &o->t1y);
+  o->hayB = cuerda(*o, o->nBx, o->nBy, o->kB, &o->b0x, &o->b0y, &o->b1x, &o->b1y) &&
+            recortar(o->nTx, o->nTy, o->kT, &o->b0x, &o->b0y, &o->b1x, &o->b1y);
+}
 
 void prepararOjo(const CuadroRostro& c, int lado, Ojo* o) {
   const Rostro& r = c.r;
@@ -173,6 +240,7 @@ void prepararOjo(const CuadroRostro& c, int lado, Ojo* o) {
   o->Rr = minf(40.0f, o->w / maxf(o->smile * 0.75f, 0.001f));
   o->linY = -o->Rr + o->smile * 0.02f;
   o->finY = o->Rr - raiz(maxf(o->Rr * o->Rr - o->w * o->w * 0.9025f, 0.0f)) - o->smile * 0.02f;
+  cuerdas(o);
   // La pupila mira para donde mira la cara.
   o->pupR = 0.55f * minf(o->w, o->h) * o->pupil;
   o->pupX = limitar(r[param::GX] * 0.6f, -o->w * 0.4f, o->w * 0.4f);
@@ -242,6 +310,24 @@ float ojo(V2 p, const Ojo& o, const Prep& pr, float* dPupila, float* anguloAnill
   const float dT = (q.x - 0) * o.nTx + (q.y - o.kT) * o.nTy;
   const float dB = (q.x - 0) * o.nBx + (q.y - o.kB) * o.nBy;
   float dl = maxf(d, maxf(dT, dB));
+  if (dl > 0 && (o.hayT || o.hayB) && o.heart + o.star + o.cross + o.ring < 0.001f) {
+    // Afuera del ojo con párpados (que es convexo), el máximo se queda corto
+    // al costado de las esquinas y sus curvas de nivel (el resplandor) se ven
+    // como cajas. La distancia de verdad: hasta el ojo sin párpados si ese
+    // punto más cercano queda entre los párpados; si no, hasta el borde recto
+    // que deja alguno. Adentro y en el borde no cambia nada.
+    bool listo = false;
+    if (d > 0) {
+      const V2 c = cercaRB(q, w, h, o.rr, d);
+      listo = c.x * o.nTx + (c.y - o.kT) * o.nTy <= 1e-4f && c.x * o.nBx + (c.y - o.kB) * o.nBy <= 1e-4f;
+    }
+    if (!listo) {
+      float e = 9.0f;
+      if (o.hayT) e = minf(e, distSegmento(q, o.t0x, o.t0y, o.t1x, o.t1y));
+      if (o.hayB) e = minf(e, distSegmento(q, o.b0x, o.b0y, o.b1x, o.b1y));
+      if (e < 9.0f) dl = maxf(dl, e);
+    }
+  }
   if (o.smile > 0.001f) {
     const float R = w * 0.68f;
     float qcx = q.x, qcy = q.y - (-h - R + o.smile * h * 1.5f);
@@ -251,7 +337,12 @@ float ojo(V2 p, const Ojo& o, const Prep& pr, float* dPupila, float* anguloAnill
   if (dPupila && o.pupil > 0.01f) *dPupila = largo2(q.x - o.pupX, q.y - o.pupY) - o.pupR;
   if (o.cerrado <= 0.0f) return dl;
   const float qay = q.y - o.linY;
-  float dLine = maxf(maxf(absf(largo2(q.x, qay) - o.Rr) - 0.022f, absf(q.x) - w * 0.95f), -qay);
+  // Un arco con las puntas redondas: en el tramo del arco, la distancia al
+  // círculo; fuera de él, a la punta (con un corte recto, el resplandor de
+  // las puntas se veía cuadrado).
+  const float lq = largo2(q.x, qay);
+  const bool enArco = qay > 0 && absf(q.x) * o.Rr <= w * 0.95f * lq;
+  float dLine = enArco ? absf(lq - o.Rr) - 0.022f : 9.0f;
   dLine = minf(dLine, largo2(absf(q.x) - w * 0.95f, q.y + o.finY) - 0.022f);
   return minf(dl + o.cerrado * 0.03f, mezclar(9.0f, dLine, o.cerrado));
 }

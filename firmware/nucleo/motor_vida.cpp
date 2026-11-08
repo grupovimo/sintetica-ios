@@ -1150,6 +1150,14 @@ void MotorVida::dormir(uint32_t) {
   anotar(2, 1);
 }
 
+void MotorVida::siesta(uint32_t ahora, uint32_t segundos) {
+  dormir(ahora);
+  if (!enHorarioDormir()) {
+    siesta_ = true;
+    siestaHasta_ = static_cast<float>(t_) + static_cast<float>(segundos);
+  }
+}
+
 void MotorVida::despertar(uint32_t ahora, bool forzado) {
   if (modo_ != Modo::Dormido) return;
   modo_ = Modo::Despierto;

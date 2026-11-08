@@ -334,6 +334,8 @@ struct ModVoz: View {
                 }
                 .foregroundStyle(Color.tinta)
             }
+            // Igual se puede conectar la voz: le hablás desde acá.
+            LeerVoz(modelo: modelo)
         } else {
             VStack(spacing: 16) {
                 Bandeja {
@@ -357,7 +359,7 @@ struct ModVoz: View {
                     }
                 }
                 if escucha {
-                    CampoVisor(rotulo: "Responde a · una palabra común", texto: $palabra, ayuda: modelo.nombre) {
+                    CampoVisor(rotulo: "Responde a", texto: $palabra, ayuda: modelo.nombre) {
                         let t = cortarBytes(palabra.trimmingCharacters(in: .whitespaces), MAX_PALABRA)
                         modelo.cambiar { $0.ponerVoz("palabra", t.isEmpty ? nil : t) }
                     }
@@ -370,6 +372,8 @@ struct ModVoz: View {
                 }
             }
             .onAppear { palabra = modelo.config.voz["palabra"] as? String ?? "" }
+            LeerVoz(modelo: modelo)
+            if habla { PaqueteVozVista(modelo: modelo) }
         }
     }
 }

@@ -47,6 +47,8 @@
 	<false/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Para encontrar tu robot, vincularlo y cambiarle la cara.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Para hablarle a tu robot en tiempo real.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Para marcar tu casa y que tu robot sepa cuándo llegás.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

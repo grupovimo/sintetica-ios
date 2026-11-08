@@ -7,8 +7,8 @@ import Security
 @Observable
 final class Cuenta {
     static let compartida = Cuenta()
-    /// En local, la API corre en la Mac: http://<la IP de la Mac>:8080.
-    static let servidorPorDefecto = "http://192.168.1.10:8080"
+    /// La nube de Sintética (en local, para depurar, se cambia en Tu cuenta › Depurar).
+    nonisolated static let servidorPorDefecto = "https://api-sintetica.grupovimo.com.ar"
 
     var servidor: String { didSet { UserDefaults.standard.set(servidor, forKey: "servidor") } }
     var email: String { didSet { UserDefaults.standard.set(email, forKey: "email") } }
@@ -19,10 +19,16 @@ final class Cuenta {
     @ObservationIgnored private let servicio = "com.sinteticalabs.app.cuenta"
 
     init() {
-        servidor = UserDefaults.standard.string(forKey: "servidor") ?? Cuenta.servidorPorDefecto
+        servidor = Cuenta.servidorGuardado(UserDefaults.standard.string(forKey: "servidor"))
         email = UserDefaults.standard.string(forKey: "email") ?? ""
         token = ""
         token = leerToken() ?? ""
+    }
+
+    /// El guardado, salvo que sea el de antes (la Mac en la red local): ese pasa a la nube.
+    nonisolated static func servidorGuardado(_ s: String?) -> String {
+        guard let s, !s.isEmpty, s != "http://192.168.1.10:8080" else { return servidorPorDefecto }
+        return s
     }
 
     func entrar(_ t: String) {

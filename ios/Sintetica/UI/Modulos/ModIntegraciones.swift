@@ -59,6 +59,7 @@ struct ModIntegraciones: View {
                     AvisoConsola(texto: "Todavía no en esta nube.")
                 } else {
                     tuIA
+                    IAPropiaVista()
                     BloqueSpotify()
                     bloqueTelegram
                     HStack {

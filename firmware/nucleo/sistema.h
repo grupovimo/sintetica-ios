@@ -4,6 +4,7 @@
 #pragma once
 
 #include "cara.h"
+#include "charla.h"
 #include "clima.h"
 #include "globo.h"
 #include "formato.h"
@@ -14,6 +15,7 @@
 #include "protocolo.h"
 #include "qoi.h"
 #include "sprites.h"
+#include "voz_propia.h"
 
 namespace sintetica {
 
@@ -174,6 +176,27 @@ class Sistema {
   void musica(uint8_t bpm, bool sonando, const char* titulo, const char* artista);
   // Un aviso de afuera (0x44 tipos 2 a 6): pago, mail, github, pedido u otro.
   void avisoEntrante(uint8_t tipo, const char* titulo, const char* de);
+  // v1.10 (conversar.cpp): la charla sin IA. Entiende lo que dijiste (ya en
+  // texto), hace la acción (alarma, recordatorio, hábito, juego, modo...) y
+  // contesta con su globo y su voz. true si entendió. Si no entendió y
+  // `siNoEntiende` es false, no dice nada (quien llama prueba la IA) y deja la
+  // frase de "no entendí" en r->frase.
+  bool charlar(const char* texto, size_t n, RespuestaCharla* r, bool siNoEntiende = true);
+  // La voz propia lee el globo en voz alta si hay parlante (Hal::audio).
+  void vozPropia(bool si) {
+    vozPropia_ = si;
+    if (!si) voz_.parar();
+  }
+  bool hablandoEnVozAlta() const { return voz_.hablando(); }
+  // Avisa lo que entendió e hizo (0xCC, por BLE y por la nube): cuando charló
+  // desde adentro (el micrófono del robot), para que la nube guarde la acción.
+  void avisarCharla(const RespuestaCharla& r);
+  // La alarma y el recordatorio de una vez que se pidieron charlando (ms del reloj; 0 = ninguno).
+  uint32_t alarmaCharla() const { return alarmaCharlaMs_; }
+  uint32_t recordatorioCharla() const { return recCharlaMs_; }
+  const char* textoRecordatorioCharla() const { return recCharla_; }
+  // Los gustos guardados ("el mate\nla pizza").
+  size_t gustos(char* salida, size_t cap) const;
   // El clima que mandó la nube (vale 3 h).
   const DatosClima& clima() const { return clima_; }
   bool climaVigente() const { return clima_.hay && hal_.ahoraMs() - clima_.recibido < CLIMA_VALE_MS; }
@@ -313,6 +336,11 @@ class Sistema {
   uint16_t diaHoy() const;
   void mostrarGlobo(uint32_t ahora);
   void dibujarClima(float cx, float W, float H, float alfa);
+  // v1.10.
+  void revisarCharla(uint32_t ahora);
+  void avanzarVoz(uint32_t ahora);
+  void hacerAccion(const RespuestaCharla& r, uint32_t ahora);
+  void responderCharla(const RespuestaCharla& r, bool porComando);
   void log(const char* m) {
     if (hal_.registrar) hal_.registrar(m);
   }
@@ -452,6 +480,14 @@ class Sistema {
   uint16_t habDiaHecho_[MAX_HABITOS] = {}, habDiaPreg_[MAX_HABITOS] = {};
   uint8_t habRacha_[MAX_HABITOS] = {};
   uint32_t musicaHasta_ = 0, musicaFirma_ = 0;
+  // v1.10: la charla (su contexto), lo que pidió charlando y la voz propia.
+  EstadoCharla charla_;
+  uint32_t alarmaCharlaMs_ = 0, recCharlaMs_ = 0, calladoHasta_ = 0;
+  char recCharla_[LARGO_TEXTO_CHARLA] = {};
+  bool dormirTrasGlobo_ = false;
+  VozPropia voz_;
+  bool vozPropia_ = true;
+  uint32_t vozDesde_ = 0, vozEnviadas_ = 0;
   // Protector de pantalla.
   uint32_t ultimaActividad_ = 0;
   float faseProtector_ = 0;

@@ -65,6 +65,10 @@ typedef struct sintetica_hal {
    * (1 sí, 0 no, -1 no se sabe; NULL = no se sabe). */
   void (*sonido)(void* contexto, const char* nombre);
   int (*cargando)(void* contexto);
+  /* v1.10: la voz propia (el balbuceo que lee el globo). PCM de 16 bits,
+   * 16 kHz, mono, de a bloques y un poco adelantado (~150 ms): encolarlo en
+   * el parlante (AudioTrack en modo stream). NULL = no habla en voz alta. */
+  void (*audio)(void* contexto, const int16_t* muestras, size_t n);
 } sintetica_hal;
 
 /* Arranca el núcleo. ancho ≤ 640, alto ≤ 640. Cualquier función de la tabla puede ser NULL.
@@ -167,6 +171,86 @@ const char* sintetica_globo(void);
 void sintetica_seguir(float x, float y);
 /* La superposición de depuración del núcleo (comportamiento, estado, fps). */
 void sintetica_depurar(int si);
+
+/* ---- v1.10: la charla sin IA y la voz propia ---------------------------- */
+
+/* Lo que entendió (el motor de charla, firmware/nucleo/charla.h). */
+typedef struct sintetica_charla {
+  char intencion[25];      /* "alarma", "saludo"... ("" = no entendió) */
+  int confianza;           /* 0-100 */
+  int no_entendi;          /* 1 = no entendió (o es de las que contesta mejor la IA) */
+  int falta;               /* 1 = preguntó lo que faltaba ("¿a qué hora?") */
+  int accion;              /* 0 ninguna, 1 alarma, 2 cancelar-alarma, 3 posponer, 4 apagar-alarma,
+                              5 recordatorio, 6 habito, 7 jugar, 8 modo, 9 gusto, 10 olvidar-gusto,
+                              11 toque, 12 musica, 13 dormir, 14 despertar, 15 dueno, 16 volumen,
+                              17 callar, 18 animo */
+  char accion_nombre[16];  /* el de arriba, en texto */
+  int dato;                /* el juego, el modo, el toque, el hábito, ±1 de volumen o el ánimo (-1 = nada) */
+  int minuto;              /* del día (-1 = no dijo hora) */
+  int en_minutos;          /* "en 10 minutos" (-1 = no) */
+  int dia;                 /* días desde hoy (-1 = no dijo) */
+  int semana;              /* 0 lunes ... 6 domingo (-1) */
+  int dias;                /* repetir: bit 0 lunes ... bit 6 domingo (0 = una vez) */
+  char texto[41];          /* el recordatorio, el gusto, el nombre, a quién */
+  char frase[61];          /* lo que contesta */
+  char expresion[25];      /* "" = la de hablar */
+  char comportamiento[25]; /* "" = ninguno */
+} sintetica_charla;
+
+/* El robot (la instancia) charla: entiende `texto` (lo que dijiste, ya en
+ * texto: n bytes UTF-8, hasta 200), hace la acción (alarma, recordatorio,
+ * hábito, juego, modo...), pone la expresión y el globo y lo dice con su voz
+ * (hal.audio). Síncrona, sin red: unos pocos ms. Devuelve 1 si entendió y ya
+ * hizo todo; 0 si no entendió (no dice nada, pone cara de pensar: que conteste
+ * la nube o la IA; la frase de "no entendí" queda en salida->frase por si no
+ * hay nube: sintetica_decir); < 0 si los parámetros están mal. Si hizo una
+ * acción, la avisa (0xCC) por hal.notificar y hal.notificar_nube. `salida`
+ * puede ser NULL. */
+int sintetica_charlar(const char* texto, size_t n, sintetica_charla* salida);
+
+/* Muestra `texto` (1 a 60 bytes UTF-8) en el globo con esa expresión (NULL o
+ * "" = la de hablar), y lo dice con su voz: lo mismo que el comando 0x40 Decir.
+ * 0 si lo dijo; -1 si el texto está mal; -2 si la expresión no existe. */
+int sintetica_decir(const char* texto, const char* expresion);
+
+/* 0 = el globo no se lee con la voz propia (por ejemplo, si llega audio de la
+ * nube). Por defecto, sí. */
+void sintetica_voz_propia(int si);
+
+/* El motor de charla suelto (sin la instancia, para la nube por cgo): lo que
+ * sabe quien llama, y el contexto entre frases en `estado` (un blob de
+ * SINTETICA_LARGO_ESTADO_CHARLA bytes que guarda quien llama, en ceros la
+ * primera vez). Mismo valor de retorno que sintetica_charlar; no hace nada. */
+#define SINTETICA_LARGO_ESTADO_CHARLA 96
+typedef struct sintetica_charla_ctx {
+  const char* dueno;        /* todo puede ser NULL */
+  const char* robot;
+  const char* preset;       /* "grunon", "carinoso"...: las variantes de las respuestas */
+  int minuto_del_dia;       /* -1 = no se sabe */
+  uint32_t epoch;           /* hora local (0 = no se sabe el día) */
+  const char* clima;        /* "11° y despejado" */
+  const char* clima_manana;
+  const char* agenda;       /* "Dentista a las 15" */
+  const char* agenda_manana;
+  const char* musica;       /* "Muchachos, de La Mosca" */
+  const char* habitos[4];
+  int n_habitos;
+  const char* gustos;       /* separados por '
+' */
+  int dias_juntos;          /* -1 = no se sabe */
+  int alarma_sonando;
+  uint32_t segundos;        /* un reloj que avanza (el contexto dura 90 s) */
+  uint32_t semilla;
+} sintetica_charla_ctx;
+int sintetica_charlar_con(const sintetica_charla_ctx* ctx, const char* texto, size_t n, uint8_t* estado,
+                          sintetica_charla* salida);
+
+/* La voz propia suelta (sin la instancia): empieza a decir `texto` con la voz
+ * `tipo` (0 grave, 1 media, 2 aguda, 3 robot), el volumen (0-100) y el estado
+ * (energía y ánimo, 0 a 1); devuelve cuántas muestras va a durar. Después,
+ * sintetica_voz_generar de a bloques (devuelve menos que n al terminar). */
+uint32_t sintetica_voz_empezar(const char* texto, int tipo, int volumen, float energia, float animo);
+size_t sintetica_voz_generar(int16_t* muestras, size_t n);
 
 #ifdef __cplusplus
 }

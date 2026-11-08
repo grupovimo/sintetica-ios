@@ -1003,6 +1003,7 @@ void Sistema::tick() {
   cuidar(ahora);
   revisarCompania(ahora);
   avanzarJuego(ahora);
+  revisarCharla(ahora);
   // Mantenerlo apretado mientras pregunta "¿cómo estás?" ya es "mal".
   if (preguntando_ && pregApretado_ && ahora - pregToque_ >= 800) {
     pregApretado_ = false;
@@ -1010,6 +1011,7 @@ void Sistema::tick() {
   }
   avanzarPomodoro(ahora, dtCuadro);
   motor_.tick(ahora, contexto());
+  avanzarVoz(ahora);
   avanzarSprites(dtCuadro);
   avanzarPanel(ahora, dtCuadro);
   avanzarProtector(ahora, dtCuadro);
@@ -1233,6 +1235,13 @@ void Sistema::mostrarGlobo(uint32_t ahora) {
   const uint32_t dura = duracionGlobo(globoTexto_);
   globoHasta_ = ahora + dura + tiemposPanel::FUNDIDO_MS;
   if (motor_.dormido()) motor_.despertar(ahora, false);
+  // Con parlante, lo dice con su voz (el balbuceo sigue el texto del globo).
+  if (vozPropia_ && hal_.audio && config_.voz.volumen > 0) {
+    const float* est = motor_.estadoInterno();
+    voz_.empezar(globoTexto_, paramsVoz(static_cast<int>(config_.voz.tipo), config_.voz.volumen, motor_.rasgos(), est[0], est[1]));
+    vozDesde_ = ahora;
+    vozEnviadas_ = 0;
+  }
   if (caraPendiente_.existe()) {
     motor_.reaccionar(caraPendiente_, ahora, dura);
   } else if (pendienteHablando_) {
@@ -1245,6 +1254,8 @@ void Sistema::mostrarGlobo(uint32_t ahora) {
 void Sistema::hablar(Situacion s, Plantillas extra) {
   if (apagado_ || emparejando_) return;
   const bool siempre = situacionSiempre(s);
+  // "Callate": una hora sin frases espontáneas.
+  if (!siempre && calladoHasta_ && static_cast<int32_t>(hal_.ahoraMs() - calladoHasta_) < 0) return;
   // Las espontáneas no esperan: si ya está mostrando algo, no dice nada.
   if (!siempre && (globo_ || hayPendiente_ || recVisible_ >= 0 || alarma_ || juego_ != Juego::Ninguno)) return;
   // El buen día con el tiempo: si llueve o hace frío, mejor el consejo.
@@ -2400,6 +2411,16 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
       case CmdHabito: {
         if (n != 4 || d[1] >= MAX_HABITOS || d[2] > 1) return responder(car, op, Malformado, "[u8 índice 0-3][u8 0 hecho, 1 deshacer][u8 racha]");
         return responder(car, op, habito(d[1], d[2] == 0, d[3]) ? Ok : NoExiste);
+      }
+      case CmdCharlar: {
+        // [n][texto]
+        if (n < 3 || d[1] == 0 || 2u + d[1] != n || d[1] > MAX_ENTRADA_CHARLA ||
+            !textoUtf8Valido(reinterpret_cast<const char*>(d + 2), d[1]))
+          return responder(car, op, Malformado, "[n][texto de 1 a 200 bytes UTF-8]");
+        RespuestaCharla r;
+        charlar(reinterpret_cast<const char*>(d + 2), d[1], &r, true);
+        responderCharla(r, true);
+        return;
       }
       case CmdMusica: {
         // [u8 bpm][u8 flags][n][título][n][artista]
