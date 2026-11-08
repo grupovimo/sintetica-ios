@@ -254,13 +254,19 @@ final class ProductoTests: XCTestCase {
 final class LaboratorioTests: XCTestCase {
     func testLeerVida() throws {
         var b: [UInt8] = [0x9B, 0]
-        b += [255, 128, 0, 51, 0, 0, 255]  // los 7 estados
-        b += [128, 128, 128, 128, 128, 128]  // los 6 rasgos
-        b += [1 | 2]  // dormido y soñando
-        b += [5] + Array("jugar".utf8)
-        b += [8] + Array("contento".utf8)
-        b += [1, 4] + Array("dormir".utf8.prefix(4)) + [75]
-        b += [60]
+        let estados: [UInt8] = [255, 128, 0, 51, 0, 0, 255]  // los 7 estados
+        let rasgos: [UInt8] = [128, 128, 128, 128, 128, 128]  // los 6 rasgos
+        let flags: UInt8 = 3  // dormido y soñando
+        let comp: [UInt8] = Array("jugar".utf8)
+        let vis: [UInt8] = Array("contento".utf8)
+        let cand: [UInt8] = Array("dorm".utf8)
+        b.append(contentsOf: estados)
+        b.append(contentsOf: rasgos)
+        b.append(flags)
+        b.append(UInt8(comp.count)); b.append(contentsOf: comp)
+        b.append(UInt8(vis.count)); b.append(contentsOf: vis)
+        b.append(1); b.append(UInt8(cand.count)); b.append(contentsOf: cand); b.append(75)
+        b.append(60)
         let v = try XCTUnwrap(leerVida(b))
         XCTAssertEqual(v.estado["energia"] ?? 0, 1, accuracy: 0.001)
         XCTAssertEqual(v.estado["aburrimiento"] ?? 0, 0.2, accuracy: 0.001)
