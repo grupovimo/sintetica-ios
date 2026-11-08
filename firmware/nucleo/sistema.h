@@ -140,6 +140,7 @@ class Sistema {
   void hablar(Situacion s);
   // El texto del globo que se ve (o el del despertador).
   const char* textoGlobo() const { return globoTexto_; }
+  bool globoVisible() const { return globo_; }
   // El despertador.
   bool alarmaSonando() const { return alarma_; }
   void sonarAlarma(bool porHora);

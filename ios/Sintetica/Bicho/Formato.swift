@@ -4,16 +4,17 @@ import Foundation
 // Igual que web/src/lib/formato.ts y web/src/lib/consola/guardado.svelte.ts.
 
 /// El robot cuenta los textos en bytes UTF-8 (una tilde ocupa 2): se corta sin partir una letra.
+/// Como el núcleo, por code point (no por Character: "👍🏽" son dos y entra el 👍 solo).
 func cortarBytes(_ t: String, _ max: Int) -> String {
-    var r = ""
+    var r = String.UnicodeScalarView()
     var n = 0
-    for letra in t {
-        let b = String(letra).utf8.count
+    for u in t.unicodeScalars {
+        let b = UTF8.width(u)
         if n + b > max { break }
-        r.append(letra)
+        r.append(u)
         n += b
     }
-    return r
+    return String(r)
 }
 
 let RASGOS = ["energia", "sociabilidad", "picardia", "timidez", "curiosidad", "malGenio"]
@@ -55,6 +56,12 @@ let NOMBRES_EVENTO: [String: String] = [
 ]
 
 let MAX_RECORDATORIOS = 12
+let MAX_TEXTO_RECORDATORIO = 40
+let MAX_REGLAS = 24
+let MAX_LISTA = 16
+let MAX_PALABRA = 16
+/// Nombres (del robot, del dueño, de expresiones y comportamientos), en bytes.
+let MAX_NOMBRE = 24
 let DIAS_SEMANA: [(letra: String, nombre: String)] = [
     ("L", "Lunes"), ("M", "Martes"), ("X", "Miércoles"), ("J", "Jueves"), ("V", "Viernes"), ("S", "Sábado"), ("D", "Domingo"),
 ]
@@ -233,7 +240,7 @@ struct ConfigDoc {
 
     mutating func ponerNombreDueno(_ n: String) {
         var d = objeto("dueno")
-        let v = cortarBytes(n.trimmingCharacters(in: .whitespaces), 24)
+        let v = cortarBytes(n.trimmingCharacters(in: .whitespaces), MAX_NOMBRE)
         if v.isEmpty { d.removeValue(forKey: "nombre") } else { d["nombre"] = v }
         poner("dueno", d)
     }
@@ -258,7 +265,7 @@ struct ConfigDoc {
     mutating func mostrar(_ espacio: Int, _ si: Bool) {
         var l = lista.isEmpty ? ["cara:neutral"] : lista
         let k = "imagen:\(espacio)"
-        if si { if !l.contains(k) { l = Array((l + [k]).prefix(16)) } } else { l.removeAll { $0 == k } }
+        if si { if !l.contains(k) { l = Array((l + [k]).prefix(MAX_LISTA)) } } else { l.removeAll { $0 == k } }
         if l.isEmpty || l == ["cara:neutral"] { raiz.removeValue(forKey: "lista") } else { raiz["lista"] = l }
     }
 
@@ -304,7 +311,7 @@ struct ConfigDoc {
     var reglas: [Regla] {
         get { (raiz["reglas"] as? [[String: Any]] ?? []).compactMap { Regla($0) } }
         set {
-            let l = Array(newValue.prefix(24))
+            let l = Array(newValue.prefix(MAX_REGLAS))
             if l.isEmpty { raiz.removeValue(forKey: "reglas") } else { raiz["reglas"] = l.map(\.objeto) }
         }
     }

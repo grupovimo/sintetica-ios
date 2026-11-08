@@ -1,0 +1,665 @@
+{
+  "version": 1,
+  "nota": "Generado por shared/formato/paridad/generar.mjs. No editar a mano. codigo: el ErrorConfig del núcleo (1 JSON, 2 versión, 3 campo, 4 forma, 5 demasiadas, 6 regla); detalle: el comienzo del detalle del núcleo; esquema: lo que dice config.schema.json cuando no coincide con el núcleo.",
+  "limites": {
+    "configBytes": 16384,
+    "expresiones": 24,
+    "expresionesBase": 16,
+    "carasVida": 48,
+    "carasVidaBase": 38,
+    "comportamientos": 64,
+    "comportamientosBase": 55,
+    "carasImagen": 8,
+    "sprites": 12,
+    "imagenes": 8,
+    "reglasUsuario": 24,
+    "acciones": 6,
+    "lista": 16,
+    "animaciones": 6,
+    "recordatorios": 12,
+    "bytesRecordatorio": 40,
+    "frasesPropias": 12,
+    "bytesFrase": 60,
+    "avisos": 8,
+    "bytesDecirAviso": 40,
+    "bytesAppAviso": 24,
+    "bytesPalabra": 16,
+    "bytesCiudad": 40,
+    "bytesNombre": 24
+  },
+  "cortes": [
+    {
+      "texto": "Tomar la pastilla",
+      "max": 40,
+      "resultado": "Tomar la pastilla",
+      "bytes": 17
+    },
+    {
+      "texto": "ááááááááááááááááááááa",
+      "max": 40,
+      "resultado": "áááááááááááááááááááá",
+      "bytes": 40
+    },
+    {
+      "texto": "aáááááááááááááááááááááááááááááá",
+      "max": 60,
+      "resultado": "aááááááááááááááááááááááááááááá",
+      "bytes": 59
+    },
+    {
+      "texto": "😀😀😀😀😀😀😀😀😀😀😀",
+      "max": 40,
+      "resultado": "😀😀😀😀😀😀😀😀😀😀",
+      "bytes": 40
+    },
+    {
+      "texto": "x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀",
+      "max": 60,
+      "resultado": "x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀",
+      "bytes": 60
+    },
+    {
+      "texto": "Ñandú",
+      "max": 5,
+      "resultado": "Ñand",
+      "bytes": 5
+    },
+    {
+      "texto": "Ñandú",
+      "max": 6,
+      "resultado": "Ñand",
+      "bytes": 5
+    },
+    {
+      "texto": "abc",
+      "max": 0,
+      "resultado": "",
+      "bytes": 0
+    },
+    {
+      "texto": "ñññññññññññññ",
+      "max": 24,
+      "resultado": "ññññññññññññ",
+      "bytes": 24
+    },
+    {
+      "texto": "👍🏽 listo",
+      "max": 4,
+      "resultado": "👍",
+      "bytes": 4
+    }
+  ],
+  "casos": [
+    {
+      "archivo": "minima-v2.json",
+      "acepta": true
+    },
+    {
+      "archivo": "minima-v1.json",
+      "acepta": true
+    },
+    {
+      "archivo": "version-3.json",
+      "acepta": false,
+      "codigo": 2,
+      "detalle": "config: version debe ser 1 o 2"
+    },
+    {
+      "archivo": "sin-version.json",
+      "acepta": false,
+      "codigo": 2,
+      "detalle": "config: version debe ser 1 o 2"
+    },
+    {
+      "archivo": "json-roto.json",
+      "acepta": false,
+      "codigo": 1,
+      "detalle": "config: JSON inválido"
+    },
+    {
+      "archivo": "no-es-objeto.json",
+      "acepta": false,
+      "codigo": 1,
+      "detalle": "config: JSON inválido"
+    },
+    {
+      "archivo": "mas-de-16kb.json",
+      "acepta": false,
+      "codigo": 5,
+      "detalle": "config: más de 16 KB"
+    },
+    {
+      "archivo": "casi-16kb.json",
+      "acepta": true,
+      "esquema": false
+    },
+    {
+      "archivo": "demasiados-tokens.json",
+      "acepta": false,
+      "codigo": 1,
+      "detalle": "config: JSON inválido",
+      "esquema": false
+    },
+    {
+      "archivo": "nombre-24-bytes.json",
+      "acepta": true
+    },
+    {
+      "archivo": "nombre-vacio.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "config: nombre inválido"
+    },
+    {
+      "archivo": "expresion-nombre-mayuscula.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresiones: nombre inválido"
+    },
+    {
+      "archivo": "expresion-nombre-numero.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresiones: nombre inválido"
+    },
+    {
+      "archivo": "expresion-nombre-tilde.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresiones: nombre inválido"
+    },
+    {
+      "archivo": "expresion-nombre-24.json",
+      "acepta": true
+    },
+    {
+      "archivo": "comportamiento-nombre-guion-bajo.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "comportamientos: nombre inválido"
+    },
+    {
+      "archivo": "animacion-nombre-espacio.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "animaciones: nombre inválido"
+    },
+    {
+      "archivo": "expresiones-dibujo-8.json",
+      "acepta": true
+    },
+    {
+      "archivo": "expresiones-dibujo-9.json",
+      "acepta": false,
+      "codigo": 5,
+      "detalle": "más de 24 expresiones",
+      "esquema": true
+    },
+    {
+      "archivo": "expresion-13-formas.json",
+      "acepta": false,
+      "codigo": 5,
+      "detalle": "expresion: más de 12 formas"
+    },
+    {
+      "archivo": "expresion-forma-desconocida.json",
+      "acepta": false,
+      "codigo": 4,
+      "detalle": ""
+    },
+    {
+      "archivo": "expresiones-vida-10.json",
+      "acepta": true
+    },
+    {
+      "archivo": "expresiones-vida-11.json",
+      "acepta": false,
+      "codigo": 5,
+      "detalle": "demasiadas expresiones paramétricas",
+      "esquema": true
+    },
+    {
+      "archivo": "expresiones-vida-10-y-reemplazos.json",
+      "acepta": true
+    },
+    {
+      "archivo": "expresion-extiende-inexistente.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresion: extiende una expresión que no existe",
+      "esquema": true
+    },
+    {
+      "archivo": "imagen-una.json",
+      "acepta": true
+    },
+    {
+      "archivo": "imagen-8.json",
+      "acepta": true
+    },
+    {
+      "archivo": "imagen-9.json",
+      "acepta": false,
+      "codigo": 5,
+      "detalle": "expresiones: hasta 8 caras de imagen",
+      "esquema": true
+    },
+    {
+      "archivo": "imagen-sprite-11.json",
+      "acepta": true
+    },
+    {
+      "archivo": "imagen-sprite-12.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresion: cada parte de sprites es el número de un sprite, de 0 a 11"
+    },
+    {
+      "archivo": "imagen-sin-ojo.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresion: una cara de imagen necesita al menos sprites.ojo"
+    },
+    {
+      "archivo": "imagen-parte-desconocida.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresion: las partes de sprites son ojo, ojo_cerrado, ojo_der, ojo_der_cerrado y boca"
+    },
+    {
+      "archivo": "imagen-tamano-sin-sprites.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresion: tamano, boca_tamano, boca_y y espejar_der van solo en una cara de imagen"
+    },
+    {
+      "archivo": "imagen-tamano-grande.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "expresion: tamano de 0,08 a 0,8"
+    },
+    {
+      "archivo": "comportamientos-9.json",
+      "acepta": true
+    },
+    {
+      "archivo": "comportamientos-10.json",
+      "acepta": false,
+      "codigo": 5,
+      "detalle": "demasiados comportamientos",
+      "esquema": true
+    },
+    {
+      "archivo": "reglas-24.json",
+      "acepta": true
+    },
+    {
+      "archivo": "reglas-25.json",
+      "acepta": false,
+      "codigo": 5,
+      "detalle": "reglas: más de 24"
+    },
+    {
+      "archivo": "regla-6-acciones.json",
+      "acepta": true
+    },
+    {
+      "archivo": "regla-7-acciones.json",
+      "acepta": false,
+      "codigo": 6,
+      "detalle": "regla: \"entonces\" de 1 a 6 acciones"
+    },
+    {
+      "archivo": "regla-si-desconocido.json",
+      "acepta": false,
+      "codigo": 6,
+      "detalle": "regla: \"si\" desconocido",
+      "esquema": true
+    },
+    {
+      "archivo": "regla-y-invalido.json",
+      "acepta": false,
+      "codigo": 6,
+      "detalle": "regla: \"y\" inválido"
+    },
+    {
+      "archivo": "regla-decir-desconocido.json",
+      "acepta": false,
+      "codigo": 6,
+      "detalle": "regla: decir:<situación>",
+      "esquema": true
+    },
+    {
+      "archivo": "regla-decir.json",
+      "acepta": true
+    },
+    {
+      "archivo": "lista-16.json",
+      "acepta": true
+    },
+    {
+      "archivo": "lista-17.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "lista: hasta 16 elementos"
+    },
+    {
+      "archivo": "lista-imagen-8.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "lista: usá cara:<nombre>, animacion:<nombre> o imagen:<0-7>"
+    },
+    {
+      "archivo": "lista-cara-inexistente.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "lista: una cara que no existe",
+      "esquema": true
+    },
+    {
+      "archivo": "recordatorios-12.json",
+      "acepta": true
+    },
+    {
+      "archivo": "recordatorios-13.json",
+      "acepta": false,
+      "codigo": 5,
+      "detalle": "recordatorios: hasta 12"
+    },
+    {
+      "archivo": "recordatorio-40-tildes.json",
+      "acepta": true
+    },
+    {
+      "archivo": "recordatorio-41-tildes.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "recordatorios: texto de 1 a 40 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "recordatorio-40-emoji.json",
+      "acepta": true
+    },
+    {
+      "archivo": "recordatorio-41-emoji.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "recordatorios: texto de 1 a 40 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "recordatorio-texto-vacio.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "recordatorios: texto de 1 a 40 bytes"
+    },
+    {
+      "archivo": "recordatorio-hora-mala.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "recordatorios: hora es HH:MM"
+    },
+    {
+      "archivo": "recordatorio-dias-repetidos.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "recordatorios: dias son letras"
+    },
+    {
+      "archivo": "recordatorio-todos-los-dias.json",
+      "acepta": true
+    },
+    {
+      "archivo": "recordatorio-clave-de-mas.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "recordatorios: claves válidas"
+    },
+    {
+      "archivo": "frases-12.json",
+      "acepta": true
+    },
+    {
+      "archivo": "frases-13.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habla: hasta 12 frases propias en total",
+      "esquema": true
+    },
+    {
+      "archivo": "frase-60-tildes.json",
+      "acepta": true
+    },
+    {
+      "archivo": "frase-61-tildes.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habla: cada frase de 1 a 60 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "frase-60-emoji.json",
+      "acepta": true
+    },
+    {
+      "archivo": "frase-61-emoji.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habla: cada frase de 1 a 60 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "frase-60-emoji-escapado.json",
+      "acepta": true
+    },
+    {
+      "archivo": "frase-60-tildes-escapado.json",
+      "acepta": true
+    },
+    {
+      "archivo": "frase-vacia.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habla: cada frase de 1 a 60 bytes"
+    },
+    {
+      "archivo": "habla-situacion-desconocida.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habla: situación desconocida"
+    },
+    {
+      "archivo": "habla-frecuencia-1-5.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "habla: frecuencia de 0 a 1"
+    },
+    {
+      "archivo": "despertador-ok.json",
+      "acepta": true
+    },
+    {
+      "archivo": "despertador-hora-24.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "despertador: hora es HH:MM"
+    },
+    {
+      "archivo": "despertador-hora-sin-cero.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "despertador: hora es HH:MM"
+    },
+    {
+      "archivo": "despertador-minuto-60.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "despertador: hora es HH:MM"
+    },
+    {
+      "archivo": "despertador-sin-hora.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "despertador: hora es HH:MM"
+    },
+    {
+      "archivo": "despertador-texto-61.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "despertador: texto de 1 a 60 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "despertador-posponer-31.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "despertador: posponer en minutos, de 1 a 30"
+    },
+    {
+      "archivo": "ubicacion-borde.json",
+      "acepta": true
+    },
+    {
+      "archivo": "ubicacion-lat-90-5.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "ubicacion: lat de -90 a 90"
+    },
+    {
+      "archivo": "ubicacion-lon-181.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "ubicacion: lon de -180 a 180"
+    },
+    {
+      "archivo": "ubicacion-sin-lat.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "ubicacion: lat de -90 a 90"
+    },
+    {
+      "archivo": "ubicacion-ciudad-41.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "ubicacion: ciudad de 1 a 40 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "avisos-8.json",
+      "acepta": true
+    },
+    {
+      "archivo": "avisos-9.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "avisos: hasta 8"
+    },
+    {
+      "archivo": "aviso-borde.json",
+      "acepta": true
+    },
+    {
+      "archivo": "aviso-app-25.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "avisos: app y contacto de hasta 24 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "aviso-decir-41.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "avisos: decir de 1 a 40 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "aviso-tipo-malo.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "avisos: tipo es notificacion o llamada"
+    },
+    {
+      "archivo": "aviso-expresion-inexistente.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "avisos: una expresion que no existe",
+      "esquema": true
+    },
+    {
+      "archivo": "voz-palabra-16.json",
+      "acepta": true
+    },
+    {
+      "archivo": "voz-palabra-17.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "voz: palabra de 1 a 16 bytes",
+      "esquema": true
+    },
+    {
+      "archivo": "voz-tipo-malo.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "voz: tipo es grave, media, aguda o robot"
+    },
+    {
+      "archivo": "pomodoro-borde.json",
+      "acepta": true
+    },
+    {
+      "archivo": "pomodoro-121.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "pomodoro: trabajo en minutos, de 1 a 120"
+    },
+    {
+      "archivo": "protector-imagen-8.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "protector: imagen es el espacio de una imagen, de 0 a 7"
+    },
+    {
+      "archivo": "protector-espera-2.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "protector: espera en segundos, de 3 a 3600"
+    },
+    {
+      "archivo": "cuidado-agua-9.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "cuidado: agua cada 1 a 8 horas"
+    },
+    {
+      "archivo": "cuidado-trabajo-al-reves.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "cuidado: trabajo.desde antes que trabajo.hasta",
+      "esquema": true
+    },
+    {
+      "archivo": "modo-desconocido.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "modo desconocido"
+    },
+    {
+      "archivo": "modo-pomodoro.json",
+      "acepta": true
+    },
+    {
+      "archivo": "horario-igual.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "horario: despierta y duerme no pueden ser iguales",
+      "esquema": true
+    },
+    {
+      "archivo": "color-malo.json",
+      "acepta": false,
+      "codigo": 3,
+      "detalle": "cara: color debe ser #RRGGBB"
+    }
+  ]
+}

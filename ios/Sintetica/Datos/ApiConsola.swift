@@ -69,6 +69,7 @@ struct AccionAuto: Codable, Equatable {
     var bicho: String? = nil  // robot: otro del mismo dueño
     var expresion: String? = nil  // cara, robot y (opcional) decir
     var modo: String? = nil   // modo
+    var juego: String? = nil  // jugar: ppt, reflejos, mirada, dado o moneda
 
     static func nueva(_ tipo: String, otro: String?) -> AccionAuto {
         switch tipo {
@@ -78,6 +79,7 @@ struct AccionAuto: Codable, Equatable {
         case "cara": AccionAuto(tipo: tipo, expresion: "contento")
         case "modo": AccionAuto(tipo: tipo, modo: "reloj")
         case "despertar": AccionAuto(tipo: tipo)
+        case "jugar": AccionAuto(tipo: tipo, juego: "dado")
         default: AccionAuto(tipo: "robot", bicho: otro ?? "", expresion: "contento")
         }
     }
@@ -86,7 +88,7 @@ struct AccionAuto: Codable, Equatable {
 /// Las acciones, en el orden de la web.
 let ACCIONES_AUTO: [(tipo: String, nombre: String, icono: String)] = [
     ("decir", "Decir", "bubble.left.fill"), ("cara", "Cara", "face.smiling"), ("modo", "Modo", "square.grid.2x2"),
-    ("despertar", "Despertar", "sunrise.fill"), ("telegram", "Telegram", "paperplane.fill"), ("webhook", "URL", "link"),
+    ("despertar", "Despertar", "sunrise.fill"), ("jugar", "Jugar", "gamecontroller.fill"), ("telegram", "Telegram", "paperplane.fill"), ("webhook", "URL", "link"),
     ("robot", "Otro robot", "person.2.fill"),
 ]
 let MODOS_ACCION: [(String, String)] = [("mascota", "Compañía"), ("reloj", "Reloj"), ("pomodoro", "Pomodoro"), ("clima", "Clima")]

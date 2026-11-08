@@ -66,6 +66,8 @@ targets:
         buildPhase: resources
       - path: ../shared/formato/config-ejemplo.json
         buildPhase: resources
+      - path: ../shared/formato/paridad/paridad.json
+        buildPhase: resources
     dependencies:
       - target: Sintetica
     settings:

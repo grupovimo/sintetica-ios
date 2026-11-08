@@ -161,6 +161,8 @@ int sintetica_fps_sugerido(void);
 void sintetica_qr_por_mantener(int si);
 /* Muestra el QR para vincular otro celu un rato (como mantener el botón). */
 void sintetica_mostrar_qr(void);
+/* El texto del globo que se ve (lo que dice), "" si no hay. */
+const char* sintetica_globo(void);
 /* Algo que mirar (una cara que ve la cámara), de -1 a 1; y hacia arriba es +. */
 void sintetica_seguir(float x, float y);
 /* La superposición de depuración del núcleo (comportamiento, estado, fps). */

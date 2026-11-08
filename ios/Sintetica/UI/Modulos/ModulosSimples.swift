@@ -357,10 +357,10 @@ struct ModVoz: View {
                 }
                 if escucha {
                     CampoVisor(rotulo: "Responde a", texto: $palabra, ayuda: modelo.nombre) {
-                        let t = cortarBytes(palabra.trimmingCharacters(in: .whitespaces), 16)
+                        let t = cortarBytes(palabra.trimmingCharacters(in: .whitespaces), MAX_PALABRA)
                         modelo.cambiar { $0.ponerVoz("palabra", t.isEmpty ? nil : t) }
                     }
-                    .onChange(of: palabra) { _, x in let c = cortarBytes(x, 16); if c != x { palabra = c } }
+                    .onChange(of: palabra) { _, x in let c = cortarBytes(x, MAX_PALABRA); if c != x { palabra = c } }
                     Llave(texto: "Conversar con IA", prendida: v["conversar"] as? Bool ?? false, ancha: true) {
                         let si = !(modelo.config.voz["conversar"] as? Bool ?? false)
                         modelo.cambiar { $0.ponerVoz("conversar", si) }

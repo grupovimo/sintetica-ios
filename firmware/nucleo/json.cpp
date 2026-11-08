@@ -253,7 +253,22 @@ int Json::texto(int i, char* destino, size_t cap) const {
         uint32_t cp = 0;
         for (int k = 1; k <= 4; k++) cp = cp * 16 + hex(s_[p + k]);
         p += 4;
-        if (cp < 0x80) {
+        // Un par sustituto (😀, como escapa Python los emoji) es una
+        // sola letra de 4 bytes; suelto, queda como estaba (3 bytes).
+        if (cp >= 0xD800 && cp < 0xDC00 && p + 6 < toks_[i].fin && s_[p + 1] == '\\' && s_[p + 2] == 'u') {
+          uint32_t bajo = 0;
+          for (int k = 3; k <= 6; k++) bajo = bajo * 16 + hex(s_[p + k]);
+          if (bajo >= 0xDC00 && bajo < 0xE000) {
+            cp = 0x10000 + ((cp - 0xD800) << 10) + (bajo - 0xDC00);
+            p += 6;
+          }
+        }
+        if (cp >= 0x10000) {
+          poner(static_cast<char>(0xF0 | (cp >> 18)));
+          poner(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+          poner(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+          poner(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp < 0x80) {
           poner(static_cast<char>(cp));
         } else if (cp < 0x800) {
           poner(static_cast<char>(0xC0 | (cp >> 6)));

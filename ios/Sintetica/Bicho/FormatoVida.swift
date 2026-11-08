@@ -8,6 +8,7 @@ let MAX_TEXTO = 60
 let MAX_AVISOS = 8
 let MAX_DECIR_AVISO = 40
 let MAX_NOMBRE_AVISO = 24
+let MAX_CIUDAD = 40
 
 /// Las situaciones en las que habla solo.
 let SITUACIONES = [
@@ -204,7 +205,7 @@ extension ConfigDoc {
     mutating func ponerUbicacion(_ u: Ubicacion) {
         let r = { (x: Double) in (x * 10000).rounded() / 10000 }
         var o: [String: Any] = ["lat": r(u.lat), "lon": r(u.lon)]
-        let c = cortarBytes(u.ciudad, 40)
+        let c = cortarBytes(u.ciudad, MAX_CIUDAD)
         if !c.isEmpty { o["ciudad"] = c }
         raiz["ubicacion"] = o
     }

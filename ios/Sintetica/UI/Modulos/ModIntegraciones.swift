@@ -395,6 +395,10 @@ struct ModIntegraciones: View {
                 Menu {
                     ForEach(MODOS_ACCION, id: \.0) { k, t in Button(t) { autos[i].hacer[j].modo = k; guardar() } }
                 } label: { selector("Pasa a · " + nombreModo(h.modo)) }
+            case "jugar":
+                Menu {
+                    ForEach(JUEGOS, id: \.self) { g in Button(NOMBRES_JUEGO[g] ?? g) { autos[i].hacer[j].juego = g; guardar() } }
+                } label: { selector("Te invita a · " + (NOMBRES_JUEGO[h.juego ?? "dado"] ?? "Dado")) }
             case "despertar":
                 Visor(relleno: 10) {
                     Grabado("Lo despierta")

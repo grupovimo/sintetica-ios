@@ -565,7 +565,12 @@ final class AutomatizacionesNuevasTests: XCTestCase {
         let d = AccionAuto.nueva("despertar", otro: nil)
         let o = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(d)) as? [String: Any])
         XCTAssertEqual(Set(o.keys), ["tipo"])
-        XCTAssertEqual(ACCIONES_AUTO.map(\.tipo), ["decir", "cara", "modo", "despertar", "telegram", "webhook", "robot"])
+        XCTAssertEqual(ACCIONES_AUTO.map(\.tipo), ["decir", "cara", "modo", "despertar", "jugar", "telegram", "webhook", "robot"])
+        let j = AccionAuto.nueva("jugar", otro: nil)
+        XCTAssertEqual(j, AccionAuto(tipo: "jugar", juego: "dado"))
+        let oj = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(j)) as? [String: Any])
+        XCTAssertEqual(Set(oj.keys), ["tipo", "juego"])
+        XCTAssertEqual(oj["juego"] as? String, "dado")
         XCTAssertTrue(PLANTILLAS_AUTO.contains("{clima}"))
         XCTAssertTrue(PLANTILLAS_AUTO.contains("{dueno}"))
     }

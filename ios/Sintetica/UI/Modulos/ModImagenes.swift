@@ -210,10 +210,10 @@ private struct FichaRecordatorio: View {
                 }
             }
             CampoVisor(rotulo: "Te dice", texto: $texto, ayuda: "Tomar la pastilla", claro: true) {
-                let v = cortarBytes(texto.trimmingCharacters(in: .whitespaces), 40)
+                let v = cortarBytes(texto.trimmingCharacters(in: .whitespaces), MAX_TEXTO_RECORDATORIO)
                 if v.isEmpty { texto = r.texto } else if v != r.texto { cambiar { $0.texto = v } }
             }
-            .onChange(of: texto) { _, v in let c = cortarBytes(v, 40); if c != v { texto = c } }
+            .onChange(of: texto) { _, v in let c = cortarBytes(v, MAX_TEXTO_RECORDATORIO); if c != v { texto = c } }
             HStack(spacing: 5) {
                 ForEach(DIAS_SEMANA, id: \.letra) { d in
                     Button { cambiar { $0.alternar(d.letra) } } label: { Text(d.letra) }

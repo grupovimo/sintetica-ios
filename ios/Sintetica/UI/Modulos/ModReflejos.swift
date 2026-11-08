@@ -28,7 +28,7 @@ func cablesDe(_ reglas: [Regla]) -> [String: String] {
 func conectarReflejo(_ reglas: [Regla], _ entrada: String, _ salida: String?) -> [Regla] {
     var otras = reglas.filter { !(esReflejoSimple($0) && $0.si == entrada) }
     if let salida { otras.append(Regla(si: entrada, entonces: ["reflejo:\(salida)"])) }
-    return Array(otras.prefix(24))
+    return Array(otras.prefix(MAX_REGLAS))
 }
 
 struct ModReflejos: View {
