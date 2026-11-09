@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Una cara de imagen: el ojo, el ojo cerrado y la boca son dibujos (SVG, PNG,
 /// JPEG o GIF) que el robot anima vivos. Cada parte se sube al toque; la
@@ -18,6 +19,7 @@ struct LabDeImagen: View {
     @State private var subiendo: String?
     @State private var paraSubir = "ojo"
     @State private var eligiendo = false
+    @State private var importando = false
     @State private var item: PhotosPickerItem?
     @State private var error = ""
     @State private var guardando = false
@@ -42,7 +44,7 @@ struct LabDeImagen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             PantallaDibujada(config: configVista, expresion: spriteDe("ojo") != nil ? nombreVista : "neutral", pantalla: modelo.pantalla, fps: 24, escala: 2)
-                .aspectRatio(modelo.pantalla.redonda ? 1 : 320 / 172, contentMode: .fit)
+                .aspectRatio(modelo.pantalla.aspecto, contentMode: .fit)
                 .clipShape(modelo.pantalla.redonda ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 18)))
                 .padding(14)
                 .chapa(radio: modelo.pantalla.redonda ? 200 : 30)
@@ -74,6 +76,15 @@ struct LabDeImagen: View {
             }
         }
         .photosPicker(isPresented: $eligiendo, selection: $item, matching: .images)
+        .fileImporter(isPresented: $importando, allowedContentTypes: [.svg, .png, .jpeg, .gif]) { r in
+            guard case let .success(url) = r else { return }
+            let ok = url.startAccessingSecurityScopedResource()
+            defer { if ok { url.stopAccessingSecurityScopedResource() } }
+            guard let d = try? Data(contentsOf: url) else { return }
+            let p = paraSubir
+            let f: ModeloRobot.FuenteSprite = url.pathExtension.lowercased() == "svg" ? .svg(String(decoding: d, as: UTF8.self)) : .datos(d)
+            Task { await subir(p, f) }
+        }
         .onChange(of: item) { _, i in
             guard let i else { return }
             let p = paraSubir
@@ -115,7 +126,10 @@ struct LabDeImagen: View {
             .frame(height: 64)
             Grabado(t, color: Color.tinta.opacity(0.7))
             HStack(spacing: 4) {
-                Button { paraSubir = p; eligiendo = true } label: { Image(systemName: "arrow.up") }.tecla(chica: true).accessibilityLabel("Subir \(t)")
+                Menu {
+                    Button { paraSubir = p; eligiendo = true } label: { Label("Fotos", systemImage: "photo.on.rectangle") }
+                    Button { paraSubir = p; importando = true } label: { Label("Archivos (SVG, PNG)", systemImage: "folder") }
+                } label: { Image(systemName: "arrow.up") }.tecla(chica: true).accessibilityLabel("Subir \(t)")
                 Button { pegando = pegando == p ? nil : p } label: { Text("</>") }.tecla(chica: true, hundida: pegando == p).accessibilityLabel("Pegar un SVG")
                 if n != nil && p != "ojo" {
                     Button { quitar(p) } label: { Image(systemName: "xmark") }.tecla(.negra, chica: true).accessibilityLabel("Sacar")

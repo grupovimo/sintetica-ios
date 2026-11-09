@@ -165,7 +165,7 @@ void Sistema::hacerAccion(const RespuestaCharla& r, uint32_t ahora) {
   }
 }
 
-// [0xCC][código][flags: bit 0 no entendió, bit 1 falta, bit 2 hizo una acción][confianza]
+// [0xCC][código][flags: bit 0 no entendió, bit 1 falta, bit 2 hizo una acción, bit 3 pregunta si lo hace][confianza]
 // [n][intención][u8 acción][i8 dato][i16 minuto][i16 en minutos][i8 día][u8 días][n][texto][n][frase]
 void Sistema::responderCharla(const RespuestaCharla& r, bool porComando) {
   using namespace protocolo;
@@ -173,7 +173,8 @@ void Sistema::responderCharla(const RespuestaCharla& r, bool porComando) {
   size_t i = 0;
   b[i++] = static_cast<uint8_t>(CmdCharlar | Respuesta);
   b[i++] = Ok;
-  b[i++] = static_cast<uint8_t>((r.noEntendi ? 1 : 0) | (r.falta ? 2 : 0) | (r.accion != AccionCharla::Ninguna ? 4 : 0));
+  b[i++] = static_cast<uint8_t>((r.noEntendi ? 1 : 0) | (r.falta ? 2 : 0) | (r.accion != AccionCharla::Ninguna ? 4 : 0) |
+                                (r.confirma ? 8 : 0));
   b[i++] = r.confianza;
   auto texto = [&](const char* s, size_t max) {
     size_t k = largo(s);

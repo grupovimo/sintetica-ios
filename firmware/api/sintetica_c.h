@@ -195,6 +195,8 @@ typedef struct sintetica_charla {
   char frase[61];          /* lo que contesta */
   char expresion[25];      /* "" = la de hablar */
   char comportamiento[25]; /* "" = ninguno */
+  int confirma;            /* 1 = no estaba seguro y preguntó antes de hacerla ("¿Te llamás Zoe?", con falta = 1):
+                              con "sí", la hace; con "no", nada (v1.11) */
 } sintetica_charla;
 
 /* El robot (la instancia) charla: entiende `texto` (lo que dijiste, ya en

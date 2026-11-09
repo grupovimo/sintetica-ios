@@ -11,6 +11,7 @@ struct LabDibujos: View {
     @State private var elegido = "contento"
     @State private var error = ""
     @State private var aviso = ""
+    @State private var editando: (nombre: String, doc: [String: Any])?
 
     private var propios: [String: [String: Any]] {
         var d: [String: [String: Any]] = [:]
@@ -27,9 +28,21 @@ struct LabDibujos: View {
     private var esDelManual: Bool { VidaBase.dibujos.contains { $0.nombre == elegido } }
 
     var body: some View {
+        if let e = editando {
+            LabDibujoEditor(modelo: modelo, inicial: e.nombre, doc: e.doc) { n in
+                editando = nil
+                if !n.isEmpty { elegido = n }
+            }
+            .id(e.nombre)
+        } else {
+            galeria
+        }
+    }
+
+    private var galeria: some View {
         VStack(alignment: .leading, spacing: 16) {
             PantallaNucleo()
-                .aspectRatio(modelo.pantalla.redonda ? 1 : 320 / 172, contentMode: .fit)
+                .aspectRatio(modelo.pantalla.aspecto, contentMode: .fit)
                 .clipShape(modelo.pantalla.redonda ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 18)))
                 .padding(14)
                 .chapa(radio: modelo.pantalla.redonda ? 200 : 30)
@@ -39,6 +52,9 @@ struct LabDibujos: View {
                 Spacer()
             }
             Flujo(espacio: 8, renglon: 4) {
+                Button { editando = (elegido, docDe(elegido) ?? [:]) } label: { Label("Editar", systemImage: "pencil") }.tecla(.naranja, chica: true)
+                Button { editando = ("", VidaBase.dibujos.first { $0.nombre == "neutral" }?.doc ?? [:]) } label: { Label("Nueva", systemImage: "plus") }
+                    .tecla(chica: true)
                 Button { enRobot() } label: { Label("En el robot", systemImage: "play.fill") }.tecla(.negra, chica: true).disabled(!modelo.conectado)
                 Button { copiar() } label: { Label("Copiar", systemImage: "plus.square.on.square") }.tecla(chica: true)
                 if propios[elegido] != nil {
@@ -160,7 +176,7 @@ struct LabAnimaciones: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             PantallaNucleo()
-                .aspectRatio(modelo.pantalla.redonda ? 1 : 320 / 172, contentMode: .fit)
+                .aspectRatio(modelo.pantalla.aspecto, contentMode: .fit)
                 .clipShape(modelo.pantalla.redonda ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 18)))
                 .padding(14)
                 .chapa(radio: modelo.pantalla.redonda ? 200 : 30)

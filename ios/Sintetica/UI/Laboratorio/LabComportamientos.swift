@@ -79,7 +79,7 @@ struct LabComportamientos: View {
         VStack(alignment: .leading, spacing: 16) {
             ZStack(alignment: .bottomTrailing) {
                 PantallaNucleo()
-                    .aspectRatio(modelo.pantalla.redonda ? 1 : 320 / 172, contentMode: .fit)
+                    .aspectRatio(modelo.pantalla.aspecto, contentMode: .fit)
                     .clipShape(modelo.pantalla.redonda ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 18)))
                     .padding(14)
                     .chapa(radio: modelo.pantalla.redonda ? 200 : 30)

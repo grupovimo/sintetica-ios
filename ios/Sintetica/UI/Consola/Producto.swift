@@ -60,7 +60,7 @@ struct Producto<Contenido: View>: View {
     private func encastre(_ t: CGSize) -> some View {
         let agrandar = modelo.encuadre.apaisada(redonda: modelo.redonda)
         let ancho: CGFloat = agrandar ? t.width * Encuadre.agrandado : t.width
-        let alto: CGFloat = agrandar ? ancho * 172 / 320 : t.height
+        let alto: CGFloat = agrandar ? ancho * CGFloat(modelo.proporcion) : t.height
         return pantalla.frame(width: ancho, height: alto).frame(width: t.width, height: t.height)
     }
 
@@ -126,7 +126,9 @@ struct PantallaDibujada: View {
     }
 
     private func dibujar(_ t: Double) -> CGImage? {
-        let w = max(16, Int(Double(pantalla.ancho) * escala)), h = max(16, Int(Double(pantalla.alto) * escala))
+        // El núcleo dibuja hasta 640 de lado.
+        let k = min(escala, 640.0 / Double(max(1, max(pantalla.ancho, pantalla.alto))))
+        let w = max(16, Int(Double(pantalla.ancho) * k)), h = max(16, Int(Double(pantalla.alto) * k))
         let nombre = nombreDibujable(expresion)
         let c = Nucleo.parpadeo(t)
         return Nucleo.dibujarExpresion(config: config, nombre: nombre, ancho: w, alto: h, redonda: pantalla.redonda, t: t, cierre: c)
@@ -152,7 +154,8 @@ enum Miniaturas {
     static func de(_ nombre: String, config: String?, pantalla: Pantalla) -> UIImage? {
         let clave = "\(config?.hashValue ?? 0)|\(nombre)|\(pantalla.ancho)x\(pantalla.alto)"
         if let i = cache[clave] { return i }
-        let w = pantalla.redonda ? 120 : 160, h = pantalla.redonda ? 120 : 86
+        let w = pantalla.redonda ? 120 : 160
+        let h = pantalla.redonda ? 120 : max(16, Int((160 * pantalla.proporcion).rounded()))
         guard let cg = Nucleo.dibujarExpresion(config: config, nombre: nombre, ancho: w, alto: h, redonda: pantalla.redonda, t: 0.4) else { return nil }
         let i = UIImage(cgImage: cg)
         if cache.count > 400 { cache.removeAll() }
@@ -177,7 +180,7 @@ struct MiniCara: View {
                 Color.black.overlay(Text("·").foregroundStyle(Color.gris))
             }
         }
-        .frame(width: ancho, height: pantalla.redonda ? ancho : ancho * 172 / 320)
+        .frame(width: ancho, height: pantalla.redonda ? ancho : ancho * pantalla.proporcion)
         .clipShape(forma)
         .overlay(forma.stroke(Color.white.opacity(0.06), lineWidth: 1))
         .accessibilityLabel(nombre)

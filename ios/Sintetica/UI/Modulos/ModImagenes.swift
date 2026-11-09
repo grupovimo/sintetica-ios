@@ -15,6 +15,19 @@ struct VideoElegido: Transferable {
     }
 }
 
+/// Un archivo elegido en Archivos: un video se copia (el permiso dura poco); lo demás, sus bytes.
+func fuenteDeArchivo(_ url: URL) -> ModeloRobot.Fuente? {
+    let ok = url.startAccessingSecurityScopedResource()
+    defer { if ok { url.stopAccessingSecurityScopedResource() } }
+    let tipo = UTType(filenameExtension: url.pathExtension)
+    if tipo?.conforms(to: .movie) == true {
+        let destino = FileManager.default.temporaryDirectory.appendingPathComponent("video-\(UUID().uuidString).\(url.pathExtension)")
+        guard (try? FileManager.default.copyItem(at: url, to: destino)) != nil else { return nil }
+        return .video(destino)
+    }
+    return (try? Data(contentsOf: url)).map { .datos($0) }
+}
+
 /// Lee lo que se eligió en la galería: una foto, un GIF o un video corto.
 func fuenteDe(_ item: PhotosPickerItem) async -> ModeloRobot.Fuente? {
     if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }), let v = try? await item.loadTransferable(type: VideoElegido.self) {
@@ -31,6 +44,7 @@ struct ModImagenes: View {
     let modelo: ModeloRobot
     @State private var bahia = 0
     @State private var eligiendo = false
+    @State private var importando = false
     @State private var item: PhotosPickerItem?
 
     var body: some View {
@@ -43,6 +57,11 @@ struct ModImagenes: View {
             }
         }
         .photosPicker(isPresented: $eligiendo, selection: $item, matching: .any(of: [.images, .videos]))
+        .fileImporter(isPresented: $importando, allowedContentTypes: [.image, .gif, .movie, .mpeg4Movie, .quickTimeMovie]) { r in
+            guard case let .success(url) = r, let f = fuenteDeArchivo(url) else { return }
+            let e = bahia
+            Task { await modelo.subir(e, f) }
+        }
         .onChange(of: item) { _, i in
             guard let i else { return }
             let e = bahia
@@ -79,7 +98,10 @@ struct ModImagenes: View {
         let cuadros = modelo.miniaturas[e] ?? []
         let c = modelo.config
         return VStack(spacing: 8) {
-            Button { bahia = e; eligiendo = true } label: { hueco(e, lleno: lleno, cuadros: cuadros) }
+            Menu {
+                Button { bahia = e; eligiendo = true } label: { Label("Fotos", systemImage: "photo.on.rectangle") }
+                Button { bahia = e; importando = true } label: { Label("Archivos", systemImage: "folder") }
+            } label: { hueco(e, lleno: lleno, cuadros: cuadros) }
                 .buttonStyle(.plain)
                 .disabled(modelo.subiendo >= 0)
                 .accessibilityLabel(lleno ? "Bahía \(e + 1): cambiar" : "Bahía \(e + 1): subir")

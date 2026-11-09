@@ -1,4 +1,5 @@
 import CoreBluetooth
+import CoreGraphics
 import Foundation
 
 /// Protocolo BLE de SintéticaOS v1.1, del lado de la app. Misma lógica que
@@ -367,6 +368,18 @@ func leerProgresoOta(_ b: [UInt8]) -> ProgresoOta? {
 struct Pantalla: Equatable, Sendable {
     var ancho = 320, alto = 172
     var redonda = false
+
+    /// Alto sobre ancho (para las cajas de la UI).
+    var proporcion: CGFloat { ancho > 0 ? CGFloat(alto) / CGFloat(ancho) : 172.0 / 320 }
+    /// Ancho sobre alto (para .aspectRatio).
+    var aspecto: CGFloat { redonda ? 1 : 1 / proporcion }
+
+    /// El tamaño de la vista previa en el celu: al doble, pero el núcleo dibuja
+    /// hasta 640 de lado (el robot-celu ya tiene 640 × 360).
+    var previa: (ancho: Int, alto: Int) {
+        let k = Swift.min(2.0, 640.0 / Double(Swift.max(1, Swift.max(ancho, alto))))
+        return (Swift.max(16, Int((Double(ancho) * k).rounded(.down))), Swift.max(16, Int((Double(alto) * k).rounded(.down))))
+    }
 }
 
 struct Estado: Equatable, Sendable {

@@ -382,6 +382,7 @@ void copiarSalida(const RespuestaCharla& r, sintetica_charla* s) {
   s->confianza = r.confianza;
   s->no_entendi = r.noEntendi ? 1 : 0;
   s->falta = r.falta ? 1 : 0;
+  s->confirma = r.confirma ? 1 : 0;
   s->accion = static_cast<int>(r.accion);
   copiarTexto(s->accion_nombre, sizeof s->accion_nombre, nombreAccionCharla(r.accion));
   s->dato = r.dato;

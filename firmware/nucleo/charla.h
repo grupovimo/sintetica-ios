@@ -87,6 +87,7 @@ struct RespuestaCharla {
   uint8_t confianza = 0;            // 0-100
   bool noEntendi = false;  // no entendió (o es de las que contesta mejor la IA): si hay IA, que pruebe ella
   bool falta = false;      // preguntó lo que faltaba ("¿a qué hora?"): la acción queda para la próxima
+  bool confirma = false;   // no estaba seguro y preguntó antes de hacerla ("¿Te llamás Zoe?"): con "sí", la hace
   const char* nombre() const;       // el de la intención ("" = no entendió)
 };
 

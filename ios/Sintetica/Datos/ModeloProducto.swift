@@ -68,6 +68,8 @@ struct ModeloProducto: Equatable, Sendable {
     let redonda: Bool
     let encuadre: Encuadre
     let capacidades: Set<Capacidad>
+    /// Alto sobre ancho de su pantalla.
+    var proporcion: Double = 172.0 / 320
 
     func tiene(_ c: Capacidad) -> Bool { capacidades.contains(c) }
 
@@ -77,8 +79,10 @@ struct ModeloProducto: Equatable, Sendable {
         let redonda = pantalla?.redonda ?? broche
         let todo: Set<Capacidad> = Set(Capacidad.allCases)
         let base: Set<Capacidad> = [.pantalla, .movimiento, .bluetooth, .wifi]
+        let prop: Double = pantalla.map { $0.ancho > 0 ? Double($0.alto) / Double($0.ancho) : 172.0 / 320 } ?? 172.0 / 320
+        let celu = perfil.contains("celu")
         return ModeloProducto(nombre: broche || (pantalla?.redonda ?? false) ? "Broche" : "Unidad", redonda: redonda,
-                              encuadre: redonda ? .redonda : .rectangular, capacidades: virtual ? todo : base)
+                              encuadre: redonda ? .redonda : .rectangular, capacidades: virtual || celu ? todo : base, proporcion: prop)
     }
 }
 

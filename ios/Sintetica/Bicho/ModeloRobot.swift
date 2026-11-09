@@ -287,7 +287,8 @@ final class ModeloRobot {
     private func iniciarVistaPrevia() {
         let p = pantalla
         let ident = id.count == 12 ? id : "000000000000"
-        Nucleo.iniciar(ancho: p.ancho * 2, alto: p.alto * 2, identificador: ident, anfitrion: anfitrion, redonda: p.redonda)
+        let v = p.previa
+        Nucleo.iniciar(ancho: v.ancho, alto: v.alto, identificador: ident, anfitrion: anfitrion, redonda: p.redonda)
         Nucleo.vistaPrevia()
         aplicarEnVistaPrevia(config.texto)
         ultimaFijada = ""
@@ -546,7 +547,8 @@ final class ModeloRobot {
         let demo = esDemo
         let r = await Task.detached(priority: .userInitiated) { () -> ([UIImage], [Int], [UInt8]?) in
             let c = PrepararImagen.cuadrosDe(bytes)
-            let doble = demo ? nil : (previa ?? PrepararImagen.reescalar(bytes, ancho: p.ancho * 2, alto: p.alto * 2, redonda: p.redonda))
+            let v = p.previa
+            let doble = demo ? nil : (previa ?? PrepararImagen.reescalar(bytes, ancho: v.ancho, alto: v.alto, redonda: p.redonda))
             return (c.map { $0.0 }, c.map { $0.1 }, doble)
         }.value
         miniaturas[espacio] = r.0
@@ -580,7 +582,8 @@ final class ModeloRobot {
             let listo = try await Task.detached(priority: .userInitiated) { () -> ([UInt8], UIImage, [UInt8]?) in
                 let r = try PrepararImagen.empaquetar(fuentes, ancho: p.ancho, alto: p.alto, redonda: p.redonda)
                 var doble: [UInt8]?
-                if !demo { doble = try? PrepararImagen.empaquetar(fuentes, ancho: p.ancho * 2, alto: p.alto * 2, redonda: p.redonda).bytes }
+                let v = p.previa
+                if !demo { doble = try? PrepararImagen.empaquetar(fuentes, ancho: v.ancho, alto: v.alto, redonda: p.redonda).bytes }
                 return (r.bytes, r.primero, doble)
             }.value
             switch via {

@@ -195,7 +195,7 @@ final class EnVivoTests: XCTestCase {
 @MainActor
 final class ProductoTests: XCTestCase {
     func testEncuadres() {
-        let u = ModeloProducto.de(perfil: "dev-147b", virtual: false, pantalla: nil)
+        let u = ModeloProducto.de(perfil: "unidad-1", virtual: false, pantalla: nil)
         XCTAssertEqual(u.nombre, "Unidad")
         XCTAssertEqual(u.encuadre, .rectangular)
         XCTAssertEqual(u.encuadre.imagen, "unidad")
@@ -209,7 +209,7 @@ final class ProductoTests: XCTestCase {
         XCTAssertEqual(Encuadre.agrandado, 1.85, accuracy: 0.0001)
         XCTAssertFalse(u.tiene(.microfono))
         XCTAssertTrue(Modulo.voz.bloqueado(u))
-        let b = ModeloProducto.de(perfil: "broche-c3", virtual: false, pantalla: nil)
+        let b = ModeloProducto.de(perfil: "broche-v1", virtual: false, pantalla: nil)
         XCTAssertEqual(b.nombre, "Broche")
         XCTAssertTrue(b.redonda)
         XCTAssertEqual(b.encuadre.imagen, "pieza-colgante")
@@ -790,5 +790,129 @@ final class VozYEntradaTests: XCTestCase {
         XCTAssertEqual(b.frameLength, 2)
         XCTAssertEqual(b.floatChannelData?[0][0] ?? 0, 0.5, accuracy: 0.0001)
         XCTAssertEqual(b.floatChannelData?[0][1] ?? 0, -0.5, accuracy: 0.0001)
+    }
+}
+
+/// El repaso: los dibujos con formas, el tamaño de la vista previa, las imágenes y los pedidos.
+@MainActor
+final class RepasoTests: XCTestCase {
+    func testFormas() {
+        let p = formaNueva("pildora")
+        let c = cajaDe(p)
+        XCTAssertEqual(c.0, -0.075, accuracy: 0.0001)
+        XCTAssertEqual(c.3, 0.2, accuracy: 0.0001)
+        let m = moverForma(p, 0.1, -0.05)
+        XCTAssertEqual((m["x"] as? Double) ?? 0, 0.1, accuracy: 0.0001)
+        XCTAssertEqual((m["y"] as? Double) ?? 0, -0.05, accuracy: 0.0001)
+        let a = moverForma(formaNueva("arco"), 0.2, 0)
+        let pa = a["puntos"] as? [[Double]] ?? []
+        XCTAssertEqual(pa.first?.first ?? 0, 0.1, accuracy: 0.0001)
+        let f = moverForma(formaNueva("franjas"), 0, 0.1)
+        XCTAssertEqual(((f["bandas"] as? [[String: Any]])?.first?["y"] as? Double) ?? 0, 0, accuracy: 0.0001)
+        var corte = formaNueva("corte")
+        corte["x"] = -0.3
+        let e = espejarForma(corte)
+        XCTAssertEqual((e["x"] as? Double) ?? 0, 0.3, accuracy: 0.0001)
+        XCTAssertEqual((e["der"] as? Double) ?? -1, 0.08, accuracy: 0.0001)
+        XCTAssertEqual(formaEn([p, moverForma(p, 0.5, 0)], x: 0.5, y: 0), 1)
+        XCTAssertNil(formaEn([p], x: 0.9, y: 0.4))
+        let (x, y) = aNormal(0.5, 0)
+        XCTAssertEqual(x, 0, accuracy: 0.0001)
+        XCTAssertEqual(y, -MEDIO_ALTO, accuracy: 0.0001)
+        XCTAssertFalse(camposVisibles(p).contains { $0.clave == "r" })  // sin radio propio
+        XCTAssertFalse(camposVisibles(p).contains { $0.clave == "trazo" })  // rellena
+    }
+
+    func testDibujoValidoYConTodasLasFormas() {
+        var c = ConfigDoc()
+        let formas: [Forma] = TIPOS_FORMA.map { formaNueva($0.tipo) }
+        c.ponerExpresion("mi-cara", ["formas": formas, "parpadea": false])
+        XCTAssertNil(Nucleo.validar(c.texto))
+        // El tamaño de la cara se guarda en la config (el núcleo lo acepta de 0,5 a 1,5).
+        c.ponerTamano(1.35)
+        XCTAssertEqual(c.tamano, 1.35, accuracy: 0.0001)
+        XCTAssertNil(Nucleo.validar(c.texto))
+        c.ponerTamano(1.6)
+        XCTAssertNotNil(Nucleo.validar(c.texto))  // fuera de rango: el núcleo la rechaza y se muestra su error
+    }
+
+    func testVistaPreviaHasta640() {
+        XCTAssertEqual(Pantalla(ancho: 320, alto: 172).previa.ancho, 640)
+        XCTAssertEqual(Pantalla(ancho: 320, alto: 172).previa.alto, 344)
+        let celu = Pantalla(ancho: 640, alto: 360)  // el robot-celu (Moto E4)
+        XCTAssertEqual(celu.previa.ancho, 640)
+        XCTAssertEqual(celu.previa.alto, 360)
+        XCTAssertEqual(Pantalla(ancho: 240, alto: 240, redonda: true).previa.ancho, 480)
+        XCTAssertEqual(celu.aspecto, 640.0 / 360, accuracy: 0.001)
+        // El núcleo arranca con ese tamaño.
+        Nucleo.iniciar(ancho: celu.previa.ancho, alto: celu.previa.alto, identificador: "A1B2C3D4E5F6", anfitrion: nil)
+        Nucleo.vistaPrevia()
+        Nucleo.tick()
+        XCTAssertEqual(Nucleo.ancho, 640)
+        XCTAssertEqual(Nucleo.alto, 360)
+        XCTAssertNotNil(PantallaDibujadaPrueba.dibujar(celu))
+        let m = ModeloProducto.de(perfil: "celu", virtual: false, pantalla: celu)
+        XCTAssertEqual(m.proporcion, 360.0 / 640, accuracy: 0.001)
+        XCTAssertTrue(m.tiene(.parlante))
+    }
+
+    private func foto(_ w: Int, _ h: Int) -> UIImage {
+        let f = UIGraphicsImageRendererFormat()
+        f.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: f).image { ctx in
+            UIColor.red.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: w / 2, height: h))
+            UIColor.blue.setFill()
+            ctx.fill(CGRect(x: w / 2, y: 0, width: w / 2, height: h))
+        }
+    }
+
+    func testImagenesAlTamanoDelRobot() throws {
+        // Una foto de pie a la pantalla del robot-celu: recortada al tamaño exacto, QOI de 3 canales.
+        let r = PrepararImagen.recortar(foto(1200, 1600), ancho: 640, alto: 360, redonda: false)
+        let q = PrepararImagen.qoi(r)
+        let d = try XCTUnwrap(Qoi.decodificar(q))
+        XCTAssertEqual(d.ancho, 640)
+        XCTAssertEqual(d.alto, 360)
+        XCTAssertEqual(q[12], 3)
+        XCTAssertLessThanOrEqual(q.count, 640 * 360 * 4 + 22)
+        // Varios cuadros (un GIF o un video): una animación "sani" que entra en un espacio.
+        let cuadros: [(UIImage, Int)] = (0 ..< 10).map { i in (foto(400 + i, 300), 100) }
+        let a = try PrepararImagen.empaquetar(cuadros, ancho: 320, alto: 172, redonda: false)
+        XCTAssertTrue(Animacion.esAnimacion(a.bytes))
+        XCTAssertEqual(Animacion.cuadros(a.bytes).count, 10)
+        XCTAssertLessThanOrEqual(a.bytes.count, 320 * 172 * 4 + 22)
+        // Y reescalada para la vista previa al doble.
+        let doble = try XCTUnwrap(PrepararImagen.reescalar(a.bytes, ancho: 640, alto: 344, redonda: false))
+        let c0 = try XCTUnwrap(Animacion.cuadros(doble).first)
+        XCTAssertEqual(Qoi.decodificar(c0.qoi)?.ancho, 640)
+        // El broche: redonda, afuera del círculo el color de la pantalla.
+        let b = PrepararImagen.qoi(PrepararImagen.recortar(foto(500, 500), ancho: 240, alto: 240, redonda: true))
+        let px = try XCTUnwrap(Qoi.decodificar(b))
+        XCTAssertEqual(Array(px.rgb[0 ..< 3]), [11, 10, 9])
+    }
+
+    func testPedidos() throws {
+        let api = ApiSintetica(servidor: "https://api-sintetica.grupovimo.com.ar/", token: "t0k")
+        let r = try api.pedido("/v1/bichos/A1B2C3D4E5F6/comando", "POST", ["expresion": "contento"])
+        XCTAssertEqual(r.url?.absoluteString, "https://api-sintetica.grupovimo.com.ar/v1/bichos/A1B2C3D4E5F6/comando")
+        XCTAssertEqual(r.httpMethod, "POST")
+        XCTAssertEqual(r.value(forHTTPHeaderField: "Authorization"), "Bearer t0k")
+        XCTAssertEqual(r.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        let o = try XCTUnwrap(JSONSerialization.jsonObject(with: r.httpBody ?? Data()) as? [String: String])
+        XCTAssertEqual(o, ["expresion": "contento"])
+        let s = try api.pedido("/v1/sesion/telegram/x?esperar=25", encabezados: ["X-Sintetica-Secreto": "s"])
+        XCTAssertEqual(s.httpMethod, "GET")
+        XCTAssertEqual(s.value(forHTTPHeaderField: "X-Sintetica-Secreto"), "s")
+        XCTAssertNil(s.httpBody)
+    }
+}
+
+/// Dibuja una cara al tamaño de la vista previa (como PantallaDibujada, sin la vista).
+@MainActor
+enum PantallaDibujadaPrueba {
+    static func dibujar(_ p: Pantalla) -> CGImage? {
+        let v = p.previa
+        return Nucleo.dibujarExpresion(config: nil, nombre: "contento", ancho: v.ancho, alto: v.alto, redonda: p.redonda, t: 0.5)
     }
 }

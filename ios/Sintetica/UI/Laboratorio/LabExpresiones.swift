@@ -85,7 +85,7 @@ struct LabExpresiones: View {
 
     @ViewBuilder private func editor(_ cambios: Int) -> some View {
             PantallaDibujada(config: configEnVivo, expresion: nombreDibujo, pantalla: modelo.pantalla, fps: 30, escala: 2)
-                .aspectRatio(modelo.pantalla.redonda ? 1 : 320 / 172, contentMode: .fit)
+                .aspectRatio(modelo.pantalla.aspecto, contentMode: .fit)
                 .clipShape(modelo.pantalla.redonda ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 18)))
                 .padding(14)
                 .chapa(radio: modelo.pantalla.redonda ? 200 : 30)
