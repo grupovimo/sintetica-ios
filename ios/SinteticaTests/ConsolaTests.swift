@@ -886,10 +886,11 @@ final class RepasoTests: XCTestCase {
         let doble = try XCTUnwrap(PrepararImagen.reescalar(a.bytes, ancho: 640, alto: 344, redonda: false))
         let c0 = try XCTUnwrap(Animacion.cuadros(doble).first)
         XCTAssertEqual(Qoi.decodificar(c0.qoi)?.ancho, 640)
-        // El broche: redonda, afuera del círculo el color de la pantalla.
+        // El broche: redonda, afuera del círculo el color de la pantalla (#0B0A09
+        // redondeado a 16 bits, lo que muestra la pantalla: 8, 8, 8).
         let b = PrepararImagen.qoi(PrepararImagen.recortar(foto(500, 500), ancho: 240, alto: 240, redonda: true))
         let px = try XCTUnwrap(Qoi.decodificar(b))
-        XCTAssertEqual(Array(px.rgb[0 ..< 3]), [11, 10, 9])
+        XCTAssertEqual(Array(px.rgb[0 ..< 3]), [8, 8, 8])
     }
 
     func testPedidos() throws {
