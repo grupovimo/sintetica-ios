@@ -459,7 +459,9 @@ void Sistema::actualizarSprites() {
 uint32_t Sistema::firmaSprites(int cara) const {
   if (cara < 0 || cara >= config_.vida.nCaras || config_.vida.caras[cara].imagen < 0) return 0;
   const CaraImagen& c = config_.vida.imagenes[config_.vida.caras[cara].imagen];
-  uint8_t b[N_PARTES_SPRITE * 5 + 8];
+  // Por parte: espacio + CRC (5); después espejar (1), tamaño, tamaño de boca,
+  // altura de boca y tamaño de la cara (2 cada uno) y el cierre (1).
+  uint8_t b[N_PARTES_SPRITE * 5 + 1 + 4 * 2 + 1];
   size_t n = 0;
   for (int i = 0; i < N_PARTES_SPRITE; i++) {
     b[n++] = static_cast<uint8_t>(c.sprite[i]);
