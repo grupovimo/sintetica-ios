@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   subir:
-    runs-on: macos-15
+    runs-on: macos-15-intel  # la cola arm64 de GitHub se quedó sin lugar (10/11)
     timeout-minutes: 60
     defaults:
       run:
