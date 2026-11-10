@@ -163,6 +163,25 @@ final class TransporteBle: NSObject, Transporte, CBPeripheralDelegate {
         _ = try await operacion { periferico.writeValue(Data(datos), for: c, type: .withResponse) }
     }
 
+    /// Lo que entra en una escritura sin respuesta (el MTU que se negoció; la
+    /// placa acepta hasta 512 por escritura).
+    var tamanoBloque: Int { max(20, min(512, periferico.maximumWriteValueLength(for: .withoutResponse))) }
+
+    /// Sin respuesta: CoreBluetooth encola y avisa cuando hay lugar de nuevo
+    /// (peripheralIsReady). Varias veces más rápido que una ida y vuelta por bloque.
+    func escribirRapido(_ car: Car, _ datos: [UInt8]) async throws {
+        guard let c = caracteristicas[car] else { throw ErrorBle.noEsUnBicho }
+        guard c.properties.contains(.writeWithoutResponse) else { return try await escribir(car, datos) }
+        var esperas = 0
+        while !periferico.canSendWriteWithoutResponse {
+            guard periferico.state == .connected else { throw ErrorBle.desconectado }
+            esperas += 1
+            if esperas > 500 { throw ErrorBle.tiempo }  // ~5 s sin lugar
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        periferico.writeValue(Data(datos), for: c, type: .withoutResponse)
+    }
+
     func leerEstado() async throws -> [UInt8] {
         guard let c = caracteristicas[.estado] else { throw ErrorBle.noEsUnBicho }
         leyendoEstado = true

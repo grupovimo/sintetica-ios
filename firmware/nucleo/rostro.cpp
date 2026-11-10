@@ -49,7 +49,7 @@ const InfoParametro INFO_GLOBAL[N_PARAMETROS - param::GX] = {
 };
 
 const char* const NOMBRES_PARTICULAS[static_cast<int>(TipoParticula::Cantidad)] = {
-    "zzz", "corazon", "lagrima", "gota", "chispa", "pregunta", "exclamacion", "nota", "estrella", "burbuja", "oveja", "reloj"};
+    "zzz", "corazon", "lagrima", "gota", "chispa", "pregunta", "exclamacion", "nota", "estrella", "burbuja", "oveja", "reloj", "garabato"};
 
 uint32_t g_finos = 0;
 
@@ -641,7 +641,7 @@ uint32_t escalarColor(uint32_t c, float k) {
   return b(x.r * k) << 16 | b(x.g * k) << 8 | b(x.b * k);
 }
 
-float sdParticula(TipoParticula t, V2 q, float a) {
+float sdParticula(TipoParticula t, V2 q, float a, float prog) {
   switch (t) {
     case TipoParticula::Zzz: {
       const float d1 = sdSegmento(q, {-a, a}, {a, a});
@@ -690,6 +690,21 @@ float sdParticula(TipoParticula t, V2 q, float a) {
       const float h = sdSegmento(q, {0, 0}, {0, 0.42f * a}) - 0.08f * a;
       return minf(aro, minf(h, sdSegmento(q, {0, 0}, {0.3f * a, 0}) - 0.08f * a));
     }
+    case TipoParticula::Garabato: {
+      // Un dibujito que se va haciendo (v3, juega solo): una espiral que crece
+      // con la vida de la partícula (termina al 70 %).
+      const float hasta = limitar(prog / 0.7f, 0, 1) * 12.0f;
+      float d = 9.0f;
+      V2 antes = {0.12f * a, 0};
+      for (int k = 1; k <= 12 && k - 1 < hasta; k++) {
+        const float f = minf(static_cast<float>(k), hasta) / 12.0f;
+        const float r = a * (0.12f + 0.88f * f), ang = f * 3.0f * MEDIA_VUELTA;
+        const V2 p = {r * coseno(ang), r * seno(ang) * 0.8f};
+        d = minf(d, sdSegmento(q, antes, p));
+        antes = p;
+      }
+      return d - 0.07f * a;
+    }
     case TipoParticula::Oveja: {
       // Lana (cuatro bultos), la cabeza adelante y dos patitas.
       float d = largo2(q.x + 0.3f * a, q.y) - 0.38f * a;
@@ -715,6 +730,7 @@ void dibujarParticula(Lienzo& l, const VistaRostro& v, const Particula& pt, uint
     case TipoParticula::Corazon:
     case TipoParticula::Chispa:
     case TipoParticula::Estrella:
+    case TipoParticula::Garabato:
       color = colorOjos;
       break;
     case TipoParticula::Lagrima:
@@ -739,7 +755,7 @@ void dibujarParticula(Lienzo& l, const VistaRostro& v, const Particula& pt, uint
     for (int x = x0; x < x1; x++) {
       V2 q = {(x + 0.5f - cx) / v.unidad, -(y + 0.5f - cy) / v.unidad};
       q = rotar(cg, sg, q);
-      const float d = sdParticula(pt.tipo, q, a);
+      const float d = sdParticula(pt.tipo, q, a, vida);
       if (d > aa) continue;
       l.cubrir(x, y, 1 - suaveEntre(-aa, aa, d), color);
     }

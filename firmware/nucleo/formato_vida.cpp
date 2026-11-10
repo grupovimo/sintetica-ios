@@ -19,7 +19,8 @@ ResultadoConfig falla(const char* detalle, ErrorConfig e = ErrorConfig::Campo) {
 const char* const NOMBRES_VAR[static_cast<int>(VarVida::Cantidad)] = {
     "energia", "animo", "afecto", "aburrimiento", "curiosidad", "sueno", "estres",
     "rasgo.energia", "rasgo.sociabilidad", "rasgo.picardia", "rasgo.timidez", "rasgo.curiosidad", "rasgo.malGenio",
-    "bateria", "hora", "humor", "ignorado", "ausencia", "rencor", "dormido", "noche", "cargando"};
+    "bateria", "hora", "humor", "ignorado", "ausencia", "rencor", "dormido", "noche", "cargando",
+    "etapa", "dias", "solo", "bajon", "lluvia", "esperando"};
 
 const char* const NOMBRES_RASGO[N_RASGOS] = {"energia", "sociabilidad", "picardia", "timidez", "curiosidad", "malGenio"};
 
@@ -35,7 +36,7 @@ const char* const NOMBRES_PARTES[N_PARTES_SPRITE] = {"ojo", "ojo_cerrado", "ojo_
 
 const char* const NOMBRES_MIRADA[static_cast<int>(Mirada::Cantidad)] = {
     "libre", "frente", "arriba", "abajo", "izquierda", "derecha", "lado", "alrededor", "perdida", "reojo", "estimulo",
-    "rem", "ovejas"};
+    "rem", "ovejas", "particula", "puerta"};
 
 template <int N>
 int buscarNombre(const char* const (&tabla)[N], const char* n) {
@@ -351,6 +352,7 @@ const char* const CLAVES_RECORDATORIO[] = {"hora", "dias", "texto", "expresion",
 const char* const CLAVES_VOZ[] = {"volumen", "tipo", "palabra", "conversar", "microfono"};
 const char* const CLAVES_POMODORO[] = {"trabajo", "descanso"};
 const char* const CLAVES_PROTECTOR[] = {"imagen", "espera"};
+const char* const CLAVES_GALERIA[] = {"segundos"};
 const char* const TIPOS_VOZ[] = {"grave", "media", "aguda", "robot"};
 
 ResultadoConfig leerRecordatorio(const Json& j, int obj, const Config& c, Recordatorio* r) {
@@ -457,6 +459,19 @@ ResultadoConfig leerAvisos(const Json& j, int raiz, Config& c) {
     }
     c.protector.imagen = static_cast<int8_t>(imagen);
     c.protector.espera = static_cast<uint16_t>(espera);
+  }
+  const int ga = j.buscar(raiz, "galeria");
+  if (ga >= 0) {
+    if (j.tipo(ga) != TipoJson::Objeto) return falla("galeria: no es un objeto");
+    if (!soloClaves(j, ga, CLAVES_GALERIA)) return falla("galeria: la clave válida es segundos");
+    const int se = j.buscar(ga, "segundos");
+    float segundos = 30;
+    if (se >= 0) {
+      segundos = j.numero(se, -1);
+      if (j.tipo(se) != TipoJson::Numero || segundos < 5 || segundos > 3600 || segundos != static_cast<float>(static_cast<int>(segundos)))
+        return falla("galeria: segundos, de 5 a 3600");
+    }
+    c.galeriaSegundos = static_cast<uint16_t>(segundos);
   }
   return {};
 }
@@ -778,7 +793,7 @@ ResultadoConfig leerVidaConfig(const Json& j, int raiz, Config& c) {
 }
 
 ResultadoConfig cargarVidaBase(Config& c) {
-  c.vida = DatosVida();
+  new (static_cast<void*>(&c.vida), EnSuLugar{}) DatosVida();  // sin temporal (~24 KB): ver formato.h
   Json j;
   for (const DatoVidaBase& d : CARAS_VIDA_BASE) {
     if (j.parsear(d.json, largo(d.json), g_tok, 260) <= 0) return falla("vida base: expresión inválida");

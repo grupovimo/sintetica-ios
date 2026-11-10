@@ -13,7 +13,8 @@ const char* const NOMBRES_SITUACION[N_SITUACIONES] = {
     "buen-dia", "comiste", "a-dormir", "tardaste", "agua", "pausa", "como-estas", "animo-bien", "animo-medio", "animo-mal",
     "jugar", "gane", "perdi", "empate", "anio-nuevo", "navidad", "dia-del-amigo", "dia-del-nino", "aniversario",
     "toque-recibido", "toque-devuelto", "agenda", "agenda-manana", "te-vas", "habito-hecho", "habito-racha",
-    "habito-cortado", "musica", "pago", "mail", "github", "pedido", "aviso"};
+    "habito-cortado", "musica", "pago", "mail", "github", "pedido", "aviso",
+    "recuerdo", "propuesta", "crecio", "mes-juntos", "feriado", "fecha-tuya", "fecha-manana", "mimos"};
 
 const char* const PRESETS[] = {"equilibrado", "timido", "picaro", "dormilon", "carinoso", "curioso", "grunon", "electrico"};
 
@@ -370,6 +371,38 @@ const char* leerPresencia(const Json& j, int raiz, Presencia* p) {
     copiarTexto(n.texto, sizeof n.texto, buf);
   }
   *p = n;
+  return nullptr;
+}
+
+const char* leerFechas(const Json& j, int raiz, FechasTuyas* f) {
+  const int fe = j.buscar(raiz, "fechas");
+  if (fe < 0) return nullptr;
+  if (j.tipo(fe) != TipoJson::Arreglo) return "fechas: es una lista";
+  if (j.cantidad(fe) > MAX_FECHAS) return "fechas: hasta 6";
+  static const char* const CLAVES[] = {"fecha", "texto"};
+  FechasTuyas n;
+  for (int i = 0; i < j.cantidad(fe); i++) {
+    const int o = j.elemento(fe, i);
+    if (j.tipo(o) != TipoJson::Objeto || !soloEstas(j, o, CLAVES)) return "fechas: claves válidas: fecha y texto";
+    FechaTuya& x = n.lista[n.n];
+    char t[8];
+    const int fc = j.buscar(o, "fecha");
+    auto d = [](char c) { return c >= '0' && c <= '9'; };
+    if (fc < 0 || j.tipo(fc) != TipoJson::Texto || j.texto(fc, t, sizeof t) != 5 || !d(t[0]) || !d(t[1]) || t[2] != '-' ||
+        !d(t[3]) || !d(t[4]))
+      return "fechas: fecha es MM-DD (obligatoria)";
+    const int mes = (t[0] - '0') * 10 + (t[1] - '0'), dia = (t[3] - '0') * 10 + (t[4] - '0');
+    static const int DIAS[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (mes < 1 || mes > 12 || dia < 1 || dia > DIAS[mes - 1]) return "fechas: fecha es MM-DD (obligatoria)";
+    x.fecha = static_cast<int16_t>(mes * 100 + dia);
+    char buf[LARGO_FECHA + 8];
+    const int te = j.buscar(o, "texto");
+    const int l = te >= 0 && j.tipo(te) == TipoJson::Texto ? j.texto(te, buf, sizeof buf) : -1;
+    if (l < 1 || l >= LARGO_FECHA || !utf8Valido(buf)) return "fechas: texto de 1 a 40 bytes (obligatorio)";
+    copiarTexto(x.texto, sizeof x.texto, buf);
+    n.n++;
+  }
+  *f = n;
   return nullptr;
 }
 

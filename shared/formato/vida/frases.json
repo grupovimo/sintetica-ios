@@ -428,6 +428,65 @@
       "frases": {
         "todos": ["Aviso: {titulo}", "{de}: {titulo}", "¡Ey! {titulo}"]
       }
+    },
+    "recuerdo": {
+      "probabilidad": 0.7, "enfriamiento": 43200,
+      "frases": {
+        "todos": ["Me acordé de ayer."]
+      }
+    },
+    "propuesta": {
+      "probabilidad": 0.7, "enfriamiento": 3600,
+      "frases": {
+        "todos": ["¿Jugamos a {juego}?", "Volviste. ¿Un partido de {juego}?", "¿Me contás algo sobre {gusto}?", "Estuve pensando en {gusto}.", "¿Hacemos algo juntos?"],
+        "picaro": ["Te reto a {juego}. Si te animás."],
+        "carinoso": ["¡Volviste! ¿Jugamos un ratito?"],
+        "timido": ["¿Querés... jugar a {juego}?"],
+        "electrico": ["¡Ya estás! ¡{juego}, dale!"]
+      }
+    },
+    "crecio": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Siento que ya te conozco un poco más.", "Ya no me da tanta vergüenza.", "Creo que somos amigos, {dueno}."],
+        "timido": ["Ya me animo más con vos..."],
+        "electrico": ["¡Ya somos re amigos!"],
+        "grunon": ["Bueno, me caés bien. Un poco."]
+      }
+    },
+    "mes-juntos": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["¡Hoy hace {cantidad} que nos conocimos!", "¡Ya {cantidad} juntos, {dueno}!"],
+        "carinoso": ["¡{cantidad} con vos! Te quiero."],
+        "grunon": ["{cantidad} aguantándote. Bien."]
+      }
+    },
+    "feriado": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Hoy es {titulo}.", "Hoy es feriado: {titulo}."]
+      }
+    },
+    "fecha-tuya": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Hoy es {titulo}. ¡No te olvides!", "¡Acordate: hoy es {titulo}!"]
+      }
+    },
+    "fecha-manana": {
+      "probabilidad": 1, "enfriamiento": 0, "siempre": true,
+      "frases": {
+        "todos": ["Mañana es {titulo}.", "Ojo: mañana es {titulo}."]
+      }
+    },
+    "mimos": {
+      "probabilidad": 0.6, "enfriamiento": 7200,
+      "frases": {
+        "todos": ["Acá estoy, {dueno}.", "Si querés, te hago compañía.", "Te quiero mucho, ¿sabías?", "Despacito, hoy vamos tranqui."],
+        "grunon": ["No soy de mimos, pero acá estoy."],
+        "timido": ["Estoy acá... por si acaso."]
+      }
     }
   }
 }

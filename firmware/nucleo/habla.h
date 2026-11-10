@@ -27,6 +27,8 @@ enum class Situacion : uint8_t {
   // v1.9: amigos, agenda, presencia, hábitos, música y avisos de afuera.
   ToqueRecibido, ToqueDevuelto, Agenda, AgendaManana, TeVas, HabitoHecho, HabitoRacha, HabitoCortado,
   Musica, Pago, Mail, Github, Pedido, AvisoOtro,
+  // v3: la memoria, las propuestas al volver, crecer, las fechas propias y la empatía.
+  Recuerdo, Propuesta, Crecio, MesJuntos, Feriado, FechaTuya, FechaManana, Mimos,
   Cantidad
 };
 constexpr int N_SITUACIONES = static_cast<int>(Situacion::Cantidad);
@@ -106,6 +108,20 @@ struct Presencia {
   bool preguntar = true;
   char texto[LARGO_PRESENCIA] = {};
 };
+
+// "fechas" (v3): las fechas que le importan al dueño ("el cumple de mamá"): el
+// día antes avisa y ese día lo recuerda.
+constexpr int MAX_FECHAS = 6;
+constexpr int LARGO_FECHA = 41;       // 40 bytes + terminador
+struct FechaTuya {
+  int16_t fecha = 0;                  // mes·100 + día
+  char texto[LARGO_FECHA] = {};
+};
+struct FechasTuyas {
+  uint8_t n = 0;
+  FechaTuya lista[MAX_FECHAS];
+};
+const char* leerFechas(const Json& j, int raiz, FechasTuyas* f);
 
 // Lee "habla", "despertador" y "ubicacion" (esta la usa la nube: acá solo se
 // valida). nullptr si está bien; si no, el motivo.

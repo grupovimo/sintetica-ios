@@ -1,6 +1,7 @@
 #include "motor_vida.h"
 
 #include "protocolo.h"
+#include "vida_base.h"
 
 namespace sintetica {
 
@@ -156,6 +157,17 @@ void MotorVida::iniciar(const Config* config, uint32_t semilla, uint32_t ahora) 
   for (int i = 0; i < N_ANIMO; i++) g_idxAnimo[i] = config->vida.indiceCara(NOMBRES_ANIMO[i]);
   ahora_ = inicio_ = ultimoTick_ = ahora;
   mem_ = Memoria();  // la que estaba guardada la pone el sistema (restaurarMemoria)
+  rec_ = Recuerdos();  // y los recuerdos (v3), restaurarRecuerdos
+  caracter_ = Caracter();  // sin identidad, sin tics (los tests del motor solo)
+  favoritoIdx_ = caraPensar_ = microParam_ = -1;
+  microDesde_ = -10;
+  for (float& a : ajusteRasgos_) a = 0;
+  rigidezV3_ = 1;
+  lluvia_ = ausente_ = fueSolo_ = hitoSinFestejo_ = crecioPendiente_ = false;
+  feriadoHoy_ = fechaTuya_ = -1;
+  recuerdoDia_ = anticipoDia_ = dormisDia_ = 0;
+  primerContacto_ = -1e9f;
+  dormisPeso_ = 0;
   primeroDelDia_ = hitoPendiente_ = false;
   hitoSituacion_ = -1;
   acumulado_ = 0;
@@ -217,6 +229,7 @@ void MotorVida::reconfigurar(const Config* config) {
   for (int8_t& a : animoCaras_) a = -1;
   caraEstado_ = -1;
   nCand_ = 0;
+  resolverV3();
 }
 
 void MotorVida::restaurarMemoria(const Memoria& m) {
@@ -230,7 +243,7 @@ void MotorVida::restaurarMemoria(const Memoria& m) {
 
 Personalidad MotorVida::rasgos() const {
   Personalidad p = config_ ? config_->vida.personalidad : Personalidad();
-  for (int i = 0; i < N_RASGOS; i++) p[i] = limitar(p[i] + mem_.deriva[i] / 100.0f, 0, 1);
+  for (int i = 0; i < N_RASGOS; i++) p[i] = limitar(p[i] + mem_.deriva[i] / 100.0f + ajusteRasgos_[i], 0, 1);
   return p;
 }
 
@@ -290,6 +303,7 @@ void MotorVida::paso(float dt) {
   const float energia = 0.5f * estado_[0] + 0.5f * rasgos().energia;
   float f = 0.8f + 0.4f * energia;
   if (modo_ == Modo::Dormido) f *= 0.75f;
+  f *= rigidezV3_;
   const float t = static_cast<float>(t_);
   if (t < reflejoHasta_ && reflejo_ >= 0) f *= 1.0f + 1.5f * limitar((reflejoHasta_ - t) / tiempos::REFLEJO_MS * 1000.0f, 0, 1);
   rigidez_ = f;
@@ -310,7 +324,8 @@ void MotorVida::paso(float dt) {
   mover(parpadeo_, parpadeoObj_, PARPADEO);
   mover(aplastar_, 1.0f, APLASTAR);
   const bool siguiendo = t < seguirHasta_;
-  const ParResorte pm = (siguiendo || mirada_ == Mirada::Perdida || mirada_ == Mirada::Ovejas) ? SEGUIMIENTO : GRUPOS[2];
+  const ParResorte pm =
+      (siguiendo || mirada_ == Mirada::Perdida || mirada_ == Mirada::Ovejas || mirada_ == Mirada::Particula) ? SEGUIMIENTO : GRUPOS[2];
   mover(sacX_, sacBaseX_ + microX_, pm);
   mover(sacY_, sacBaseY_ + microY_, pm);
   // Partículas.
@@ -379,8 +394,9 @@ void MotorVida::microVida(float dt) {
     intervalo *= 1.0f - 0.25f * maxf(maxf(estado_[5] - 0.4f, 0) / 0.6f, estado_[6]);
     if (modo == Parpadeo::Menos) intervalo *= 1.6f;
     if (modo == Parpadeo::Mas) intervalo *= 0.75f;
+    intervalo *= caracter_.parpadeo;  // cada uno parpadea a su ritmo (v3)
     proximoParpadeo_ = t + intervalo;
-    if (!cerrado) parpadear(azar_.real() < 0.15f);
+    if (!cerrado) parpadear(azar_.real() < caracter_.dobles);
   }
 
   // Mirada: saccades cada 0,7 a 3 s cerca del centro, con preferencia por el
@@ -402,7 +418,15 @@ void MotorVida::microVida(float dt) {
         x = entre(azar_, -0.18f, 0.18f), y = entre(azar_, -0.08f, 0.1f);
         proximaSacada_ = t + entre(azar_, 0.4f, 0.9f);
         break;
-      case Mirada::Perdida: x = 0.08f * ladoMirada_, y = 0.1f; break;
+      case Mirada::Perdida:
+        if (caracter_.hay) x = 0.08f * caracter_.pensarX, y = 0.1f * caracter_.pensarY;
+        else x = 0.08f * ladoMirada_, y = 0.1f;
+        break;
+      case Mirada::Puerta:
+        x = 0.17f * caracter_.puerta, y = 0.01f;
+        if (azar_.real() < 0.2f) x = entre(azar_, -0.02f, 0.02f);  // de vez en cuando, al frente
+        break;
+      case Mirada::Particula: x = sacBaseX_, y = sacBaseY_; break;  // la sigue (abajo), continuo: sin saltos
       case Mirada::Reojo: x = 0.2f * ladoMirada_, y = -0.02f; break;
       case Mirada::Estimulo: x = estX_ * 0.15f, y = estY_ * 0.1f; break;
       case Mirada::Rem:
@@ -417,8 +441,10 @@ void MotorVida::microVida(float dt) {
         y = mezclar(entre(azar_, -0.04f, 0.04f), estY_ * 0.09f, 0.3f);
         // Ánimo bajo: mira más abajo. Tímido, también.
         y -= 0.04f * maxf(0, 0.45f - estado_[1]) / 0.45f + 0.02f * p.timidez;
-        // Si a esta hora suele aparecer el dueño, lo espera mirando al frente.
-        if (esperandoDueno_) x *= 0.4f, y *= 0.4f;
+        // Si a esta hora suele aparecer el dueño, lo espera: mirando "la
+        // puerta" si ya aprendió a qué hora llegás (v3), si no al frente.
+        if (esperandoDueno_ && rec_.minLlegada < 1440 && azar_.real() < 0.6f) x = 0.17f * caracter_.puerta, y = 0.01f;
+        else if (esperandoDueno_) x *= 0.4f, y *= 0.4f;
         if (azar_.real() < 0.3f) x *= 0.2f, y *= 0.2f;
       }
     }
@@ -430,6 +456,19 @@ void MotorVida::microVida(float dt) {
       proximoParpadeo_ = maxf(proximoParpadeo_, t + 1.5f);
     }
   }
+  if (mirada_ == Mirada::Particula) {
+    // La última partícula viva (persigue la estrella, mira su dibujito).
+    const Particula* q = nullptr;
+    for (const Particula& pa : cuadro_.particulas)
+      if (pa.viva && !pa.enBurbuja && (!q || pa.edad < q->edad)) q = &pa;
+    if (q) sacBaseX_ = limitar(q->x * 0.4f, -0.2f, 0.2f), sacBaseY_ = limitar(q->y * 0.3f, -0.12f, 0.12f);
+  }
+  // El microgesto propio (v3): cada tanto, el suyo.
+  if (despierto && microParam_ >= 0 && t >= proximoMicro_) {
+    const MicrogestoBase& g = caracter::MICROGESTOS[caracter_.microgesto];
+    microDesde_ = t;
+    proximoMicro_ = t + entre(azar_, g.cadaMin, g.cadaMax);
+  }
   if (mirada_ == Mirada::Ovejas) {
     const float f = fraccion(t / 1.3f);
     sacBaseX_ = -0.12f + 0.24f * f;
@@ -437,7 +476,7 @@ void MotorVida::microVida(float dt) {
   }
   if (t >= proximaMicro_) {
     proximaMicro_ = t + entre(azar_, 0.15f, 0.4f);
-    const bool quieto = mirada_ == Mirada::Perdida || mirada_ == Mirada::Ovejas ||
+    const bool quieto = mirada_ == Mirada::Perdida || mirada_ == Mirada::Ovejas || mirada_ == Mirada::Particula ||
                         (capa >= 0 && config_->vida.caras[capa].movimiento == Movimiento::Quieto);
     const float a = quieto ? 0.002f : entre(azar_, 0.005f, 0.01f);
     microX_ = entre(azar_, -1, 1) * a, microY_ = entre(azar_, -1, 1) * a * 0.6f;
@@ -504,6 +543,9 @@ void MotorVida::cambioDeCapa(int cara, float peso) {
   capaPeso_ = peso;
   capaCambio_ = t;
   capaDesde_ = t;
+  // La voz propia sin texto (si hay parlante): un "¡oh!" al sorprenderse, un
+  // "mmm..." al pensar (caracter.json "voz.caras"; el sistema decide si suena).
+  if (cara >= 0 && cara != capaCara_ && peso >= 0.5f && modo_ == Modo::Despierto) vocalizar(config_->vida.caras[cara].nombre, true);
   // La partícula propia de la cara, al llegar.
   if (cara >= 0 && config_->vida.caras[cara].particula >= 0 && modo_ == Modo::Despierto)
     soltar(static_cast<TipoParticula>(config_->vida.caras[cara].particula));
@@ -646,6 +688,27 @@ void MotorVida::calcularObjetivos(float dt) {
     if (c < 0 || w <= 0) continue;
     const float e = viejo ? Eant[i] : E[i];
     T[i] = base[i] + w * (e - base[i]) + (T[i] - base[i]);
+  }
+
+  // v3: la cara de pensar mira hacia su lado (el de su semilla).
+  if (caracter_.hay && caraPensar_ >= 0 && capaCara_ == caraPensar_ && capaPeso_ > 0) {
+    const CaraVida& c = v.caras[caraPensar_];
+    for (int a = 0; a < c.nAjustes; a++) {
+      const int pi = c.ajustes[a].param;
+      const float x = c.ajustes[a].valor();
+      if (pi == param::GX) T[pi] += capaPeso_ * (absf(x) * caracter_.pensarX - x);
+      if (pi == param::GY) T[pi] += capaPeso_ * (absf(x) * caracter_.pensarY - x);
+    }
+  }
+  // El microgesto: un empujoncito suave (seno) que los resortes redondean.
+  if (microParam_ >= 0 && modo_ == Modo::Despierto && !fija_.existe()) {
+    const MicrogestoBase& g = caracter::MICROGESTOS[caracter_.microgesto];
+    const float u = (t - microDesde_) / g.dura;
+    if (u >= 0 && u < 1) {
+      const float b = g.valor * seno(u * MEDIA_VUELTA);
+      T[microParam_] += b;
+      if (microAmbos_) T[microParam_ + param::DER] += b;
+    }
   }
 
   // La capa de movimiento de la cara que manda.
@@ -841,6 +904,10 @@ void MotorVida::soltar(TipoParticula tipo, int cuantas) {
       case TipoParticula::Reloj:
         p.x = 0.36f, p.y = 0.28f, p.vy = 0.04f, p.vida = 1.6f, p.tamano = 0.07f;
         break;
+      case TipoParticula::Garabato:
+        // Un dibujito abajo de los ojos, que se va haciendo (v3).
+        p.x = entre(azar_, -0.12f, 0.12f), p.y = -0.3f, p.vida = 4.0f, p.tamano = 0.085f;
+        break;
       default:
         break;
     }
@@ -887,6 +954,7 @@ void MotorVida::armarCuadro(float) {
     const int falta = minutosHasta(ctx_.minutoDelDia, config_->vida.duerme);
     if (falta < 60) brillo = 1.0f - 0.3f * (60 - falta) / 60.0f;
   }
+  if (!dormido) brillo *= 1.0f - caracter::BRILLO_DORMIS * dormisPeso_;
   // Con poca batería (sin enchufar), más apagado.
   if (!dormido && ctx_.bateria >= 0 && ctx_.bateria < 20 && ctx_.cargando != 1) brillo *= 0.85f;
   c.brillo = minf(brillo, config_->vida.brilloMax);
@@ -922,6 +990,12 @@ float MotorVida::variable(VarVida v) const {
     case VarVida::Dormido: return modo_ == Modo::Dormido ? 1.0f : 0.0f;
     case VarVida::Noche: return enHorarioDormir() ? 1.0f : 0.0f;
     case VarVida::Cargando: return ctx_.cargando == 1 ? 1.0f : 0.0f;
+    case VarVida::Etapa: return static_cast<float>(rec_.etapa);
+    case VarVida::Dias: return static_cast<float>(mem_.dias);
+    case VarVida::Solo: return caracter_.hay && (ausente_ || (t - ultimaInteraccion_) >= caracter::SOLO_MINUTOS * 60.0f) ? 1.0f : 0.0f;
+    case VarVida::Bajon: return maxf(0, bajon());
+    case VarVida::Lluvia: return lluvia_ ? 1.0f : 0.0f;
+    case VarVida::Esperando: return esperandoDueno_ ? 1.0f : 0.0f;
     default: return 0;
   }
 }
@@ -1008,6 +1082,7 @@ void MotorVida::actualizarEstado(float dt) {
     if (!enHorarioDormir() && desde < 60) circ += 0.15f * (60 - desde) / 60.0f;
     if (m >= 13 * 60 + 30 && m < 15 * 60 + 30) circ += 0.12f;
   }
+  circ += caracter::SUENO_DORMIS * dormisPeso_;  // v3: a la hora en que te dormís
   estado_[5] = limitar(presionSueno_ + circ, 0, 1);
 
   // Estrés: se va en unos 5 min (más lento con mal genio).
@@ -1018,6 +1093,7 @@ void MotorVida::actualizarEstado(float dt) {
 
 void MotorVida::lento(float dt) {
   const float t = static_cast<float>(t_);
+  actualizarV3();
   actualizarEstado(dt);
   ritmo();
   caraEstado_ = caraEstado();
@@ -1066,7 +1142,12 @@ void MotorVida::lento(float dt) {
     int mejor = -1;
     for (int h = 0; h < 24; h++)
       if (mem_.horas[h] >= 3 && (mejor < 0 || mem_.horas[h] > mem_.horas[mejor])) mejor = h;
-    if (mejor >= 0) {
+    if (caracter_.hay && rec_.minLlegada < 1440) {
+      // v3: ya sabe a qué minuto llegás.
+      const int d = minutosHasta(rec_.minLlegada, ctx_.minutoDelDia);
+      esperandoDueno_ = (d <= caracter::ESPERAR_DESPUES || d >= 1440 - caracter::ESPERAR_ANTES) && t - ultimaInteraccion_ > 1800;
+      if (esperandoDueno_) anotarHoy(Hoy::Espero, static_cast<uint8_t>(rec_.minLlegada / 60));
+    } else if (mejor >= 0) {
       const int d = minutosHasta(mejor * 60, ctx_.minutoDelDia);
       esperandoDueno_ = (d < 30 || d > 1410) && t - ultimaInteraccion_ > 1800;
       if (esperandoDueno_) anotarHoy(Hoy::Espero, static_cast<uint8_t>(mejor));
@@ -1074,9 +1155,17 @@ void MotorVida::lento(float dt) {
   }
 
   // Un hito pendiente se festeja apenas está libre.
+  // Creció (v3): festeja (la regla de "crecio") y lo dice.
+  if (crecioPendiente_ && modo_ == Modo::Despierto && actual_ == -1 && !fija_.existe()) {
+    crecioPendiente_ = false;
+    if (!reglaPara(Evento::Crecio)) reglaPara(Evento::Hito);
+    decir(Situacion::Crecio);
+  }
   if (hitoPendiente_ && modo_ == Modo::Despierto && actual_ == -1 && !fija_.existe()) {
     hitoPendiente_ = false;
-    reglaPara(Evento::Hito);
+    // Las fechas serias (el Día de la Memoria) o las tuyas no se festejan: se dicen.
+    if (!hitoSinFestejo_) reglaPara(Evento::Hito);
+    hitoSinFestejo_ = false;
     decir(hitoSituacion_ >= 0 ? static_cast<Situacion>(hitoSituacion_) : Situacion::Hito);
     hitoSituacion_ = -1;
   }
@@ -1120,7 +1209,16 @@ void MotorVida::ritmo() {
     if (!hayHora && quieto >= 600 && estado_[5] > 0.8f && !ocupado) dormir(ahora_);
     return;
   }
-  // Dormido.
+  // Dormido. v3: si sabe a qué hora llegás, se despierta un poco antes.
+  if (caracter_.hay && hayHora && rec_.minLlegada < 1440 && caracter::DESPERTAR_ANTES > 0) {
+    const int falta = minutosHasta(ctx_.minutoDelDia, rec_.minLlegada);
+    const uint16_t dia = diaVida();
+    if (falta > 0 && falta <= caracter::DESPERTAR_ANTES && anticipoDia_ != dia) {
+      anticipoDia_ = dia;
+      despertar(ahora_, false);
+      return;
+    }
+  }
   if (siesta_ ? t >= siestaHasta_ : (hayHora ? !noche : presionSueno_ < 0.12f)) {
     despertar(ahora_, false);
     return;
@@ -1129,7 +1227,9 @@ void MotorVida::ritmo() {
   // Sueños: cada 20 a 40 min, una fase de unos 30 s.
   if (t >= proximoSueno_ && actual_ == -1) {
     proximoSueno_ = t + entre(azar_, 600, 1500);
-    const bool pesadilla = estado_[6] > 0.5f || azar_.real() < 0.2f;
+    // Si hoy lo sacudieron fuerte, más pesadillas (v3).
+    const bool sacudido = caracter_.hay && ocurrio(diaVida(), TipoEpisodio::Sacudida);
+    const bool pesadilla = estado_[6] > 0.5f || azar_.real() < (sacudido ? 0.6f : 0.2f);
     const int s = config_->vida.indiceComportamiento(pesadilla ? "pesadilla" : "sonar");
     anotarHoy(Hoy::Sueno, pesadilla ? 16 : 0);
     if (s >= 0) comportamiento(s, ahora_);
@@ -1148,6 +1248,12 @@ void MotorVida::dormir(uint32_t) {
   proximoZzz_ = proximaPosturaSueno_ = proximoGestoSueno_ = proximoRonquido_ = 0;
   if (actual_ != -1) terminarComportamiento();
   anotar(2, 1);
+  if (enHorarioDormir()) {
+    const float q = (static_cast<float>(t_) - ultimaInteraccion_) / 60.0f;
+    if (ctx_.minutoDelDia >= 0 && q < 180 && ultimaInteraccion_ > 0)
+      aprender(rec_.minDormis, ((ctx_.minutoDelDia - static_cast<int>(q)) % 1440 + 1440) % 1440);
+    escribirDiario(diaVida());
+  }
 }
 
 void MotorVida::siesta(uint32_t ahora, uint32_t segundos) {
@@ -1279,6 +1385,7 @@ void MotorVida::elegirComportamiento() {
     float afinidad = 1;
     for (int r = 0; r < N_RASGOS; r++) afinidad += b.afinidad[r] / 100.0f * (p[r] - 0.5f) * 2;
     afinidad = limitar(afinidad, 0.2f, 2);
+    if (i == favoritoIdx_) afinidad *= caracter::FAVORITO;  // su gesto favorito (v3)
     float contexto = 1;
     if (ctx_.bateria >= 0 && ctx_.bateria < 20) contexto *= 0.6f;
     float puntaje = necesidad * afinidad * contexto;
@@ -1341,6 +1448,12 @@ bool MotorVida::comportamiento(int i, uint32_t) {
   }
   enfriadoHasta_[i] = static_cast<float>(t_) + b.enfriamiento;
   ladoMirada_ = azar_.real() < 0.5f ? -1.0f : 1.0f;
+  // Los que hace solo (con "solo" en sus condiciones): al volver, te propone algo.
+  for (int c = 0; c < b.nCuando; c++)
+    if (b.cuando[c].var == VarVida::Solo) {
+      fueSolo_ = true;
+      recordar(TipoEpisodio::Solo);
+    }
   anotar(1, static_cast<uint8_t>(i));
   empezarPaso(0, true);
   return true;
@@ -1376,9 +1489,17 @@ void MotorVida::empezarPaso(int i, bool primera) {
   if (p.dentro >= 0 && p.particula == static_cast<int8_t>(TipoParticula::Burbuja)) {
     // Lo que sueña, adentro de la burbuja que acaba de salir.
     static const TipoParticula SUENOS[] = {TipoParticula::Corazon, TipoParticula::Estrella, TipoParticula::Nota, TipoParticula::Oveja};
-    const uint32_t cual = azar_.entre(0, 3);
-    const TipoParticula que = p.dentro == DENTRO_SUENO ? SUENOS[cual] : static_cast<TipoParticula>(p.dentro);
-    if (p.dentro == DENTRO_SUENO) anotarHoy(Hoy::SonoCon, static_cast<uint8_t>(1u << cual));
+    uint32_t cual = azar_.entre(0, 3);
+    TipoParticula que = p.dentro == DENTRO_SUENO ? SUENOS[cual] : static_cast<TipoParticula>(p.dentro);
+    // v3: lo que sueña sale de lo que pasó en el día (si pasó algo).
+    const int delDia = p.dentro == DENTRO_SUENO && caracter_.hay ? particulaDeSueno() : -1;
+    if (delDia >= 0) {
+      que = static_cast<TipoParticula>(delDia);
+      cual = 4;
+      for (uint32_t k = 0; k < 4; k++)
+        if (SUENOS[k] == que) cual = k;
+    }
+    if (p.dentro == DENTRO_SUENO && cual < 4) anotarHoy(Hoy::SonoCon, static_cast<uint8_t>(1u << cual));
     const Particula* b = nullptr;
     for (const Particula& q : cuadro_.particulas)
       if (q.viva && q.tipo == TipoParticula::Burbuja && q.edad == 0) b = &q;
@@ -1584,6 +1705,7 @@ void MotorVida::evento(Evento e, uint32_t ahora) {
     }
   }
   anotar(0, static_cast<uint8_t>(e));
+  vocalizar(nombreEvento(e), false);
   const float animoAntes = estado_[1];
   // Percepción: lo nuevo da curiosidad; lo repetido, cada vez menos.
   const int ie = static_cast<int>(e);
@@ -1601,6 +1723,7 @@ void MotorVida::evento(Evento e, uint32_t ahora) {
   if (e == Evento::SacudidaFuerte || e == Evento::Caida) {
     if (ctx_.epoch) mem_.rencorHasta = ctx_.epoch + 86400;
     mem_.sacudidas++;
+    if (e == Evento::SacudidaFuerte) recordar(TipoEpisodio::Sacudida);
     mem_.deriva[3] = static_cast<int8_t>(mini(10, mem_.deriva[3] + (azar_.real() < 0.2f ? 1 : 0)));
   }
   if (!reglaPara(e)) {
@@ -1682,6 +1805,8 @@ void MotorVida::memoriaInteraccion(Evento e) {
   if (ausencia * 3600 >= tiempos::AUSENCIA_SALUDO_S && (mem_.ultimaInteraccion || t > 0)) {
     hayVolvio_ = true;
     ausenciaHoras_ = ausencia;
+    if (!enHorarioDormir()) aprender(rec_.minLlegada, ctx_.minutoDelDia);
+    if (ausencia >= 24) recordar(TipoEpisodio::Volviste, static_cast<uint8_t>(minf(255, ausencia / 24)));
     mem_.ausenciaMaxima = static_cast<uint16_t>(minf(65535, maxf(mem_.ausenciaMaxima, ausencia)));
   }
   // Aprende a qué hora suele aparecer (la primera interacción después de 1 h).
@@ -1692,7 +1817,13 @@ void MotorVida::memoriaInteraccion(Evento e) {
     h++;
   }
   ultimaInteraccion_ = t;
-  if (e == Evento::Caricia) mem_.caricias++;
+  ausente_ = false;
+  if (e == Evento::Caricia) {
+    mem_.caricias++;
+    const uint16_t d = diaVida();
+    if (d && rec_.diaCaricias != d) rec_.diaCaricias = d, rec_.hoyCaricias = 0;
+    if (rec_.hoyCaricias < 255 && ++rec_.hoyCaricias == caracter::CARICIAS_DIA) recordar(TipoEpisodio::Caricias, rec_.hoyCaricias);
+  }
   else if (esToque(e)) mem_.toques++;
   // Afecto: la atención repetida a lo largo de los días (con tope diario).
   if (ctx_.epoch) {
@@ -1705,6 +1836,9 @@ void MotorVida::memoriaInteraccion(Evento e) {
       mem_.dias++;
       mem_.ultimoDia = dia;
       mem_.afectoHoy = 0;
+      // Si ayer no durmió de noche (con una cara fija, por ejemplo), el diario de ayer.
+      const uint16_t dv = diaVida();
+      if (dv > 1 && rec_.diaDiario < dv - 1 && hayEpisodio(static_cast<uint16_t>(dv - 1))) escribirDiario(static_cast<uint16_t>(dv - 1));
     }
     mem_.ultimaInteraccion = ctx_.epoch;
   }
@@ -1742,7 +1876,10 @@ void MotorVida::anotarHoy(Hoy que, uint8_t dato) {
       mem_.hoySonoCon |= dato;
       break;
     case Hoy::SonoCon: mem_.hoySonoCon |= dato; break;
-    case Hoy::Animo: mem_.hoyAnimo = dato; break;
+    case Hoy::Animo:
+      mem_.hoyAnimo = dato;
+      anotarAnimo(dato);
+      break;
     case Hoy::Espero:
       if (!mem_.hoyEspero) mem_.hoyEspero = static_cast<uint8_t>(dato + 1);
       break;
@@ -1761,6 +1898,7 @@ void MotorVida::anotarReflejo(uint16_t ms) {
 void MotorVida::rutinaConVos(bool volvio) {
   const bool primero = primeroDelDia_;
   primeroDelDia_ = false;
+  if (primero) primerContacto_ = static_cast<float>(t_);  // v3: el recuerdo de ayer va un rato después
   if (modo_ != Modo::Despierto) return;
   const int m = ctx_.minutoDelDia;
   if (primero) {
@@ -1778,10 +1916,30 @@ void MotorVida::rutinaConVos(bool volvio) {
       if (mem_.horas[h] >= 3 && (mejor < 0 || mem_.horas[h] > mem_.horas[mejor])) mejor = h;
     const int tarde = mejor >= 0 ? minutosHasta(mejor * 60, m) : -1;
     if (tarde >= 90 && tarde <= 360) {
+      recordar(TipoEpisodio::Tarde, static_cast<uint8_t>(minf(255, tarde / 10)));
       decir(Situacion::Tardaste);
       return;
     }
   }
+  // v3: estuvo jugando solo y volviste: te propone algo (lo que más jugás, tus gustos).
+  if (fueSolo_ && caracter_.hay) {
+    fueSolo_ = false;
+    decir(Situacion::Propuesta);
+    return;
+  }
+  // v3: un rato después del primer encuentro del día, se acuerda de ayer.
+  const float tt = static_cast<float>(t_);
+  const uint16_t hoy = diaVida();
+  if (caracter_.hay && !primero && hoy && recuerdoDia_ != hoy && tt - primerContacto_ >= 1200) {
+    // El "¿hoy también vas a posponer?" lo dice el despertador.
+    if (masImportante(static_cast<uint16_t>(hoy - 1), &recuerdo_, 1u << static_cast<int>(TipoEpisodio::Posponer))) {
+      recuerdoDia_ = hoy;
+      decir(Situacion::Recuerdo);
+      return;
+    }
+  }
+  // Con empatía (estuviste bajoneado estos días): más mimos.
+  if (caracter_.hay && empatico() && !primero) decir(Situacion::Mimos);
   if (m < 0) return;
   if (m >= 13 * 60 && m <= 15 * 60 + 30) decir(Situacion::Comiste);
   const int falta = minutosHasta(m, config_->vida.duerme);
@@ -1848,9 +2006,11 @@ void MotorVida::revisarHitos() {
         mem_.fechas = static_cast<uint8_t>(mem_.fechas | (1u << f)), nuevos++;
         hitoSituacion_ = static_cast<int8_t>(fechas[f].s);
       }
+    nuevos = static_cast<uint16_t>(nuevos + fechasV3(static_cast<int32_t>(ctx_.epoch / 86400)));
     if (config_->vida.cumpleDueno == hoy && mem_.anioCumpleDueno != anio) {
       mem_.anioCumpleDueno = static_cast<uint16_t>(anio), nuevos++;
       hitoSituacion_ = static_cast<int8_t>(Situacion::CumpleDueno);  // el del dueño gana
+      hitoSinFestejo_ = false;
     }
   }
   if (nuevos) {
@@ -1869,6 +2029,22 @@ void MotorVida::guardar() {
   uint8_t b[LARGO_MEMORIA];
   const size_t n = codificarMemoria(mem_, b, sizeof b);
   salidas_.guardar(salidas_.ctx, b, n);
+  guardarRecuerdos();
+}
+
+void MotorVida::vocalizar(const char* clave, bool cara) {
+  if (!salidas_.sonido || !clave) return;
+  bool hay = false;
+  if (cara) {
+    for (const VozBase& v : caracter::VOZ_CARAS) hay = hay || iguales(v.clave, clave);
+  } else {
+    for (const VozBase& v : caracter::VOZ_EVENTOS) hay = hay || iguales(v.clave, clave);
+  }
+  if (!hay) return;
+  char n[LARGO_VIDA + 8];
+  const size_t k = copiarTexto(n, sizeof n, "voz:");
+  copiarTexto(n + k, sizeof n - k, clave);
+  salidas_.sonido(salidas_.ctx, n);
 }
 
 void MotorVida::anotar(uint8_t tipo, uint8_t dato) {

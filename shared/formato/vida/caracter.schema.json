@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sinteticalabs.com/schema/vida/caracter.json",
+  "title": "El carácter del motor de vida v3 (docs/motor-de-vida.md, \"v3\")",
+  "description": "Tics por semilla, etapas, memoria de lo que pasó, diario, empatía, clima, feriados, rutinas y la voz propia sin texto. Lo embebe firmware/herramientas/embeber_caras.py como tablas (flash).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tics", "etapas", "meses_juntos", "episodios", "diario_tranquilo", "diario_lineas", "juegos", "toques",
+    "caricias_dia", "empatia", "clima", "feriados", "rutinas", "solo_minutos", "voz"],
+  "$defs": {
+    "rango": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+    "frases": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"type": "string", "minLength": 1, "maxLength": 60}},
+    "rasgos": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "energia": {"type": "number", "minimum": -0.3, "maximum": 0.3},
+        "sociabilidad": {"type": "number", "minimum": -0.3, "maximum": 0.3},
+        "picardia": {"type": "number", "minimum": -0.3, "maximum": 0.3},
+        "timidez": {"type": "number", "minimum": -0.3, "maximum": 0.3},
+        "curiosidad": {"type": "number", "minimum": -0.3, "maximum": 0.3},
+        "malGenio": {"type": "number", "minimum": -0.3, "maximum": 0.3}
+      }
+    },
+    "particula": {"enum": ["zzz", "corazon", "lagrima", "gota", "chispa", "pregunta", "exclamacion", "nota", "estrella", "burbuja", "oveja", "reloj", "garabato"]},
+    "textos": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 24}}
+  },
+  "properties": {
+    "tics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["parpadeo", "dobles", "velocidad", "pensar", "caras_pensar", "favoritos", "favorito", "microgestos"],
+      "properties": {
+        "parpadeo": {"$ref": "#/$defs/rango", "description": "Cuánto multiplica el intervalo entre parpadeos"},
+        "dobles": {"$ref": "#/$defs/rango", "description": "Probabilidad de un parpadeo doble"},
+        "velocidad": {"$ref": "#/$defs/rango", "description": "Cuánto multiplica la rigidez de los resortes"},
+        "pensar": {"type": "array", "minItems": 1, "maxItems": 8,
+          "items": {"type": "array", "items": {"type": "number", "minimum": -1, "maximum": 1}, "minItems": 2, "maxItems": 2},
+          "description": "Hacia dónde mira cuando piensa (x, y)"},
+        "caras_pensar": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
+        "favoritos": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "string"}},
+        "favorito": {"type": "number", "minimum": 1, "maximum": 3},
+        "microgestos": {"type": "array", "minItems": 1, "maxItems": 8, "items": {
+          "type": "object", "additionalProperties": false, "required": ["nombre", "param", "valor", "dura", "cada"],
+          "properties": {
+            "nombre": {"type": "string"},
+            "param": {"type": "string", "pattern": "^((izq|der)\\.)?[a-z]+$"},
+            "valor": {"type": "number", "minimum": -0.5, "maximum": 0.5},
+            "dura": {"type": "number", "minimum": 0.1, "maximum": 2},
+            "cada": {"$ref": "#/$defs/rango"}
+          }}}
+      }
+    },
+    "etapas": {"type": "array", "minItems": 1, "maxItems": 6, "items": {
+      "type": "object", "additionalProperties": false, "required": ["nombre", "dias", "afecto", "rasgos"],
+      "properties": {
+        "nombre": {"type": "string", "pattern": "^[a-z-]+$"},
+        "dias": {"type": "integer", "minimum": 0, "maximum": 3650},
+        "afecto": {"type": "number", "minimum": 0, "maximum": 1},
+        "rasgos": {"$ref": "#/$defs/rasgos"}
+      }}},
+    "meses_juntos": {"type": "integer", "minimum": 0, "maximum": 11},
+    "episodios": {
+      "type": "object", "additionalProperties": false,
+      "description": "Los nombres son los de TipoEpisodio (motor_vida.h): embeber_caras.py revisa que estén todos",
+      "patternProperties": {"^[a-z-]+$": {
+        "type": "object", "additionalProperties": false, "required": ["importancia", "sueno", "recuerdo", "diario"],
+        "properties": {
+          "importancia": {"type": "integer", "minimum": 0, "maximum": 9},
+          "sueno": {"$ref": "#/$defs/particula"},
+          "recuerdo": {"$ref": "#/$defs/frases"},
+          "diario": {"$ref": "#/$defs/frases"}
+        }}}
+    },
+    "diario_tranquilo": {"$ref": "#/$defs/frases"},
+    "diario_lineas": {"type": "integer", "minimum": 1, "maximum": 3},
+    "juegos": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "string", "minLength": 1, "maxLength": 24}},
+    "toques": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "string", "minLength": 1, "maxLength": 24}},
+    "caricias_dia": {"type": "integer", "minimum": 1, "maximum": 200},
+    "empatia": {
+      "type": "object", "additionalProperties": false,
+      "required": ["dias", "minimo", "umbral", "rasgos", "rigidez", "otra_pregunta_h"],
+      "properties": {
+        "dias": {"type": "integer", "minimum": 1, "maximum": 7},
+        "minimo": {"type": "integer", "minimum": 1, "maximum": 7},
+        "umbral": {"type": "number", "minimum": 0, "maximum": 1},
+        "rasgos": {"$ref": "#/$defs/rasgos"},
+        "rigidez": {"type": "number", "minimum": 0.6, "maximum": 1.2},
+        "otra_pregunta_h": {"type": "integer", "minimum": 0, "maximum": 12}
+      }
+    },
+    "clima": {
+      "type": "object", "additionalProperties": false, "required": ["lluvia", "estaciones"],
+      "properties": {
+        "lluvia": {"type": "object", "additionalProperties": false, "required": ["energia", "curiosidad", "rigidez"],
+          "properties": {"energia": {"type": "number"}, "curiosidad": {"type": "number"}, "rigidez": {"type": "number", "minimum": 0.6, "maximum": 1.2}}},
+        "estaciones": {"type": "object", "additionalProperties": {
+          "type": "object", "additionalProperties": false, "required": ["meses", "energia", "curiosidad"],
+          "properties": {
+            "meses": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 12}},
+            "energia": {"type": "number", "minimum": -0.2, "maximum": 0.2},
+            "curiosidad": {"type": "number", "minimum": -0.2, "maximum": 0.2}
+          }}}
+      }
+    },
+    "feriados": {"type": "array", "maxItems": 32, "items": {
+      "type": "object", "additionalProperties": false, "required": ["titulo", "festejo"],
+      "properties": {
+        "fecha": {"type": "string", "pattern": "^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"},
+        "pascua": {"type": "integer", "minimum": -60, "maximum": 60},
+        "titulo": {"type": "string", "minLength": 1, "maxLength": 40},
+        "festejo": {"type": "boolean"}
+      },
+      "oneOf": [{"properties": {"fecha": true}, "required": ["fecha"]}, {"properties": {"pascua": true}, "required": ["pascua"]}]}},
+    "rutinas": {
+      "type": "object", "additionalProperties": false,
+      "required": ["aprender", "despertar_antes", "esperar_antes", "esperar_despues", "dormis_antes", "brillo_dormis", "sueno_dormis"],
+      "properties": {
+        "aprender": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "despertar_antes": {"type": "integer", "minimum": 0, "maximum": 60},
+        "esperar_antes": {"type": "integer", "minimum": 0, "maximum": 120},
+        "esperar_despues": {"type": "integer", "minimum": 0, "maximum": 180},
+        "dormis_antes": {"type": "integer", "minimum": 0, "maximum": 120},
+        "brillo_dormis": {"type": "number", "minimum": 0, "maximum": 0.6},
+        "sueno_dormis": {"type": "number", "minimum": 0, "maximum": 0.6}
+      }
+    },
+    "solo_minutos": {"type": "integer", "minimum": 1, "maximum": 240},
+    "voz": {
+      "type": "object", "additionalProperties": false, "required": ["sonidos", "caras", "eventos"],
+      "description": "La voz propia sin texto (modo 2, y el 1): lo que balbucea en vez de cada sonido, al llegar a una cara o con un evento",
+      "properties": {
+        "sonidos": {"$ref": "#/$defs/textos"},
+        "caras": {"$ref": "#/$defs/textos"},
+        "eventos": {"$ref": "#/$defs/textos"}
+      }
+    }
+  }
+}

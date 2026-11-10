@@ -65,6 +65,7 @@ bool Sistema::toque(uint8_t tipo, const char* de, const char* expresion) {
   if (motor_.dormido()) motor_.despertar(ahora, false);
   evento(Evento::ToqueRecibido);
   motor_.anotarRegistro(7, tipo);
+  motor_.recordar(TipoEpisodio::Toque, tipo);
   sonar(SONIDOS_TOQUE[tipo]);
   copiarTexto(toqueDe_, sizeof toqueDe_, de);
   toqueTipo_ = tipo;
@@ -117,6 +118,7 @@ void Sistema::agenda(uint16_t minutos, uint16_t duracion, const char* titulo) {
 
 void Sistema::presencia(bool llegaste) {
   const uint32_t ahora = hal_.ahoraMs();
+  motor_.presencia(llegaste);  // v3: aprende a qué hora llegás y a cuál te vas a dormir
   if (llegaste) {
     const uint32_t fuera = fuisteMs_ ? ahora - fuisteMs_ : 0;
     fuisteMs_ = 0;
@@ -184,6 +186,7 @@ void Sistema::marcarHabito(int i, uint8_t racha, bool enElRobot) {
   motor_.interaccion(ahora);
   motor_.evento(Evento::Habito, ahora);
   motor_.anotarRegistro(8, static_cast<uint8_t>(i));
+  motor_.recordar(TipoEpisodio::Habito, static_cast<uint8_t>(i));
   if (enElRobot) notificarEvento(Evento::Habito, 8, static_cast<uint8_t>(i));
   const int c = config_.vida.indiceComportamiento("orgulloso");
   if (c >= 0) motor_.comportamiento(c, ahora);
@@ -297,6 +300,7 @@ void Sistema::musica(uint8_t bpm, bool sonando, const char* titulo, const char* 
   if (f == musicaFirma_) return;
   musicaFirma_ = f;
   if (motor_.dormido()) return;
+  motor_.recordar(TipoEpisodio::Musica);
   const int c = config_.vida.indiceComportamiento("bailar-ritmo");
   if (c >= 0) motor_.comportamiento(c, ahora);
   if (titulo[0] || artista[0]) {

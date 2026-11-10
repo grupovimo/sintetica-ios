@@ -182,11 +182,20 @@ class Sistema {
   // `siNoEntiende` es false, no dice nada (quien llama prueba la IA) y deja la
   // frase de "no entendí" en r->frase.
   bool charlar(const char* texto, size_t n, RespuestaCharla* r, bool siNoEntiende = true);
-  // La voz propia lee el globo en voz alta si hay parlante (Hal::audio).
-  void vozPropia(bool si) {
-    vozPropia_ = si;
-    if (!si) voz_.parar();
+  // La voz propia (si hay parlante: Hal::audio). 0 = apagada; 1 = todo (lee
+  // los globos y balbucea las vocalizaciones); 2 = solo sin texto: balbucea
+  // (murmullos, hablar dormido, sorpresas, el "mm" al pensar, la reacción a
+  // un toque) pero nunca lee un globo (los dice otro: el paquete, la nube, un
+  // TTS). Con 1 o 2, los sonidos de caracter.json "voz.sonidos" salen por la
+  // voz y no por Hal::sonido (ver docs/motor-de-vida.md, "La voz sin texto").
+  void vozPropia(int modo) {
+    vozModo_ = static_cast<uint8_t>(modo < 0 ? 0 : modo > 2 ? 2 : modo);
+    if (!vozModo_) voz_.parar(), vozSuelta_ = false;
   }
+  int modoVozPropia() const { return vozModo_; }
+  // Lo que balbucea si un sonido pasa a la voz propia (nullptr = sale por
+  // Hal::sonido). "voz:<cara o evento>" son las vocalizaciones del motor.
+  const char* vocalizacion(const char* sonido) const;
   bool hablandoEnVozAlta() const { return voz_.hablando(); }
   // Avisa lo que entendió e hizo (0xCC, por BLE y por la nube): cuando charló
   // desde adentro (el micrófono del robot), para que la nube guarde la acción.
@@ -195,11 +204,18 @@ class Sistema {
   uint32_t alarmaCharla() const { return alarmaCharlaMs_; }
   uint32_t recordatorioCharla() const { return recCharlaMs_; }
   const char* textoRecordatorioCharla() const { return recCharla_; }
+  // v3: el texto de un episodio: la línea del diario (como la manda el 0x4D)
+  // o el recuerdo de ayer. false si no hay una frase que sirva.
+  bool textoEpisodio(const Episodio& e, bool diario, char* salida, size_t cap) const;
   // Los gustos guardados ("el mate\nla pizza").
   size_t gustos(char* salida, size_t cap) const;
   // El clima que mandó la nube (vale 3 h).
   const DatosClima& clima() const { return clima_; }
   bool climaVigente() const { return clima_.hay && hal_.ahoraMs() - clima_.recibido < CLIMA_VALE_MS; }
+  // El tamaño de la cara que se ve (config "cara.tamano", limitado para que
+  // entre en la pantalla): llega con un fundido, nunca de golpe.
+  float tamanoVisto() const { return tamanoVisto_; }
+  float tamanoObjetivo() const;
   // El protector de pantalla: 0 = la cara, 1 = la imagen entera.
   float faseProtector() const { return faseProtector_; }
 
@@ -295,6 +311,10 @@ class Sistema {
   void avanzarSprites(uint32_t dt);
   static int leerSprite(void* contexto, int sprite, uint32_t desplazamiento, uint8_t* destino, size_t n);
   int imagenParaMostrar(uint32_t ahora);
+  // Modo galería: la primera imagen subida desde `desde` (en ronda), o -1.
+  int imagenDeGaleria(int desde) const;
+  void pasarGaleria(uint32_t ahora);
+  float alfaGaleria(uint32_t ahora);
   bool dibujarImagen(int espacio, float alfa = 1);
   void avanzarProtector(uint32_t ahora, uint32_t dt);
   void actividad() { ultimaActividad_ = hal_.ahoraMs(); }
@@ -336,6 +356,13 @@ class Sistema {
   uint16_t diaHoy() const;
   void mostrarGlobo(uint32_t ahora);
   void dibujarClima(float cx, float W, float H, float alfa);
+  // v3 (diario.cpp).
+  void leerRecuerdos();
+  void guardarRecuerdos(const uint8_t* d, size_t n);
+  void enviarLineaDiario(const Episodio& e, uint8_t i, uint8_t n, bool aviso);
+  void enviarDiario();
+  void lineaDiarioNueva(uint16_t dia, uint8_t tipo, uint8_t dato);
+  bool hablarV3(Situacion s);
   // v1.10.
   void revisarCharla(uint32_t ahora);
   void avanzarVoz(uint32_t ahora);
@@ -380,6 +407,11 @@ class Sistema {
   // Lista y pulsador del broche.
   uint8_t posLista_ = 0;
   uint32_t ultimaRotacion_ = 0;
+  // Modo galería: la imagen que se ve y el fundido al pasar a la siguiente.
+  uint8_t posGaleria_ = 0;
+  uint32_t galeriaDesde_ = 0;
+  uint32_t galeriaFundido_ = 0;  // 0 = sin fundido
+  bool galeriaPaso_ = false;
   bool apagado_ = false;
   bool botonApretado_ = false;
   bool ignorarSoltar_ = false;
@@ -458,6 +490,8 @@ class Sistema {
   uint32_t proximaAgua_ = 0;
   bool pausaDicha_ = false;
   uint16_t animoDia_ = 0;
+  uint32_t animoPregMs_ = 0;   // v3: con empatía, pregunta otra vez unas horas después
+  bool animoOtra_ = false;
   bool preguntando_ = false, pregApretado_ = false, tragarPregunta_ = false;
   uint8_t pregToques_ = 0;
   uint32_t pregDesde_ = 0, pregToque_ = 0;
@@ -486,7 +520,14 @@ class Sistema {
   char recCharla_[LARGO_TEXTO_CHARLA] = {};
   bool dormirTrasGlobo_ = false;
   VozPropia voz_;
-  bool vozPropia_ = true;
+  float tamanoVisto_ = 1;  // cara.tamano, con su fundido
+  VistaRostro vistaCara() const {
+    VistaRostro v = vistaRostro_;
+    v.unidad *= tamanoVisto_;
+    return v;
+  }
+  uint8_t vozModo_ = 1;
+  bool vozSuelta_ = false;  // una vocalización (sin globo)
   uint32_t vozDesde_ = 0, vozEnviadas_ = 0;
   // Protector de pantalla.
   uint32_t ultimaActividad_ = 0;

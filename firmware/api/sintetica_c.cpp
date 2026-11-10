@@ -422,7 +422,7 @@ int sintetica_decir(const char* texto, const char* expresion) {
   return 0;
 }
 
-void sintetica_voz_propia(int si) { g_sistema.vozPropia(si != 0); }
+void sintetica_voz_propia(int modo) { g_sistema.vozPropia(modo); }
 
 int sintetica_charlar_con(const sintetica_charla_ctx* c, const char* texto, size_t n, uint8_t* estado, sintetica_charla* salida) {
   if (!textoCharlaValido(texto, n) || !estado) return -1;

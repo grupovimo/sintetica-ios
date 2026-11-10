@@ -74,7 +74,7 @@ let TIPOS_AVISO = ["notificacion", "llamada", "pago", "mail", "github", "pedido"
 let JUEGOS = ["ppt", "reflejos", "mirada", "dado", "moneda"]
 let ANIMOS = ["bien", "medio", "mal"]
 let ACCIONES_ALARMA = ["apagar", "posponer", "probar", "despertar"]
-let MODOS = ["mascota", "reloj", "pomodoro", "clima", "notificaciones"]
+let MODOS = ["mascota", "reloj", "pomodoro", "clima", "notificaciones", "galeria"]
 
 private let MENSAJES: [Int: String] = [
     0: "ok", 1: "muy grande", 2: "fuera de orden", 3: "CRC distinto", 4: "JSON inválido", 5: "config inválida",

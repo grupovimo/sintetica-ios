@@ -6,6 +6,7 @@
 #include "globo.h"
 #include "sistema.h"
 #include "texto.h"
+#include "vida_base.h"
 
 namespace sintetica {
 
@@ -56,6 +57,9 @@ void Sistema::cuidar(uint32_t ahora) {
   // una hora después de despertarse a una antes de dormir.
   const uint32_t ep = epoch();
   const uint32_t ultima = motor_.memoria().ultimaInteraccion;
+  // v3: si anduviste bajoneado estos días, pregunta otra vez unas horas después.
+  const bool otraVez = !animoOtra_ && animoPregMs_ && motor_.empatico() && caracter::OTRA_PREGUNTA_H > 0 &&
+                       ahora - animoPregMs_ >= caracter::OTRA_PREGUNTA_H * 3600000u;
   // Te vio hace menos de 2 min (y no recién prendido: que no te frene el primer toque).
   const bool estas = ep && ultima && ep >= ultima && ep - ultima < 120 && ahora - arranque_ >= 10u * 60000u;
   if (c.animo && !preguntando_ && despierto && estas && !globo_ && !hayPendiente_ && !alarma_ &&
@@ -67,6 +71,11 @@ void Sistema::cuidar(uint32_t ahora) {
     const bool respondioHoy = mem.hoyAnimo && mem.hoyDia == static_cast<uint8_t>((e / 86400u) % 251u + 1u);
     if (dia && dia != animoDia_ && !respondioHoy) {
       animoDia_ = dia;
+      animoOtra_ = false;
+      animoPregMs_ = ahora ? ahora : 1;
+      preguntarAnimo(ahora);
+    } else if (dia && dia == animoDia_ && otraVez) {
+      animoOtra_ = true;
       preguntarAnimo(ahora);
     }
   }
@@ -299,6 +308,9 @@ void Sistema::terminarJuego(int resultado) {
   if (resultado == 3 && ahora - juegoAccion_ >= JUEGO_QUIETO_MS) return;  // nadie jugó: no cuenta
   motor_.anotarHoy(Hoy::Juego);
   if (resultado == 1) motor_.anotarHoy(Hoy::JuegoGanado);
+  // v3: para acordarse ("ayer me ganaste al dado") y proponerte el que más jugás.
+  static const TipoEpisodio EP[] = {TipoEpisodio::Gane, TipoEpisodio::Perdi, TipoEpisodio::Empate};
+  if (resultado <= 2) motor_.recordar(EP[resultado], static_cast<uint8_t>(j));
   const uint8_t dato = static_cast<uint8_t>(j * 16 + resultado);
   motor_.anotarRegistro(5, dato);
   evento(Evento::Juego);

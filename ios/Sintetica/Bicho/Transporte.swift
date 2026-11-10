@@ -22,8 +22,17 @@ protocol Transporte: AnyObject {
     var difusor: Difusor { get }
     func conectar() async throws
     func escribir(_ car: Car, _ datos: [UInt8]) async throws
+    /// Sin esperar la confirmación de cada escritura (los bloques de las imágenes).
+    func escribirRapido(_ car: Car, _ datos: [UInt8]) async throws
+    /// El bloque más grande que entra en una escritura rápida.
+    var tamanoBloque: Int { get }
     func leerEstado() async throws -> [UInt8]
     func cerrar()
+}
+
+extension Transporte {
+    func escribirRapido(_ car: Car, _ datos: [UInt8]) async throws { try await escribir(car, datos) }
+    var tamanoBloque: Int { 180 }
 }
 
 /// "Probar sin bicho": el núcleo corre en el celu y se le habla con los mismos bytes que por BLE.

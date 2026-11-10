@@ -91,7 +91,7 @@ let ACCIONES_AUTO: [(tipo: String, nombre: String, icono: String)] = [
     ("despertar", "Despertar", "sunrise.fill"), ("jugar", "Jugar", "gamecontroller.fill"), ("telegram", "Telegram", "paperplane.fill"), ("webhook", "URL", "link"),
     ("robot", "Otro robot", "person.2.fill"),
 ]
-let MODOS_ACCION: [(String, String)] = [("mascota", "Compañía"), ("reloj", "Reloj"), ("pomodoro", "Pomodoro"), ("clima", "Clima")]
+let MODOS_ACCION: [(String, String)] = [("mascota", "Compañía"), ("reloj", "Reloj"), ("pomodoro", "Pomodoro"), ("clima", "Clima"), ("galeria", "Galería")]
 /// Las que solo tienen sentido con un cuándo.
 let PLANTILLAS_CUANDO: [String: [String]] = ["juego": ["{juego}", "{resultado}"], "animo": ["{animo}"], "habito": ["{habito}", "{racha}"]]
 let PLANTILLAS_AUTO = ["{robot}", "{dueno}", "{texto}", "{hora}", "{clima}", "{temp}", "{max}", "{min}", "{ciudad}", "{bateria}", "{expresion}"]

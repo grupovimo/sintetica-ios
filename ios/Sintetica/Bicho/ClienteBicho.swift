@@ -180,9 +180,10 @@ final class ClienteBicho {
     /// Manda una imagen QOI (del tamaño de la pantalla) a un espacio, avisando el progreso (0 a 1).
     func subirImagen(_ espacio: Int, _ qoi: [UInt8], progreso: @escaping (Double) -> Void = { _ in }) async throws {
         let flujo = transporte.difusor.escuchar()
-        let escrituras = escriturasDeImagen(espacio, qoi)
+        let escrituras = escriturasDeImagen(espacio, qoi, tamanoBloque: transporte.tamanoBloque)
         for (i, e) in escrituras.enumerated() {
-            try await transporte.escribir(.imagen, e)
+            // El inicio y el fin, con respuesta; los bloques, sin esperar cada uno.
+            if i == 0 || i == escrituras.count - 1 { try await transporte.escribir(.imagen, e) } else { try await transporte.escribirRapido(.imagen, e) }
             progreso(Double(i + 1) / Double(escrituras.count))
         }
         let r: Respuesta = try await conTiempo(15) {

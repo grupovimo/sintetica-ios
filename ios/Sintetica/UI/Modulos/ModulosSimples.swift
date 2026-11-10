@@ -259,14 +259,17 @@ struct SelectorCumple: View {
     }
 }
 
-/// Modos: qué es el robot ahora. Compañía (se maneja solo), reloj o pomodoro.
+/// Modos: qué es el robot ahora. Compañía (se maneja solo), reloj, pomodoro,
+/// clima o la galería de sus imágenes.
 struct ModModos: View {
     let modelo: ModeloRobot
 
     private let modos: [(clave: String, nombre: String, icono: String, listo: Bool)] = [
         ("mascota", "Compañía", "heart.fill", true), ("reloj", "Reloj", "clock.fill", true), ("pomodoro", "Pomodoro", "timer", true),
-        ("clima", "Clima", "cloud.sun.fill", true), ("notificaciones", "Avisos", "bell.fill", false),
+        ("clima", "Clima", "cloud.sun.fill", true), ("galeria", "Galería", "photo.on.rectangle.angled", true),
+        ("notificaciones", "Avisos", "bell.fill", false),
     ]
+    private let cada: [(segundos: Int, texto: String)] = [(10, "10 s"), (30, "30 s"), (60, "1 min"), (300, "5 min")]
 
     var body: some View {
         let c = modelo.config
@@ -281,6 +284,18 @@ struct ModModos: View {
                 }
             }
             if c.modo == "clima" { BloqueUbicacion(modelo: modelo) }
+            if c.modo == "galeria" {
+                HStack(spacing: 8) {
+                    Grabado("Cada")
+                    Spacer()
+                    ForEach(cada, id: \.segundos) { o in
+                        Button { modelo.cambiar { $0.ponerSegundosGaleria(o.segundos) } } label: { Text(o.texto) }
+                            .tecla(c.segundosGaleria == o.segundos ? .naranja : .negra, chica: true)
+                            .accessibilityAddTraits(c.segundosGaleria == o.segundos ? [.isSelected] : [])
+                    }
+                }
+                Label("Un toque pasa a la siguiente", systemImage: "hand.tap.fill").font(Tipos.chico).foregroundStyle(Color.tinta.opacity(0.8))
+            }
             if c.modo == "pomodoro" {
                 VisorMasMenos(rotulo: "Foco", valor: String(format: "%02d min", c.trabajo),
                               menos: { modelo.cambiar { $0.moverPomodoro(trabajo: true, -5) } },

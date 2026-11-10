@@ -12,7 +12,7 @@ struct Rostro;
 
 constexpr int MAX_CARAS_VIDA = 48;
 constexpr int MAX_AJUSTES = 28;
-constexpr int MAX_COMPORTAMIENTOS = 67;  // 58 de base + 9 del usuario
+constexpr int MAX_COMPORTAMIENTOS = 75;  // 66 de base + 9 del usuario
 constexpr int MAX_PASOS = 6;
 constexpr int MAX_CUANDO = 3;
 constexpr int LARGO_VIDA = 25;  // nombres: 24 bytes + terminador
@@ -41,6 +41,13 @@ enum class VarVida : uint8_t {
   Dormido,      // 1 o 0
   Noche,        // 1 en el horario de dormir
   Cargando,     // 1 o 0
+  // v3.
+  Etapa,        // 0, 1, 2… (caracter.json "etapas"; nunca baja)
+  Dias,         // días juntos
+  Solo,         // 1 si no hay nadie (te fuiste, o hace caracter.json "solo_minutos" que nadie lo toca)
+  Bajon,        // 0 a 1: cuánto anduvo bajoneado el dueño los últimos días
+  Lluvia,       // 1 si llueve (el clima de la nube)
+  Esperando,    // 1 si es la hora en que solés llegar y todavía no llegaste
   Cantidad
 };
 constexpr int N_ESTADO = 7;
@@ -122,7 +129,9 @@ struct CaraVida {
 
 // A dónde mira durante un paso.
 enum class Mirada : uint8_t {
-  Libre, Frente, Arriba, Abajo, Izquierda, Derecha, Lado, Alrededor, Perdida, Reojo, Estimulo, Rem, Ovejas, Cantidad
+  Libre, Frente, Arriba, Abajo, Izquierda, Derecha, Lado, Alrededor, Perdida, Reojo, Estimulo, Rem, Ovejas,
+  Particula, Puerta,  // v3: sigue a la última partícula; mira hacia "la puerta" (te espera)
+  Cantidad
 };
 const char* nombreMirada(Mirada m);
 bool miradaPorNombre(const char* n, Mirada* m);

@@ -309,6 +309,9 @@ struct ConfigDoc {
         if esTrabajo { t = Swift.min(120, Swift.max(1, t + d)) } else { s = Swift.min(60, Swift.max(1, s + d)) }
         raiz["pomodoro"] = ["trabajo": t, "descanso": s]
     }
+    /// Modo galería: cada cuántos segundos pasa a la siguiente imagen (30 por defecto).
+    var segundosGaleria: Int { (objeto("galeria")["segundos"] as? NSNumber)?.intValue ?? 30 }
+    mutating func ponerSegundosGaleria(_ s: Int) { if s == 30 { raiz.removeValue(forKey: "galeria") } else { raiz["galeria"] = ["segundos": s] } }
 
     // --- Reglas ---
     var reglas: [Regla] {

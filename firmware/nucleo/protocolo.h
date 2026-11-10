@@ -62,6 +62,7 @@ enum Op : uint8_t {
   CmdHabito = 0x4A,      // [u8 índice][u8 0 hecho, 1 deshacer][u8 racha] (v1.9)
   CmdMusica = 0x4B,      // [u8 bpm][u8 flags: bit 0 sonando][n][título][n][artista] (v1.9)
   CmdCharlar = 0x4C,     // [n][texto 1-200 bytes]: lo charla él (charla sin IA) → [0xCC]... (v1.10)
+  CmdDiario = 0x4D,      // → n × [0xCD][0][u16 día][u8 i][u8 n][u8 tipo][u8 dato][u8 etapa][texto] (v3; también aviso)
   // Imagen
   ImgInicio = 0x20,      // u8 espacio (0-7 imágenes, 8-19 sprites), u32 largo, u32 crc32
   ImgBloque = 0x21,      // u32 desplazamiento, datos

@@ -4,6 +4,7 @@
 #include "globo.h"
 #include "fuentes.h"
 #include "texto.h"
+#include "vida_base.h"
 
 namespace sintetica {
 
@@ -44,6 +45,7 @@ constexpr uint32_t QR_POR_BOTON_MS = 120000;  // el QR del botón dura 2 min
 constexpr uint8_t FALLOS_MAXIMOS = 5;
 constexpr uint32_t BLOQUEO_MS = 30000;
 // Sin letras ni números que se confundan (0/O, 1/I/L).
+constexpr int64_t MARGEN_ARCHIVOS = 16 * 1024;  // bloques de 4 KB y metadatos de LittleFS
 const char ALFABETO_CODIGO[] = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 
@@ -137,8 +139,13 @@ void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
     auto* s = static_cast<Sistema*>(c);
     if (s->hal_.guardar) s->hal_.guardar(CLAVE_VIDA, d, n);
   };
+  sv.guardarRecuerdos = [](void* c, const uint8_t* d, size_t n) { static_cast<Sistema*>(c)->guardarRecuerdos(d, n); };
+  sv.diario = [](void* c, uint16_t dia, uint8_t tipo, uint8_t dato) { static_cast<Sistema*>(c)->lineaDiarioNueva(dia, tipo, dato); };
   motor_.salidas(sv);
   leerMemoria();
+  leerRecuerdos();
+  // v3: sus tics salen del identificador (la MAC): los mismos para siempre.
+  motor_.identidad(protocolo::crc32(reinterpret_cast<const uint8_t*>(id_), largo(id_)));
   leerAjustes();
   leerImagenes();
   leerSprites();
@@ -153,6 +160,7 @@ void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
   proximaVueltaCara_ = vueltaCaraHasta_ = 0;
   ultimaRotacion_ = ahora;
   ultimaActividad_ = ahora;
+  tamanoVisto_ = tamanoObjetivo();  // al prender, ya del tamaño de la config (sin fundido)
   aplicarLista(ahora);
   log("SintéticaOS listo");
 }
@@ -339,6 +347,16 @@ int Sistema::fpsSugerido() const {
 }
 
 // Convierte lo que pasa alrededor (batería, cargador, WiFi) en eventos.
+float Sistema::tamanoObjetivo() const {
+  // Lo más grande que entra: los ojos más abiertos y separados de la marca
+  // (medio ancho ~0,5 y medio alto ~0,55 unidades, con lo que salta y las chispas)
+  // dentro de la pantalla, o del círculo en la redonda.
+  const float W = static_cast<float>(perfil_.ancho), H = static_cast<float>(perfil_.alto), u = vistaRostro_.unidad;
+  float maximo = perfil_.redonda ? (minf(W, H) / 2) / (0.52f * u) : minf((W / 2) / (0.5f * u), (H / 2) / (0.55f * u));
+  maximo = limitar(maximo, 1.0f, 1.5f);
+  return limitar(config_.tamano, 0.5f, maximo);
+}
+
 void Sistema::vigilar(uint32_t ahora) {
   const Contexto c = contexto();
   if (c.bateria >= 0 && ultimaBateria_ >= 0) {
@@ -452,6 +470,9 @@ uint32_t Sistema::firmaSprites(int cara) const {
   b[n++] = static_cast<uint8_t>(c.tamano), b[n++] = static_cast<uint8_t>(c.tamano >> 8);
   b[n++] = static_cast<uint8_t>(c.bocaTamano), b[n++] = static_cast<uint8_t>(c.bocaTamano >> 8);
   b[n++] = static_cast<uint8_t>(c.bocaY), b[n++] = static_cast<uint8_t>(c.bocaY >> 8);
+  // El tamaño de la cara (cara.tamano): con otro, se vuelven a cargar a esa escala.
+  const uint16_t t = static_cast<uint16_t>(tamanoObjetivo() * 1000 + 0.5f);
+  b[n++] = static_cast<uint8_t>(t), b[n++] = static_cast<uint8_t>(t >> 8);
   b[n++] = 0x5A;
   return protocolo::crc32(b, n) | 1u;
 }
@@ -469,7 +490,7 @@ void Sistema::avanzarSprites(uint32_t dt) {
       cache_.vaciar();
       if (objetivo) {
         const CaraImagen& c = config_.vida.imagenes[config_.vida.caras[cara].imagen];
-        if (cache_.cargar(c, vistaRostro_.unidad, leerSprite, this)) {
+        if (cache_.cargar(c, vistaRostro_.unidad * tamanoObjetivo(), leerSprite, this)) {
           firmaCache_ = objetivo;
         } else {
           log("no pude leer los sprites de la cara; uso la de siempre");
@@ -584,10 +605,49 @@ bool Sistema::dibujarImagen(int espacio, float alfa) {
   return true;
 }
 
+int Sistema::imagenDeGaleria(int desde) const {
+  for (int k = 0; k < MAX_IMAGENES; k++) {
+    const int i = (desde + k) % MAX_IMAGENES;
+    if (imagenes_[i].largo > 0 && subiendo_ != i) return i;
+  }
+  return -1;
+}
+
+// Pasar a la siguiente imagen de la galería: se funde a la cara y vuelve con la otra.
+void Sistema::pasarGaleria(uint32_t ahora) {
+  const int actual = imagenDeGaleria(posGaleria_);
+  if (galeriaFundido_ || actual < 0 || imagenDeGaleria(actual + 1) == actual) return;
+  galeriaFundido_ = ahora ? ahora : 1;
+  galeriaPaso_ = false;
+}
+
+// La opacidad de la imagen de la galería: baja, cambia a la siguiente en el
+// medio (con la cara de fondo) y vuelve a subir.
+float Sistema::alfaGaleria(uint32_t ahora) {
+  constexpr uint32_t MEDIO_MS = 350;
+  if (!galeriaFundido_) return 1;
+  const uint32_t t = ahora - galeriaFundido_;
+  if (t < MEDIO_MS) return 1 - suave(static_cast<float>(t) / MEDIO_MS);
+  if (!galeriaPaso_) {
+    const int sig = imagenDeGaleria(imagenDeGaleria(posGaleria_) + 1);
+    if (sig >= 0) posGaleria_ = static_cast<uint8_t>(sig);
+    galeriaPaso_ = true;
+  }
+  if (t < 2 * MEDIO_MS) return suave(static_cast<float>(t - MEDIO_MS) / MEDIO_MS);
+  galeriaFundido_ = 0;
+  galeriaDesde_ = ahora;
+  return 1;
+}
+
 // La imagen que corresponde mostrar ahora, o -1 si va una cara.
 int Sistema::imagenParaMostrar(uint32_t ahora) {
   // El protector de pantalla (mientras entra, está o sale).
   if (faseProtector_ > 0 && !apagado_ && !emparejando_) return config_.protector.imagen;
+  // Galería: solo las imágenes, sin la cara (si no hay ninguna, la mascota de siempre).
+  if (config_.modo == Modo::Galeria) {
+    if (apagado_ || emparejando_ || alarma_ || globo_ || recVisible_ >= 0) return -1;
+    return imagenDeGaleria(posGaleria_);
+  }
   if (apagado_ || emparejando_ || motor_.hayFija() || animPedida_ >= 0 || largoLista() == 0 ||
       panel_ != Panel::Ninguno || recVisible_ >= 0 || config_.modo == Modo::Reloj || config_.modo == Modo::Pomodoro ||
       config_.modo == Modo::Clima || alarma_ || globo_)
@@ -615,6 +675,10 @@ void Sistema::bleImagen(uint8_t op, const uint8_t* d, size_t n) {
       const uint32_t largo = leer32(d + 2);
       const uint32_t limite = esSprite(d[1]) ? LIMITE_SPRITE : limiteImagen(perfil_.ancho, perfil_.alto);
       if (largo < 22 || largo > limite) return responder(car, op, MuyGrande);
+      // Que entre: lo que ya ocupa ese espacio se libera al reemplazarlo, y
+      // queda un margen para los bloques y los metadatos del sistema de archivos.
+      if (hal_.espacioLibre && static_cast<int64_t>(largo) + MARGEN_ARCHIVOS > hal_.espacioLibre() + meta(d[1])->largo)
+        return responder(car, op, MuyGrande, "no hay lugar");
       subiendo_ = d[1];
       subidaLargo_ = largo;
       subidaCrc_ = leer32(d + 6);
@@ -941,7 +1005,7 @@ void Sistema::dibujarPantalla(uint32_t ahora) {
   if (dibujo >= 0 && op >= 0.999f) {
     lienzo_.limpiar(paleta::PANTALLA);
   } else {
-    dibujarRostro(lienzo_, vistaRostro_, motor_.cuadro(), &cache_, opSprites_, ocultarOjos_);
+    dibujarRostro(lienzo_, vistaCara(), motor_.cuadro(), &cache_, opSprites_, ocultarOjos_);
   }
   if (dibujo >= 0 && op > 0.001f) {
     lienzo_.opacidad(op);
@@ -991,6 +1055,8 @@ void Sistema::tick() {
   while (gestos_.sacar(&e)) {
     // En pomodoro, un toque arranca o pausa (y el bicho igual reacciona).
     if (e == Evento::Tacto && config_.modo == Modo::Pomodoro) pomoCorriendo_ = !pomoCorriendo_;
+    // En galería, un toque pasa a la siguiente imagen.
+    if (e == Evento::Tacto && config_.modo == Modo::Galeria) pasarGaleria(ahora), galeriaDesde_ = ahora;
     evento(e);
   }
   // Inclinado: los ojos "caen" hacia donde está la gravedad.
@@ -1010,6 +1076,14 @@ void Sistema::tick() {
     responderAnimo(2);
   }
   avanzarPomodoro(ahora, dtCuadro);
+  // El tamaño de la cara (cara.tamano): hacia el de la config con un fundido
+  // de ~150 ms que no depende de los cuadros por segundo (nunca de golpe).
+  if (dtCuadro > 0) {
+    const float k = 1.0f - exponencial(-static_cast<float>(dtCuadro < 2000 ? dtCuadro : 2000) / 150.0f);
+    tamanoVisto_ += (tamanoObjetivo() - tamanoVisto_) * k;
+  }
+  // v3: si llueve, más tranquilo.
+  motor_.clima(climaVigente() && situacionClima(clima_) == Situacion::ClimaLluvia);
   motor_.tick(ahora, contexto());
   avanzarVoz(ahora);
   avanzarSprites(dtCuadro);
@@ -1036,6 +1110,10 @@ void Sistema::tick() {
     emparejando_ = true;
     emparejarHasta_ = ahora + QR_POR_BOTON_MS;
   }
+  // La galería pasa sola cada tantos segundos.
+  if (config_.modo == Modo::Galeria && !galeriaFundido_ &&
+      ahora - galeriaDesde_ >= static_cast<uint32_t>(config_.galeriaSegundos) * 1000u)
+    pasarGaleria(ahora), galeriaDesde_ = ahora;
   // La lista rota sola cada tantos minutos.
   if (config_.rotarMinutos && largoLista() > 1 &&
       ahora - ultimaRotacion_ >= static_cast<uint32_t>(config_.rotarMinutos) * 60000u)
@@ -1045,6 +1123,7 @@ void Sistema::tick() {
 
   if (vistaPrevia_) emparejando_ = false;
   elegirAnimacion(ahora);
+  const float alfaGal = config_.modo == Modo::Galeria ? alfaGaleria(ahora) : 1;
   int imagen = imagenParaMostrar(ahora);
   if (imagen >= 0 && imagen != imagenPreparada_ && !prepararImagen(imagen, ahora)) {
     // No se pudo leer: se marca vacía para no intentarlo en cada cuadro.
@@ -1058,7 +1137,8 @@ void Sistema::tick() {
   }
   if (imagen < 0) imagenPreparada_ = -1;
   // Entrando o saliendo del protector: la imagen sobre la cara, con fundido.
-  const float alfaImagen = imagen >= 0 && faseProtector_ > 0 ? suave(faseProtector_) : 1;
+  float alfaImagen = imagen >= 0 && faseProtector_ > 0 ? suave(faseProtector_) : 1;
+  if (alfaGal < alfaImagen) alfaImagen = alfaGal;
   if (imagen >= 0 && imagen == mostrandoImagen_ && !imagenSucia_ && alfaImagen >= 1) {
     // La imagen ya está en la pantalla: no hace falta redibujarla.
     notificarEstadoSiCambio();
@@ -1156,9 +1236,39 @@ void aMayusculas(char* s) {
 int minutosEntre(int desde, int hasta) { return ((hasta - desde) % 1440 + 1440) % 1440; }
 }  // namespace
 
+const char* Sistema::vocalizacion(const char* sonido) const {
+  if (!vozModo_ || !hal_.audio || !sonido) return nullptr;
+  if (iguales(sonido, "voz:", 4)) {
+    const char* k = sonido + 4;
+    for (const VozBase& v : caracter::VOZ_CARAS)
+      if (iguales(v.clave, k)) return v.texto;
+    for (const VozBase& v : caracter::VOZ_EVENTOS)
+      if (iguales(v.clave, k)) return v.texto;
+    return nullptr;
+  }
+  for (const VozBase& v : caracter::VOZ_SONIDOS)
+    if (iguales(v.clave, sonido)) return v.texto;
+  return nullptr;
+}
+
 void Sistema::sonar(const char* nombre) {
   // "voz": volumen 0 silencia todo.
-  if (hal_.sonido && config_.voz.volumen > 0) hal_.sonido(nombre);
+  if (config_.voz.volumen == 0) return;
+  // Con la voz propia, los de "voz.sonidos" (y las vocalizaciones "voz:…")
+  // los balbucea ella y no salen por Hal::sonido: el que tiene parlante no
+  // los duplica. Si ya está diciendo algo, no lo pisa (y tampoco suena).
+  const char* v = vocalizacion(nombre);
+  if (v) {
+    if (voz_.hablando()) return;
+    const float* est = motor_.estadoInterno();
+    voz_.empezar(v, paramsVoz(static_cast<int>(config_.voz.tipo), config_.voz.volumen, motor_.rasgos(), est[0], est[1]));
+    vozSuelta_ = true;
+    vozDesde_ = hal_.ahoraMs();
+    vozEnviadas_ = 0;
+    return;
+  }
+  if (iguales(nombre, "voz:", 4)) return;  // una vocalización sin voz propia: nada
+  if (hal_.sonido) hal_.sonido(nombre);
 }
 
 // Un evento que genera el sistema (recordatorio, pomodoro): además del
@@ -1236,7 +1346,8 @@ void Sistema::mostrarGlobo(uint32_t ahora) {
   globoHasta_ = ahora + dura + tiemposPanel::FUNDIDO_MS;
   if (motor_.dormido()) motor_.despertar(ahora, false);
   // Con parlante, lo dice con su voz (el balbuceo sigue el texto del globo).
-  if (vozPropia_ && hal_.audio && config_.voz.volumen > 0) {
+  if (vozModo_ == 1 && hal_.audio && config_.voz.volumen > 0) {
+    vozSuelta_ = false;
     const float* est = motor_.estadoInterno();
     voz_.empezar(globoTexto_, paramsVoz(static_cast<int>(config_.voz.tipo), config_.voz.volumen, motor_.rasgos(), est[0], est[1]));
     vozDesde_ = ahora;
@@ -1253,6 +1364,7 @@ void Sistema::mostrarGlobo(uint32_t ahora) {
 
 void Sistema::hablar(Situacion s, Plantillas extra) {
   if (apagado_ || emparejando_) return;
+  if (!extra.n && hablarV3(s)) return;  // las de la v3 llevan sus plantillas
   const bool siempre = situacionSiempre(s);
   // "Callate": una hora sin frases espontáneas.
   if (!siempre && calladoHasta_ && static_cast<int32_t>(hal_.ahoraMs() - calladoHasta_) < 0) return;
@@ -1317,7 +1429,16 @@ void Sistema::sonarAlarma(bool porHora) {
     if (i >= 0) motor_.comportamiento(i, ahora);
   }
   char t[LARGO_FRASE];
-  if (config_.despertador.texto[0]) completarFrase(config_.despertador.texto, config_.vida.dueno, nombre(), t, sizeof t);
+  // v3: si ayer la pospusiste 3 veces o más, "¿Hoy también vas a posponer?".
+  uint8_t veces = 0;
+  const uint16_t hoy = motor_.diaVida();
+  Episodio ayer;
+  ayer.dia = static_cast<uint16_t>(hoy - 1), ayer.tipo = static_cast<uint8_t>(TipoEpisodio::Posponer);
+  const bool pospusoAyer = porHora && hoy && motor_.ocurrio(ayer.dia, TipoEpisodio::Posponer, &veces) && veces >= 3;
+  ayer.dato = veces;
+  if (pospusoAyer && textoEpisodio(ayer, false, t, sizeof t)) {
+    // (ya está en t)
+  } else if (config_.despertador.texto[0]) completarFrase(config_.despertador.texto, config_.vida.dueno, nombre(), t, sizeof t);
   else if (!elegirFrase(config_.habla, Situacion::Despertador, presetCercano(motor_.rasgos()), config_.vida.dueno, nombre(),
                         azar_, t, sizeof t))
     copiarTexto(t, sizeof t, "\xC2\xA1" "Buen d\xC3\xAD" "a!");
@@ -1367,6 +1488,7 @@ void Sistema::posponerAlarma() {
   const uint32_t ahora = hal_.ahoraMs();
   alarma_ = false;
   pospuestaHasta_ = ahora + config_.despertador.posponer * 60000u;
+  motor_.recordar(TipoEpisodio::Posponer, 0, true);  // v3: cuántas veces hoy
   motor_.interaccion(ahora);
   hablar(Situacion::Posponer);
 }
@@ -1533,7 +1655,7 @@ void Sistema::dibujarPanel() {
   const float W = static_cast<float>(lienzo_.ancho()), H = static_cast<float>(lienzo_.alto());
   const bool redonda = perfil_.redonda;
   // La cara se achica y sube; abajo aparece el texto.
-  VistaRostro v = vistaRostro_;
+  VistaRostro v = vistaCara();
   v.unidad = mezclar(v.unidad, v.unidad * 0.45f, f);
   v.origenY = mezclar(v.origenY, H * 0.27f, f);
   dibujarRostro(lienzo_, v, motor_.cuadro(), &cache_, opSprites_, ocultarOjos_);
@@ -2412,6 +2534,9 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
         if (n != 4 || d[1] >= MAX_HABITOS || d[2] > 1) return responder(car, op, Malformado, "[u8 índice 0-3][u8 0 hecho, 1 deshacer][u8 racha]");
         return responder(car, op, habito(d[1], d[2] == 0, d[3]) ? Ok : NoExiste);
       }
+      case CmdDiario:
+        if (n != 1) return responder(car, op, Malformado, "sin datos");
+        return enviarDiario();
       case CmdCharlar: {
         // [n][texto]
         if (n < 3 || d[1] == 0 || 2u + d[1] != n || d[1] > MAX_ENTRADA_CHARLA ||

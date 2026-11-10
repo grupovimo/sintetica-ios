@@ -215,9 +215,15 @@ int sintetica_charlar(const char* texto, size_t n, sintetica_charla* salida);
  * 0 si lo dijo; -1 si el texto está mal; -2 si la expresión no existe. */
 int sintetica_decir(const char* texto, const char* expresion);
 
-/* 0 = el globo no se lee con la voz propia (por ejemplo, si llega audio de la
- * nube). Por defecto, sí. */
-void sintetica_voz_propia(int si);
+/* La voz propia (con el callback de audio). 0 = apagada (por ejemplo, si
+ * llega audio de la nube); 1 = todo (por defecto: lee los globos y balbucea);
+ * 2 = solo sin texto: balbucea murmullos, hablar dormido, sorpresas cortas, el
+ * "mm" al pensar y la reacción a un toque, pero nunca lee un globo. Con 1 o 2,
+ * los sonidos de shared/formato/vida/caracter.json "voz.sonidos" (murmullo,
+ * risa, tarareo, hip, achis, ayuda, llamar, festejo, ronroneo) salen por la voz
+ * y NO por el callback de sonido; los demás (ronquido, despertador:N,
+ * recordatorio, toque, ...) siguen por sonido. Ver docs/motor-de-vida.md. */
+void sintetica_voz_propia(int modo);
 
 /* El motor de charla suelto (sin la instancia, para la nube por cgo): lo que
  * sabe quien llama, y el contexto entre frases en `estado` (un blob de

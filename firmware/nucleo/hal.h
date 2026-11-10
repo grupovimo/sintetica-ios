@@ -53,6 +53,9 @@ struct Hal {
   bool (*escribirTrozo)(const char* clave, uint32_t desplazamiento, const uint8_t* datos, size_t n) = nullptr;
   int (*leerTrozo)(const char* clave, uint32_t desplazamiento, uint8_t* datos, size_t n) = nullptr;
   bool (*borrar)(const char* clave) = nullptr;
+  // Los bytes libres para archivos grandes (nullptr = sin límite conocido): una
+  // subida que no entra se rechaza de entrada, no a mitad de camino.
+  int64_t (*espacioLibre)() = nullptr;
   // Notificación BLE en una característica (protocolo::Caracteristica).
   void (*notificar)(uint8_t caracteristica, const uint8_t* datos, size_t n) = nullptr;
   // Lo mismo por la nube (MQTT, bicho/{id}/resp y bicho/{id}/state): las

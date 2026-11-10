@@ -123,11 +123,14 @@ enum PrepararImagen {
                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
             ctx?.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
         }
+        // Los colores a lo que muestra la pantalla (16 bits, RGB565): se ve igual
+        // en el robot y el QOI pesa ~20 % menos. Como la web (a16Bits).
         var rgb = [UInt8](repeating: 0, count: w * h * 3)
         for i in 0 ..< w * h {
-            rgb[i * 3] = rgba[i * 4]
-            rgb[i * 3 + 1] = rgba[i * 4 + 1]
-            rgb[i * 3 + 2] = rgba[i * 4 + 2]
+            let r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2]
+            rgb[i * 3] = (r & 0xF8) | (r >> 5)
+            rgb[i * 3 + 1] = (g & 0xFC) | (g >> 6)
+            rgb[i * 3 + 2] = (b & 0xF8) | (b >> 5)
         }
         return Qoi.codificar(rgb, ancho: w, alto: h)
     }

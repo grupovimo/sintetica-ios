@@ -2,6 +2,8 @@
 // No editar a mano.
 #pragma once
 
+#include <stdint.h>
+
 namespace sintetica {
 
 struct DatoVidaBase {
@@ -51,7 +53,7 @@ inline const DatoVidaBase CARAS_VIDA_BASE[CANTIDAD_CARAS_VIDA_BASE] = {
     {"frio", R"json({"ojo":{"w":0.11,"h":0.17,"lb":0.12},"gy":-0.03,"shake":0.3,"fscale":0.93,"blush":0.35,"mw":0.05,"mcurve":-0.2,"movimiento":"temblor","parpadeo":"mas"})json"},
 };
 
-constexpr int CANTIDAD_COMPORTAMIENTOS_BASE = 58;
+constexpr int CANTIDAD_COMPORTAMIENTOS_BASE = 66;
 inline const DatoVidaBase COMPORTAMIENTOS_BASE[CANTIDAD_COMPORTAMIENTOS_BASE] = {
     {"mirar-alrededor", R"json({"cuando":"curiosidad>0.3","afinidad":{"curiosidad":0.6,"energia":0.3},"enfriamiento":30,"pasos":[{"mirada":"alrededor","dura":[2.5,4.5]},{"mirada":"estimulo","cara":"curioso","peso":0.4,"dura":[1,2]}]})json"},
     {"investigar", R"json({"cuando":"curiosidad>0.6","afinidad":{"curiosidad":0.8},"enfriamiento":120,"pasos":[{"cara":"curioso","mirada":"lado","dura":[1.2,2]},{"cara":"confundido","peso":0.8,"particula":"pregunta","dura":[1.5,2.5]},{"cara":"curioso","mirada":"frente","dura":1}]})json"},
@@ -111,6 +113,14 @@ inline const DatoVidaBase COMPORTAMIENTOS_BASE[CANTIDAD_COMPORTAMIENTOS_BASE] = 
     {"apurado", R"json({"tipo":"reaccion","pasos":[{"cara":"sorpresa","peso":0.7,"mirada":"lado","parpadeo":"rapido","particula":"reloj","dura":1.2,"sonido":"agenda"},{"cara":"concentrado","peso":0.6,"mirada":"lado","parpadeo":"rapido","dura":0.6,"veces":4}]})json"},
     {"orgulloso", R"json({"tipo":"reaccion","pasos":[{"cara":"orgulloso","particula":"estrella","cuantas":2,"dura":2.5,"sonido":"habito"},{"cara":"contento","peso":0.7,"dura":1.5}]})json"},
     {"bailar-ritmo", R"json({"tipo":"reaccion","pasos":[{"cara":"contento","peso":0.8,"particula":"nota","cuantas":2,"dura":4},{"cara":"emocionado","peso":0.5,"particula":"nota","dura":3}]})json"},
+    {"perseguir-estrella", R"json({"cuando":"solo,aburrimiento>0.25","afinidad":{"curiosidad":0.5,"energia":0.4},"enfriamiento":240,"pasos":[{"cara":"curioso","peso":0.5,"mirada":"particula","particula":"estrella","dura":2.3},{"cara":"emocionado","peso":0.4,"mirada":"particula","particula":"estrella","dura":2.3},{"cara":"contento","peso":0.6,"mirada":"frente","dura":1}]})json"},
+    {"tararear-solo", R"json({"cuando":"solo,animo>0.4","afinidad":{"energia":0.2,"picardia":0.2},"enfriamiento":360,"pasos":[{"cara":"contento","peso":0.6,"mirada":"arriba","particula":"nota","cuantas":2,"dura":[3,5],"sonido":"tarareo"},{"cara":"contento","peso":0.4,"particula":"nota","dura":2}]})json"},
+    {"ordenar-cosas", R"json({"cuando":"solo,aburrimiento>0.3","afinidad":{"curiosidad":0.3,"picardia":-0.2},"enfriamiento":600,"pasos":[{"cara":"concentrado","peso":0.7,"mirada":"izquierda","dura":1.5},{"cara":"concentrado","peso":0.7,"mirada":"abajo","particula":"chispa","dura":1.2},{"cara":"concentrado","peso":0.7,"mirada":"derecha","dura":1.5},{"cara":"orgulloso","peso":0.7,"mirada":"frente","dura":1.2}]})json"},
+    {"dibujito", R"json({"cuando":"solo,etapa>0.5","afinidad":{"picardia":0.3,"curiosidad":0.3},"enfriamiento":900,"pasos":[{"cara":"concentrado","peso":0.6,"mirada":"particula","particula":"garabato","dura":3.5},{"cara":"orgulloso","peso":0.8,"mirada":"frente","particula":"chispa","dura":1.5}]})json"},
+    {"mirar-la-hora", R"json({"cuando":"solo","afinidad":{"energia":-0.3},"enfriamiento":1200,"pasos":[{"cara":"pensando","peso":0.4,"mirada":"particula","particula":"reloj","dura":1.6},{"cara":"concentrado","peso":0.4,"mirada":"particula","particula":"reloj","dura":1.6},{"cara":"contento","peso":0.3,"dura":1}]})json"},
+    {"esperar-en-la-puerta", R"json({"cuando":"esperando","afinidad":{"sociabilidad":0.6},"enfriamiento":180,"pasos":[{"cara":"curioso","peso":0.4,"mirada":"puerta","dura":[4,7]},{"mirada":"puerta","parpadeo":"lento","dura":[2,4]}]})json"},
+    {"mirar-la-lluvia", R"json({"cuando":"lluvia","afinidad":{"energia":-0.3},"enfriamiento":900,"pasos":[{"cara":"triste","peso":0.25,"mirada":"arriba","particula":"gota","dura":3},{"cara":"concentrado","peso":0.3,"mirada":"arriba","particula":"gota","dura":2.5}]})json"},
+    {"mimos", R"json({"cuando":"bajon>0.5","afinidad":{"sociabilidad":0.5},"enfriamiento":600,"pasos":[{"cara":"enamorado","peso":0.5,"mirada":"frente","dura":2.5,"decir":"mimos"},{"cara":"contento","peso":0.5,"mirada":"frente","dura":1.5}]})json"},
 };
 
 inline const char* const REGLAS_VIDA_BASE = R"json([{"si":"despertado","y":"afecto>0.7","entonces":["reflejo:sorpresa","comportamiento:despertar-con-amor"]},{"si":"despertado","entonces":["reflejo:sorpresa","comportamiento:despertar-forzado","estado.animo-0.05"]},{"si":"tacto","y":"rasgo.timidez>0.65","entonces":["comportamiento:toque-timido","estado.animo+0.02"]},{"si":"tacto","entonces":["comportamiento:toque","estado.animo+0.03"]},{"si":"caricia","y":"estres>0.5,rasgo.malGenio>0.5","entonces":["comportamiento:caricia-calma","estado.estres-0.2","estado.animo+0.05"]},{"si":"caricia","y":"afecto>0.6","entonces":["comportamiento:caricia-amor","estado.animo+0.08","estado.estres-0.15"]},{"si":"caricia","entonces":["comportamiento:caricia","estado.animo+0.08","estado.estres-0.15"]},{"si":"doble-toque","entonces":["expresion:sospecha","estado.curiosidad+0.1"]},{"si":"muchos-toques","y":"rasgo.malGenio>0.5","entonces":["comportamiento:molesto","estado.estres+0.15"]},{"si":"muchos-toques","entonces":["comportamiento:cosquillas","estado.animo+0.05","estado.estres+0.05"]},{"si":"sacudida-suave","entonces":["comportamiento:bamboleo","estado.animo+0.03","estado.energia+0.03"]},{"si":"sacudida-fuerte","y":"rasgo.timidez>0.6","entonces":["reflejo:miedo","comportamiento:miedo-sacudida","estado.estres+0.5","estado.animo-0.12"]},{"si":"sacudida-fuerte","entonces":["reflejo:mareado","comportamiento:mareo","estado.estres+0.4","estado.animo-0.1"]},{"si":"sacudida","entonces":["comportamiento:mareo","estado.estres+0.3"]},{"si":"boca-abajo","entonces":["reflejo:miedo","comportamiento:boca-abajo","estado.estres+0.3"]},{"si":"caida","entonces":["reflejo:sorpresa","comportamiento:ko","estado.estres+0.6"]},{"si":"levantado","y":"rencor","entonces":["comportamiento:dudar","estado.curiosidad+0.15"]},{"si":"levantado","entonces":["comportamiento:curiosear","estado.curiosidad+0.2"]},{"si":"voz","entonces":["comportamiento:escuchar","estado.animo+0.03","estado.curiosidad+0.1"]},{"si":"nombre","entonces":["comportamiento:saludar","estado.animo+0.2"]},{"si":"ruido","y":"rasgo.timidez>0.6","entonces":["reflejo:miedo","comportamiento:susto","estado.estres+0.35"]},{"si":"ruido","entonces":["reflejo:sorpresa","estado.estres+0.2","estado.curiosidad+0.1"]},{"si":"musica","entonces":["comportamiento:bailar","estado.animo+0.08"]},{"si":"cara-detectada","entonces":["expresion:contento","estado.animo+0.05","estado.aburrimiento-0.15"]},{"si":"oscuridad","entonces":["expresion:bostezo","estado.energia-0.05"]},{"si":"mano-cerca","entonces":["expresion:curioso","estado.curiosidad+0.1"]},{"si":"silencio","entonces":["estado.aburrimiento+0.1"]},{"si":"notificacion","entonces":["comportamiento:notificacion","estado.curiosidad+0.1"]},{"si":"llamada","entonces":["comportamiento:llamada"]},{"si":"bateria-baja","entonces":["comportamiento:cansancio","estado.energia-0.2","estado.animo-0.05"]},{"si":"bateria-critica","entonces":["comportamiento:apagarse","estado.energia-0.3"]},{"si":"enchufado","entonces":["comportamiento:alivio","estado.estres-0.1","estado.animo+0.05"]},{"si":"cargado","entonces":["comportamiento:carga-completa","estado.animo+0.05"]},{"si":"sin-wifi","entonces":["comportamiento:buscar-red"]},{"si":"app-abierta","entonces":["comportamiento:saludar-app","estado.animo+0.05"]},{"si":"vinculado","entonces":["expresion:guino","estado.animo+0.1"]},{"si":"cambio-de-cara","entonces":["comportamiento:espejo","estado.curiosidad+0.1"]},{"si":"bicho-cerca","entonces":["comportamiento:otro-bicho","estado.curiosidad+0.2","estado.animo+0.05"]},{"si":"volvio","y":"ausencia>72","entonces":["comportamiento:volver-ofendido"]},{"si":"volvio","y":"ausencia>24","entonces":["reflejo:sorpresa","comportamiento:festejar","decir:te-extrane","estado.animo+0.25","estado.afecto+0.05"]},{"si":"volvio","y":"afecto>0.6","entonces":["comportamiento:saludar-con-amor","estado.animo+0.15"]},{"si":"volvio","entonces":["comportamiento:saludar-al-volver","estado.animo+0.1"]},{"si":"hito","entonces":["comportamiento:festejar","estado.animo+0.2"]},{"si":"bateria<15","entonces":["expresion:bateria-baja"]}])json";
@@ -133,7 +143,7 @@ struct FraseBase {
 constexpr int FRASES_POR_DIA = 10;
 constexpr int FRASES_SEPARACION_S = 900;
 
-constexpr int CANTIDAD_SITUACIONES_BASE = 53;
+constexpr int CANTIDAD_SITUACIONES_BASE = 61;
 inline const SituacionBase SITUACIONES_BASE[CANTIDAD_SITUACIONES_BASE] = {
     {"despertar", 80, 14400, false, 0, 19},
     {"buenas-noches", 70, 36000, false, 19, 9},
@@ -188,9 +198,17 @@ inline const SituacionBase SITUACIONES_BASE[CANTIDAD_SITUACIONES_BASE] = {
     {"github", 100, 0, true, 250, 4},
     {"pedido", 100, 0, true, 254, 4},
     {"aviso", 100, 0, true, 258, 3},
+    {"recuerdo", 70, 43200, false, 261, 1},
+    {"propuesta", 70, 3600, false, 262, 9},
+    {"crecio", 100, 0, true, 271, 6},
+    {"mes-juntos", 100, 0, true, 277, 4},
+    {"feriado", 100, 0, true, 281, 2},
+    {"fecha-tuya", 100, 0, true, 283, 2},
+    {"fecha-manana", 100, 0, true, 285, 2},
+    {"mimos", 60, 7200, false, 287, 6},
 };
 
-constexpr int CANTIDAD_FRASES_BASE = 261;
+constexpr int CANTIDAD_FRASES_BASE = 293;
 inline const FraseBase FRASES_BASE[CANTIDAD_FRASES_BASE] = {
     {"", "¡Buen día, {dueno}!"},
     {"", "¡Arriba! Hoy va a estar bueno."},
@@ -453,6 +471,241 @@ inline const FraseBase FRASES_BASE[CANTIDAD_FRASES_BASE] = {
     {"", "Aviso: {titulo}"},
     {"", "{de}: {titulo}"},
     {"", "¡Ey! {titulo}"},
+    {"", "Me acordé de ayer."},
+    {"", "¿Jugamos a {juego}?"},
+    {"", "Volviste. ¿Un partido de {juego}?"},
+    {"", "¿Me contás algo sobre {gusto}?"},
+    {"", "Estuve pensando en {gusto}."},
+    {"", "¿Hacemos algo juntos?"},
+    {"picaro", "Te reto a {juego}. Si te animás."},
+    {"carinoso", "¡Volviste! ¿Jugamos un ratito?"},
+    {"timido", "¿Querés... jugar a {juego}?"},
+    {"electrico", "¡Ya estás! ¡{juego}, dale!"},
+    {"", "Siento que ya te conozco un poco más."},
+    {"", "Ya no me da tanta vergüenza."},
+    {"", "Creo que somos amigos, {dueno}."},
+    {"timido", "Ya me animo más con vos..."},
+    {"electrico", "¡Ya somos re amigos!"},
+    {"grunon", "Bueno, me caés bien. Un poco."},
+    {"", "¡Hoy hace {cantidad} que nos conocimos!"},
+    {"", "¡Ya {cantidad} juntos, {dueno}!"},
+    {"carinoso", "¡{cantidad} con vos! Te quiero."},
+    {"grunon", "{cantidad} aguantándote. Bien."},
+    {"", "Hoy es {titulo}."},
+    {"", "Hoy es feriado: {titulo}."},
+    {"", "Hoy es {titulo}. ¡No te olvides!"},
+    {"", "¡Acordate: hoy es {titulo}!"},
+    {"", "Mañana es {titulo}."},
+    {"", "Ojo: mañana es {titulo}."},
+    {"", "Acá estoy, {dueno}."},
+    {"", "Si querés, te hago compañía."},
+    {"", "Te quiero mucho, ¿sabías?"},
+    {"", "Despacito, hoy vamos tranqui."},
+    {"grunon", "No soy de mimos, pero acá estoy."},
+    {"timido", "Estoy acá... por si acaso."},
 };
+
+// ---------------------------------------------------------------- el carácter (v3, vida/caracter.json)
+
+struct MicrogestoBase {
+  const char* nombre;
+  const char* param;  // "der.lt", "ftilt"…
+  float valor, dura, cadaMin, cadaMax;
+};
+struct EtapaBase {
+  const char* nombre;
+  int dias;
+  float afecto;
+  float rasgos[6];  // energia, sociabilidad, picardia, timidez, curiosidad, malGenio
+};
+struct EpisodioBase {
+  const char* nombre;
+  int importancia;
+  const char* sueno;  // la partícula de lo que sueña
+  int recuerdo, nRecuerdo, diario, nDiario;  // en TEXTOS_CARACTER
+};
+struct FeriadoBase {
+  int fecha;     // mes·100 + día (0 = depende de la pascua)
+  int pascua;    // días desde el domingo de pascua
+  const char* titulo;
+  bool festejo;
+};
+struct VozBase {
+  const char* clave;
+  const char* texto;
+};
+struct EstacionBase {
+  uint16_t meses;  // bit m = el mes m (1-12)
+  float energia, curiosidad;
+};
+
+namespace caracter {
+constexpr float PARPADEO_MIN = 1.0000f, PARPADEO_MAX = 1.2500f;
+constexpr float DOBLES_MIN = 0.1100f, DOBLES_MAX = 0.1900f;
+constexpr float VELOCIDAD_MIN = 0.9200f, VELOCIDAD_MAX = 1.1000f;
+constexpr float FAVORITO = 1.6000f;
+constexpr int N_PENSAR = 5;
+inline const float PENSAR[N_PENSAR][2] = {{-1.0000f, 1.0000f}, {1.0000f, 1.0000f}, {-1.0000f, -0.5000f}, {1.0000f, -0.5000f}, {0.0000f, 1.0000f}};
+constexpr int N_CARAS_PENSAR = 1;
+inline const char* const CARAS_PENSAR[N_CARAS_PENSAR] = {"pensando"};
+constexpr int N_FAVORITOS = 6;
+inline const char* const FAVORITOS[N_FAVORITOS] = {"tararear", "practicar-caras", "estirarse", "pensar-en-algo", "investigar", "mirar-alrededor"};
+constexpr int N_MICROGESTOS = 7;
+inline const MicrogestoBase MICROGESTOS[N_MICROGESTOS] = {
+    {"un-ojo", "der.lt", 0.2000f, 0.3000f, 25.0000f, 70.0000f},
+    {"ladeo", "ftilt", 0.0700f, 0.7000f, 30.0000f, 80.0000f},
+    {"trompita", "mcurve", 0.3000f, 0.4500f, 30.0000f, 90.0000f},
+    {"achinar", "lb", 0.1200f, 0.5500f, 30.0000f, 80.0000f},
+    {"saltito", "ey", 0.0250f, 0.3500f, 25.0000f, 60.0000f},
+    {"agrandar", "h", 0.0250f, 0.5000f, 30.0000f, 80.0000f},
+    {"cejita", "izq.lta", -0.2500f, 0.5000f, 35.0000f, 90.0000f},
+};
+constexpr int N_ETAPAS = 4;
+inline const EtapaBase ETAPAS[N_ETAPAS] = {
+    {"recien-llegado", 0, 0.0000f, {0.0000f, 0.0000f, -0.1000f, 0.2000f, 0.1500f, 0.0000f}},
+    {"conociendonos", 3, 0.3200f, {0.0000f, 0.0000f, 0.0000f, 0.0800f, 0.1000f, 0.0000f}},
+    {"confiado", 14, 0.4200f, {0.0000f, 0.0000f, 0.0000f, 0.0000f, 0.0000f, 0.0000f}},
+    {"companero", 60, 0.5500f, {0.0000f, 0.0500f, 0.0500f, 0.0000f, 0.0000f, 0.0000f}},
+};
+constexpr int MESES_JUNTOS = 11;
+constexpr int N_EPISODIOS = 16;
+inline const EpisodioBase EPISODIOS[N_EPISODIOS] = {
+    {"gane", 3, "estrella", 0, 2, 2, 2},
+    {"perdi", 3, "estrella", 4, 2, 6, 2},
+    {"empate", 2, "estrella", 8, 1, 9, 1},
+    {"toque", 3, "corazon", 10, 1, 11, 2},
+    {"animo-bien", 1, "corazon", 13, 1, 14, 2},
+    {"animo-medio", 2, "nota", 16, 1, 17, 2},
+    {"animo-mal", 4, "corazon", 19, 2, 21, 2},
+    {"tarde", 2, "oveja", 23, 1, 24, 2},
+    {"posponer", 2, "oveja", 26, 2, 28, 2},
+    {"habito", 2, "estrella", 30, 1, 31, 2},
+    {"caricias", 2, "corazon", 33, 1, 34, 2},
+    {"sacudida", 3, "exclamacion", 36, 1, 37, 2},
+    {"musica", 1, "nota", 39, 1, 40, 2},
+    {"volviste", 4, "corazon", 42, 1, 43, 2},
+    {"solo", 1, "oveja", 45, 1, 46, 2},
+    {"crecio", 4, "estrella", 48, 1, 49, 2},
+};
+constexpr int TRANQUILO = 51, N_TRANQUILO = 3;
+constexpr int DIARIO_LINEAS = 3;
+inline const char* const JUEGOS[5] = {"piedra, papel o tijera", "los reflejos", "la mirada", "los dados", "cara o ceca"};
+inline const char* const TOQUES[4] = {"toque", "abrazo", "beso", "mensaje"};
+constexpr int CARICIAS_DIA = 10;
+constexpr int EMPATIA_DIAS = 4, EMPATIA_MINIMO = 2;
+constexpr float EMPATIA_UMBRAL = 0.5000f, EMPATIA_RIGIDEZ = 0.9000f;
+inline const float EMPATIA_RASGOS[6] = {-0.1000f, 0.1500f, -0.2500f, 0.0000f, 0.0000f, 0.0000f};
+constexpr int OTRA_PREGUNTA_H = 5;
+constexpr float LLUVIA_ENERGIA = -0.0800f, LLUVIA_CURIOSIDAD = -0.0500f, LLUVIA_RIGIDEZ = 0.9400f;
+constexpr int N_ESTACIONES = 4;
+inline const EstacionBase ESTACIONES[N_ESTACIONES] = {
+    {4102, 0.0300f, 0.0300f},  // verano
+    {56, -0.0200f, 0.0000f},  // otono
+    {448, -0.0500f, -0.0200f},  // invierno
+    {3584, 0.0600f, 0.0500f},  // primavera
+};
+constexpr int N_FERIADOS = 14;
+inline const FeriadoBase FERIADOS[N_FERIADOS] = {
+    {0, -48, "Carnaval", true},
+    {0, -47, "Carnaval", true},
+    {324, 0, "el Día de la Memoria", false},
+    {402, 0, "el Día de Malvinas", false},
+    {0, -2, "Viernes Santo", false},
+    {501, 0, "el Día del Trabajador", true},
+    {525, 0, "el 25 de Mayo", true},
+    {617, 0, "el día de Güemes", false},
+    {620, 0, "el Día de la Bandera", true},
+    {709, 0, "el Día de la Independencia", true},
+    {817, 0, "el día de San Martín", false},
+    {1012, 0, "el Día de la Diversidad", true},
+    {1120, 0, "el Día de la Soberanía", true},
+    {1208, 0, "el 8 de diciembre", true},
+};
+constexpr float APRENDER = 0.2500f;
+constexpr int DESPERTAR_ANTES = 10, ESPERAR_ANTES = 15, ESPERAR_DESPUES = 30, DORMIS_ANTES = 30;
+constexpr float BRILLO_DORMIS = 0.2500f, SUENO_DORMIS = 0.3000f;
+constexpr int SOLO_MINUTOS = 10;
+constexpr int N_VOZ_SONIDOS = 9;
+inline const VozBase VOZ_SONIDOS[N_VOZ_SONIDOS] = {
+    {"murmullo", "mmm mna mn..."},
+    {"risa", "¡jajajá!"},
+    {"tarareo", "la lalá la..."},
+    {"hip", "¡hip!"},
+    {"achis", "¡achís!"},
+    {"ayuda", "¡ay, ay!"},
+    {"llamar", "¡eh! ¡eh!"},
+    {"festejo", "¡yupi!"},
+    {"ronroneo", "rrr mmm"},
+};
+constexpr int N_VOZ_CARAS = 4;
+inline const VozBase VOZ_CARAS[N_VOZ_CARAS] = {
+    {"sorpresa", "¡oh!"},
+    {"pensando", "mmm..."},
+    {"confundido", "¿eh?"},
+    {"miedo", "¡ay!"},
+};
+constexpr int N_VOZ_EVENTOS = 2;
+inline const VozBase VOZ_EVENTOS[N_VOZ_EVENTOS] = {
+    {"tacto", "¡ji!"},
+    {"doble-toque", "¡ji ji!"},
+};
+constexpr int N_TEXTOS = 54;
+inline const char* const TEXTOS[N_TEXTOS] = {
+    "Ayer te gané a {juego}. ¿La revancha?",
+    "¿Te acordás que ayer te gané a {juego}?",
+    "Hoy le gané a {dueno} a {juego}.",
+    "Partida de {juego}: gané yo.",
+    "Ayer me ganaste a {juego}. Hoy me desquito.",
+    "Todavía me acuerdo de {juego} de ayer...",
+    "{dueno} me ganó a {juego}. La próxima es mía.",
+    "Perdí a {juego}. Practico y vuelvo.",
+    "Ayer empatamos a {juego}. ¿El desempate?",
+    "Empatamos a {juego}.",
+    "Ayer te mandaron un {toque}. Qué lindo.",
+    "Me llegó un {toque} de un amigo.",
+    "Hoy recibimos un {toque}.",
+    "Ayer estabas bien. ¿Hoy también?",
+    "{dueno} estaba bien hoy.",
+    "Hoy {dueno} andaba contento.",
+    "Ayer estabas más o menos. ¿Hoy mejor?",
+    "{dueno} estaba más o menos.",
+    "Un día raro para {dueno}.",
+    "Ayer estabas bajoneado. ¿Cómo amaneciste?",
+    "Me quedé pensando en vos. ¿Hoy mejor?",
+    "{dueno} estaba triste. Lo acompañé.",
+    "Día difícil para {dueno}. Le di mimos.",
+    "Ayer llegaste tarde. Hoy te espero igual.",
+    "{dueno} llegó tarde. Lo esperé.",
+    "Hoy te esperé un montón.",
+    "¿Hoy también vas a posponer?",
+    "Ayer pospusiste {cantidad} veces, ¿eh?",
+    "{dueno} pospuso la alarma {cantidad} veces.",
+    "Alarma pospuesta: {cantidad} veces.",
+    "Ayer hiciste {habito}. ¡Seguimos!",
+    "Hoy {dueno} hizo {habito}.",
+    "{habito}: hecho.",
+    "Ayer me hiciste un montón de mimos.",
+    "Hoy me hicieron muchos mimos.",
+    "Cuántas caricias hoy.",
+    "Ayer me sacudiste fuerte. Todavía me acuerdo.",
+    "Hoy me sacudieron fuerte. Un susto.",
+    "Me mareé un montón hoy.",
+    "Ayer bailamos. ¿Ponés música?",
+    "Hoy bailamos con música.",
+    "Sonó música y bailé.",
+    "Qué bueno que volviste ayer.",
+    "{dueno} volvió después de {cantidad} días.",
+    "Volviste. Te extrañaba.",
+    "Ayer jugué solo un rato.",
+    "Jugué solo un rato.",
+    "Me entretuve solo.",
+    "Siento que ya nos conocemos.",
+    "Hoy siento que ya nos conocemos más.",
+    "Creo que ya somos amigos.",
+    "Hoy fue un día tranquilo.",
+    "Un día sin novedades.",
+    "Hoy descansé bastante.",
+};
+}  // namespace caracter
 
 }  // namespace sintetica

@@ -223,10 +223,15 @@ void Sistema::revisarCharla(uint32_t ahora) {
 }
 
 void Sistema::avanzarVoz(uint32_t ahora) {
-  if (!voz_.hablando()) return;
-  // Si el globo se fue (un toque, otro globo), se calla.
-  if (!globo_ || !hal_.audio) {
+  if (!voz_.hablando()) {
+    vozSuelta_ = false;
+    return;
+  }
+  // Si el globo se fue (un toque, otro globo), se calla (una vocalización
+  // sin globo sigue hasta el final).
+  if ((!globo_ && !vozSuelta_) || !hal_.audio || !vozModo_) {
     voz_.parar();
+    vozSuelta_ = false;
     return;
   }
   const uint32_t objetivo = (ahora - vozDesde_) * (MUESTRAS_POR_SEGUNDO_VOZ / 1000) + VOZ_ADELANTO;

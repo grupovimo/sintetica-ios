@@ -1,0 +1,146 @@
+{
+  "tics": {
+    "parpadeo": [1.0, 1.25],
+    "dobles": [0.11, 0.19],
+    "velocidad": [0.92, 1.1],
+    "pensar": [[-1, 1], [1, 1], [-1, -0.5], [1, -0.5], [0, 1]],
+    "caras_pensar": ["pensando"],
+    "favoritos": ["tararear", "practicar-caras", "estirarse", "pensar-en-algo", "investigar", "mirar-alrededor"],
+    "favorito": 1.6,
+    "microgestos": [
+      {"nombre": "un-ojo", "param": "der.lt", "valor": 0.2, "dura": 0.3, "cada": [25, 70]},
+      {"nombre": "ladeo", "param": "ftilt", "valor": 0.07, "dura": 0.7, "cada": [30, 80]},
+      {"nombre": "trompita", "param": "mcurve", "valor": 0.3, "dura": 0.45, "cada": [30, 90]},
+      {"nombre": "achinar", "param": "lb", "valor": 0.12, "dura": 0.55, "cada": [30, 80]},
+      {"nombre": "saltito", "param": "ey", "valor": 0.025, "dura": 0.35, "cada": [25, 60]},
+      {"nombre": "agrandar", "param": "h", "valor": 0.025, "dura": 0.5, "cada": [30, 80]},
+      {"nombre": "cejita", "param": "izq.lta", "valor": -0.25, "dura": 0.5, "cada": [35, 90]}
+    ]
+  },
+  "etapas": [
+    {"nombre": "recien-llegado", "dias": 0, "afecto": 0, "rasgos": {"timidez": 0.2, "curiosidad": 0.15, "picardia": -0.1}},
+    {"nombre": "conociendonos", "dias": 3, "afecto": 0.32, "rasgos": {"timidez": 0.08, "curiosidad": 0.1}},
+    {"nombre": "confiado", "dias": 14, "afecto": 0.42, "rasgos": {}},
+    {"nombre": "companero", "dias": 60, "afecto": 0.55, "rasgos": {"sociabilidad": 0.05, "picardia": 0.05}}
+  ],
+  "meses_juntos": 11,
+  "episodios": {
+    "gane": {"importancia": 3, "sueno": "estrella",
+      "recuerdo": ["Ayer te gané a {juego}. ¿La revancha?", "¿Te acordás que ayer te gané a {juego}?"],
+      "diario": ["Hoy le gané a {dueno} a {juego}.", "Partida de {juego}: gané yo."]},
+    "perdi": {"importancia": 3, "sueno": "estrella",
+      "recuerdo": ["Ayer me ganaste a {juego}. Hoy me desquito.", "Todavía me acuerdo de {juego} de ayer..."],
+      "diario": ["{dueno} me ganó a {juego}. La próxima es mía.", "Perdí a {juego}. Practico y vuelvo."]},
+    "empate": {"importancia": 2, "sueno": "estrella",
+      "recuerdo": ["Ayer empatamos a {juego}. ¿El desempate?"],
+      "diario": ["Empatamos a {juego}."]},
+    "toque": {"importancia": 3, "sueno": "corazon",
+      "recuerdo": ["Ayer te mandaron un {toque}. Qué lindo."],
+      "diario": ["Me llegó un {toque} de un amigo.", "Hoy recibimos un {toque}."]},
+    "animo-bien": {"importancia": 1, "sueno": "corazon",
+      "recuerdo": ["Ayer estabas bien. ¿Hoy también?"],
+      "diario": ["{dueno} estaba bien hoy.", "Hoy {dueno} andaba contento."]},
+    "animo-medio": {"importancia": 2, "sueno": "nota",
+      "recuerdo": ["Ayer estabas más o menos. ¿Hoy mejor?"],
+      "diario": ["{dueno} estaba más o menos.", "Un día raro para {dueno}."]},
+    "animo-mal": {"importancia": 4, "sueno": "corazon",
+      "recuerdo": ["Ayer estabas bajoneado. ¿Cómo amaneciste?", "Me quedé pensando en vos. ¿Hoy mejor?"],
+      "diario": ["{dueno} estaba triste. Lo acompañé.", "Día difícil para {dueno}. Le di mimos."]},
+    "tarde": {"importancia": 2, "sueno": "oveja",
+      "recuerdo": ["Ayer llegaste tarde. Hoy te espero igual."],
+      "diario": ["{dueno} llegó tarde. Lo esperé.", "Hoy te esperé un montón."]},
+    "posponer": {"importancia": 2, "sueno": "oveja",
+      "recuerdo": ["¿Hoy también vas a posponer?", "Ayer pospusiste {cantidad} veces, ¿eh?"],
+      "diario": ["{dueno} pospuso la alarma {cantidad} veces.", "Alarma pospuesta: {cantidad} veces."]},
+    "habito": {"importancia": 2, "sueno": "estrella",
+      "recuerdo": ["Ayer hiciste {habito}. ¡Seguimos!"],
+      "diario": ["Hoy {dueno} hizo {habito}.", "{habito}: hecho."]},
+    "caricias": {"importancia": 2, "sueno": "corazon",
+      "recuerdo": ["Ayer me hiciste un montón de mimos."],
+      "diario": ["Hoy me hicieron muchos mimos.", "Cuántas caricias hoy."]},
+    "sacudida": {"importancia": 3, "sueno": "exclamacion",
+      "recuerdo": ["Ayer me sacudiste fuerte. Todavía me acuerdo."],
+      "diario": ["Hoy me sacudieron fuerte. Un susto.", "Me mareé un montón hoy."]},
+    "musica": {"importancia": 1, "sueno": "nota",
+      "recuerdo": ["Ayer bailamos. ¿Ponés música?"],
+      "diario": ["Hoy bailamos con música.", "Sonó música y bailé."]},
+    "volviste": {"importancia": 4, "sueno": "corazon",
+      "recuerdo": ["Qué bueno que volviste ayer."],
+      "diario": ["{dueno} volvió después de {cantidad} días.", "Volviste. Te extrañaba."]},
+    "solo": {"importancia": 1, "sueno": "oveja",
+      "recuerdo": ["Ayer jugué solo un rato."],
+      "diario": ["Jugué solo un rato.", "Me entretuve solo."]},
+    "crecio": {"importancia": 4, "sueno": "estrella",
+      "recuerdo": ["Siento que ya nos conocemos."],
+      "diario": ["Hoy siento que ya nos conocemos más.", "Creo que ya somos amigos."]}
+  },
+  "diario_tranquilo": ["Hoy fue un día tranquilo.", "Un día sin novedades.", "Hoy descansé bastante."],
+  "diario_lineas": 3,
+  "juegos": ["piedra, papel o tijera", "los reflejos", "la mirada", "los dados", "cara o ceca"],
+  "toques": ["toque", "abrazo", "beso", "mensaje"],
+  "caricias_dia": 10,
+  "empatia": {
+    "dias": 4, "minimo": 2, "umbral": 0.5,
+    "rasgos": {"picardia": -0.25, "sociabilidad": 0.15, "energia": -0.1},
+    "rigidez": 0.9,
+    "otra_pregunta_h": 5
+  },
+  "clima": {
+    "lluvia": {"energia": -0.08, "curiosidad": -0.05, "rigidez": 0.94},
+    "estaciones": {
+      "verano": {"meses": [12, 1, 2], "energia": 0.03, "curiosidad": 0.03},
+      "otono": {"meses": [3, 4, 5], "energia": -0.02, "curiosidad": 0},
+      "invierno": {"meses": [6, 7, 8], "energia": -0.05, "curiosidad": -0.02},
+      "primavera": {"meses": [9, 10, 11], "energia": 0.06, "curiosidad": 0.05}
+    }
+  },
+  "feriados": [
+    {"pascua": -48, "titulo": "Carnaval", "festejo": true},
+    {"pascua": -47, "titulo": "Carnaval", "festejo": true},
+    {"fecha": "03-24", "titulo": "el Día de la Memoria", "festejo": false},
+    {"fecha": "04-02", "titulo": "el Día de Malvinas", "festejo": false},
+    {"pascua": -2, "titulo": "Viernes Santo", "festejo": false},
+    {"fecha": "05-01", "titulo": "el Día del Trabajador", "festejo": true},
+    {"fecha": "05-25", "titulo": "el 25 de Mayo", "festejo": true},
+    {"fecha": "06-17", "titulo": "el día de Güemes", "festejo": false},
+    {"fecha": "06-20", "titulo": "el Día de la Bandera", "festejo": true},
+    {"fecha": "07-09", "titulo": "el Día de la Independencia", "festejo": true},
+    {"fecha": "08-17", "titulo": "el día de San Martín", "festejo": false},
+    {"fecha": "10-12", "titulo": "el Día de la Diversidad", "festejo": true},
+    {"fecha": "11-20", "titulo": "el Día de la Soberanía", "festejo": true},
+    {"fecha": "12-08", "titulo": "el 8 de diciembre", "festejo": true}
+  ],
+  "rutinas": {
+    "aprender": 0.25,
+    "despertar_antes": 10,
+    "esperar_antes": 15,
+    "esperar_despues": 30,
+    "dormis_antes": 30,
+    "brillo_dormis": 0.25,
+    "sueno_dormis": 0.3
+  },
+  "solo_minutos": 10,
+  "voz": {
+    "sonidos": {
+      "murmullo": "mmm mna mn...",
+      "risa": "¡jajajá!",
+      "tarareo": "la lalá la...",
+      "hip": "¡hip!",
+      "achis": "¡achís!",
+      "ayuda": "¡ay, ay!",
+      "llamar": "¡eh! ¡eh!",
+      "festejo": "¡yupi!",
+      "ronroneo": "rrr mmm"
+    },
+    "caras": {
+      "sorpresa": "¡oh!",
+      "pensando": "mmm...",
+      "confundido": "¿eh?",
+      "miedo": "¡ay!"
+    },
+    "eventos": {
+      "tacto": "¡ji!",
+      "doble-toque": "¡ji ji!"
+    }
+  }
+}

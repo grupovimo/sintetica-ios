@@ -42,6 +42,9 @@ struct SalidasVida {
   void (*guardar)(void* ctx, const uint8_t* datos, size_t n) = nullptr;
   // Una situación para hablar (Situacion de habla.h): el sistema decide si dice algo.
   void (*decir)(void* ctx, uint8_t situacion) = nullptr;
+  // v3: guardar los recuerdos (otra clave de la flash) y una línea nueva del diario.
+  void (*guardarRecuerdos)(void* ctx, const uint8_t* datos, size_t n) = nullptr;
+  void (*diario)(void* ctx, uint16_t dia, uint8_t tipo, uint8_t dato) = nullptr;
 };
 
 // Lo que recuerda (se guarda en flash y se sincroniza con la cuenta).
@@ -77,10 +80,62 @@ constexpr size_t LARGO_MEMORIA = 112;
 size_t codificarMemoria(const Memoria& m, uint8_t* salida, size_t cap);
 bool decodificarMemoria(const uint8_t* d, size_t n, Memoria* m);
 
+// ---------------------------------------------------------------- v3
+
+// Lo que pasó (la memoria episódica): el orden es el de vida/caracter.json
+// "episodios" (embeber_caras.py lo revisa con su lista y un test, con esta).
+enum class TipoEpisodio : uint8_t {
+  Gane, Perdi, Empate, Toque, AnimoBien, AnimoMedio, AnimoMal, Tarde, Posponer, Habito, Caricias, Sacudida, Musica,
+  Volviste, Solo, Crecio, Cantidad
+};
+constexpr uint8_t DIARIO_TRANQUILO = 255;  // una línea del diario sin episodio ("un día tranquilo")
+struct Episodio {
+  uint16_t dia = 0;   // el día de vida (MotorVida::diaVida: cambia a las 4)
+  uint8_t tipo = 0;   // TipoEpisodio (o DIARIO_TRANQUILO en el diario)
+  uint8_t dato = 0;   // el juego, el tipo de toque, el hábito, cuántas veces…
+};
+constexpr int MAX_EPISODIOS = 16;
+constexpr int MAX_DIARIO = 14;
+// Lo que recuerda en la v3: aparte de la Memoria (que no tiene lugar), en la
+// clave "recuerdos" de la flash. Sin esa clave, todo en cero (compatibilidad).
+struct Recuerdos {
+  Episodio episodios[MAX_EPISODIOS];  // anillo: los últimos que pasaron
+  uint8_t nEpisodios = 0, iniEpisodios = 0;
+  Episodio diario[MAX_DIARIO];        // anillo: las líneas del diario
+  uint8_t nDiario = 0, iniDiario = 0;
+  uint16_t diaDiario = 0;             // el último día que escribió
+  uint8_t animos[7] = {};             // [0] = el día diaAnimos: 0 nada, 1 bien, 2 más o menos, 3 mal
+  uint16_t diaAnimos = 0;
+  uint16_t minLlegada = 0xFFFF;       // a qué minuto del día solés llegar (lo aprende)
+  uint16_t minDormis = 0xFFFF;        // y a cuál te dormís
+  uint8_t etapa = 0;                  // la más alta a la que llegó (nunca baja)
+  uint8_t meses = 0;                  // el último "hace N meses" festejado
+  uint8_t anioFeriados = 0;           // año % 256
+  uint32_t feriados = 0;              // bits: los de caracter.json festejados ese año
+  uint8_t anioTuyas = 0;
+  uint16_t tuyas = 0;                 // bits: config.fechas hoy (0-5) y el día antes (8-13)
+  uint8_t juegos[5] = {};             // cuántas veces jugaron a cada juego
+  uint8_t hoyCaricias = 0;
+  uint16_t diaCaricias = 0;
+};
+constexpr size_t LARGO_RECUERDOS = 168;
+size_t codificarRecuerdos(const Recuerdos& r, uint8_t* salida, size_t cap);
+bool decodificarRecuerdos(const uint8_t* d, size_t n, Recuerdos* r);
+
+// Los tics propios (de la semilla del identificador): estables para siempre.
+struct Caracter {
+  bool hay = false;
+  float parpadeo = 1, dobles = 0.15f, velocidad = 1;
+  float pensarX = 1, pensarY = 1;     // hacia dónde mira cuando piensa
+  int8_t favorito = -1;               // índice en caracter::FAVORITOS
+  int8_t microgesto = -1;             // índice en caracter::MICROGESTOS
+  float puerta = 1;                   // de qué lado está "la puerta" (te espera mirando ahí)
+};
+
 // Un registro de lo que pasó, para depurar (se exporta desde la app).
 struct EntradaRegistro {
   uint32_t segundos = 0;   // desde que arrancó
-  uint8_t tipo = 0;        // 0 evento, 1 comportamiento, 2 dormir/despertar, 3 hito, 4 recordatorio
+  uint8_t tipo = 0;        // 0 evento, 1 comportamiento, 2 dormir/despertar, 3 hito, 4 recordatorio … 9 diario
   uint8_t dato = 0;        // el evento, el comportamiento o 1/0
 };
 constexpr int MAX_REGISTRO = 32;
@@ -175,6 +230,38 @@ class MotorVida {
   void anotarHoy(Hoy que, uint8_t dato = 0);
   // Un juego: cuánto tardó en tocar (reflejos), para el récord.
   void anotarReflejo(uint16_t ms);
+  // ---- v3 (docs/motor-de-vida.md, "v3")
+  // La semilla de su identidad (del identificador): sus tics, para siempre.
+  void identidad(uint32_t semilla);
+  const Caracter& caracter() const { return caracter_; }
+  // En qué etapa está (caracter.json "etapas"; nunca baja) y su nombre.
+  int etapa() const { return rec_.etapa; }
+  const char* nombreEtapa() const;
+  // Anota algo que pasó (con sumar: si ya pasó hoy, suma 1 a su dato).
+  void recordar(TipoEpisodio t, uint8_t dato = 0, bool sumar = false);
+  // El dato de ese episodio en ese día (false si no pasó).
+  bool ocurrio(uint16_t dia, TipoEpisodio t, uint8_t* dato = nullptr) const;
+  const Recuerdos& recuerdos() const { return rec_; }
+  void restaurarRecuerdos(const Recuerdos& r);
+  // El día de vida (epoch − 4 h, en días; 0 sin hora): lo de la madrugada es de ayer.
+  uint16_t diaVida() const;
+  // Escribe el diario de ese día (si no lo escribió): hasta 3 líneas.
+  int escribirDiario(uint16_t dia);
+  // Lo que recordó para decir (Situacion::Recuerdo).
+  const Episodio& recuerdoElegido() const { return recuerdo_; }
+  // Cuánto anduvo bajoneado el dueño los últimos días (0 a 1; -1 si no sabe).
+  float bajon() const;
+  bool empatico() const;
+  // Llueve (la nube manda el clima): más tranquilo.
+  void clima(bool lluvia) { lluvia_ = lluvia; }
+  // La presencia (0x49): si estás o no; aprende a qué hora llegás.
+  void presencia(bool estas);
+  // El feriado o la fecha tuya de hoy (para {titulo}; -1 = ninguno) y los meses juntos.
+  int feriadoHoy() const { return feriadoHoy_; }
+  int fechaTuyaHoy() const { return fechaTuya_; }
+  int mesesJuntos() const { return rec_.meses; }
+  // Si te está esperando (a la hora en que solés llegar).
+  bool esperando() const { return esperandoDueno_; }
   // El broche: de noche, después de dormirse, puede apagar la pantalla hasta
   // la mañana. segundosHastaDespertar: -1 si no se sabe la hora.
   bool quiereSuenoProfundo() const;
@@ -222,6 +309,18 @@ class MotorVida {
     if (salidas_.decir) salidas_.decir(salidas_.ctx, static_cast<uint8_t>(s));
   }
   void anotar(uint8_t tipo, uint8_t dato);
+  // Una vocalización de la voz propia ("voz:sorpresa"), si caracter.json la tiene.
+  void vocalizar(const char* clave, bool cara);
+  void actualizarV3();
+  void revisarEtapa();
+  void guardarRecuerdos();
+  void aprender(uint16_t& minuto, int m);
+  bool hayEpisodio(uint16_t dia) const;
+  bool masImportante(uint16_t dia, Episodio* salida, uint32_t excluir) const;
+  void anotarAnimo(uint8_t a);
+  void resolverV3();
+  int fechasV3(int32_t diaEpoch);
+  int particulaDeSueno();
   void memoriaInteraccion(Evento e);
   void revisarHitos();
   void guardar();
@@ -333,6 +432,22 @@ class MotorVida {
   float ausenciaHoras_ = 0;
 
   Memoria mem_;
+  // v3.
+  Recuerdos rec_;
+  Caracter caracter_;
+  int8_t favoritoIdx_ = -1, caraPensar_ = -1;
+  int8_t microParam_ = -1;
+  bool microAmbos_ = false;
+  float proximoMicro_ = 0, microDesde_ = -10;
+  float ajusteRasgos_[N_RASGOS] = {};
+  float rigidezV3_ = 1;
+  bool lluvia_ = false, ausente_ = false, fueSolo_ = false;
+  int8_t feriadoHoy_ = -1, fechaTuya_ = -1;
+  bool hitoSinFestejo_ = false, crecioPendiente_ = false;
+  float dormisPeso_ = 0;
+  Episodio recuerdo_;
+  uint16_t recuerdoDia_ = 0, anticipoDia_ = 0, dormisDia_ = 0;
+  float primerContacto_ = -1e9f;
   EntradaRegistro registro_[MAX_REGISTRO];
   uint8_t nRegistro_ = 0, iniRegistro_ = 0;
 };

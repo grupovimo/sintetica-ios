@@ -8,6 +8,13 @@
 #include "mate.h"
 #include "vida_datos.h"
 
+// Rearmar un objeto grande en su lugar, sin <new> (el núcleo no tiene libc):
+// `x = T()` arma la temporal en la pila, y en la placa la pila de la tarea
+// principal es de 8 KB (Config pesa ~110 KB). La etiqueta evita chocar con el
+// placement new de la biblioteca estándar.
+struct EnSuLugar {};
+inline void* operator new(decltype(sizeof 0), void* lugar, EnSuLugar) noexcept { return lugar; }
+
 namespace sintetica {
 
 constexpr int MAX_PUNTOS = 12;
@@ -127,6 +134,7 @@ enum class Evento : uint8_t {
   Llegaste,       // presencia: llegaste (v1.9)
   TeFuiste,       // presencia: te fuiste (v1.9)
   Habito,         // se marcó un hábito (v1.9; si fue en el bicho, lo avisa solo)
+  Crecio,         // pasó a otra etapa (v3; lo genera el motor; si no hay regla, la de hito)
   Cantidad
 };
 // El evento "padre" (sacudida-fuerte → sacudida, caricia → tacto): si no hay
@@ -207,7 +215,7 @@ struct Regla {
   Accion entonces[MAX_ACCIONES];
 };
 
-enum class Modo : uint8_t { Mascota, Reloj, Pomodoro, Clima, Notificaciones };
+enum class Modo : uint8_t { Mascota, Reloj, Pomodoro, Clima, Notificaciones, Galeria };
 
 // Lo que se muestra, en orden: un toque pasa al siguiente (en el broche) y la
 // lista puede rotar sola.
@@ -271,6 +279,7 @@ struct Config {
   uint8_t nLista = 0;
   ElementoLista lista[MAX_LISTA];
   uint16_t rotarMinutos = 0;  // 0 = no rota sola
+  uint16_t galeriaSegundos = 30;  // modo galería: cada cuánto pasa a la siguiente imagen
   uint8_t nAnimaciones = 0;
   Animacion animaciones[MAX_ANIMACIONES];
   DatosVida vida;
@@ -285,6 +294,7 @@ struct Config {
   Avisos avisos;
   Habitos habitos;     // v1.9
   Presencia presencia;  // v1.9
+  FechasTuyas fechas;   // v3
 
   int indiceExpresion(const char* nombre) const;
   int indiceAnimacion(const char* nombre) const;
