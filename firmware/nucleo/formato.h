@@ -46,6 +46,14 @@ constexpr uint32_t PANTALLA = 0x0B0A09;
 constexpr uint32_t TINTA = 0xF5F2EC;
 constexpr uint32_t TINTA_SUAVE = 0xA39E96;
 constexpr uint32_t LINEA = 0x2C2925;
+// Los acentos (13/11): cada estado y cada emoción tiene su color, chiquito.
+constexpr uint32_t LIMA = 0xC6F05A;      // escucha, listo, hecho
+constexpr uint32_t VIOLETA = 0xB9A4FF;   // piensa, habla, la agenda
+constexpr uint32_t CELESTE = 0x7CC8FF;   // tristeza
+constexpr uint32_t ROSA = 0xFF8FB1;      // cariño, vergüenza
+constexpr uint32_t AMARILLO = 0xFFC94D;  // sol, cargando, la racha
+constexpr uint32_t ROJO = 0xFF5A4E;      // batería baja, emergencia
+constexpr uint32_t BOTON = 0x2A2824;     // el fondo de un botón o una pista vacía
 }  // namespace paleta
 
 enum class TipoForma : uint8_t { Pildora, Corte, Circulo, Arco, Corazon, Espiral, Poligono, Franjas };
@@ -135,6 +143,8 @@ enum class Evento : uint8_t {
   TeFuiste,       // presencia: te fuiste (v1.9)
   Habito,         // se marcó un hábito (v1.9; si fue en el bicho, lo avisa solo)
   Crecio,         // pasó a otra etapa (v3; lo genera el motor; si no hay regla, la de hito)
+  RecordatorioConfirmado,    // confirmaron un recordatorio con "confirmar" (la pastilla; lo avisa solo)
+  RecordatorioSinConfirmar,  // pasaron 30 min sin confirmarlo (la nube avisa a la familia)
   Cantidad
 };
 // El evento "padre" (sacudida-fuerte → sacudida, caricia → tacto): si no hay
@@ -230,6 +240,7 @@ struct Recordatorio {
   uint8_t dias = 0x7F;     // bit 0 lunes … bit 6 domingo
   bool sonido = true;
   bool activo = true;
+  bool confirmar = false;  // insiste cada 5 min hasta que lo confirmen (la pastilla del modo Cuidado)
   int8_t caraVida = -1;    // la expresión (Config::Cara): índice en vida.caras
   int8_t caraDibujo = -1;  // o en expresiones
   char texto[LARGO_RECORDATORIO] = {};
@@ -267,6 +278,7 @@ struct Config {
   bool hayColorOjos = false;
   uint32_t colorOjos = paleta::NARANJA;
   float tamano = 1.0f;
+  bool letraGrande = false;  // "cara.letra": "grande" (el modo Cuidado): lo que dice y la hora, más grandes
   float energia = 0.5f;
   float timidez = 0.3f;
   int16_t suenoDesde = -1;  // minutos desde la medianoche; -1 = sin horario

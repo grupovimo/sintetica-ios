@@ -231,31 +231,57 @@ struct SelectorCumple: View {
     let rotulo: String
     let valor: String?
     let alCambiar: (Int, Int) -> Void
+    @State private var abierto = false
 
+    // Ruedas en una hoja y no un Menu: el Menu de 31 días volvía arriba cada
+    // vez que la pantalla se redibujaba (el estado del robot llega seguido).
     var body: some View {
         let p = partesCumple(valor)
-        Visor(relleno: 12) {
-            Grabado(rotulo)
-            HStack(spacing: 10) {
-                Menu {
-                    Button("—") { alCambiar(0, 0) }
-                    ForEach(1 ... 31, id: \.self) { d in Button("\(d)") { alCambiar(p.mes == 0 ? 1 : p.mes, d) } }
-                } label: { etiqueta(p.dia == 0 ? "—" : "\(p.dia)") }
-                Menu {
-                    Button("—") { alCambiar(0, 0) }
-                    ForEach(1 ... 12, id: \.self) { m in Button(MESES[m - 1]) { alCambiar(m, p.dia == 0 ? 1 : p.dia) } }
-                } label: { etiqueta(p.mes == 0 ? "—" : MESES[p.mes - 1]) }
-                Spacer()
+        Button { abierto = true } label: {
+            Visor(relleno: 12) {
+                Grabado(rotulo)
+                HStack(spacing: 6) {
+                    Text(p.mes == 0 ? "—" : "\(p.dia) de \(MESES[p.mes - 1])").font(Tipos.marca(18, .black))
+                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.gris)
+                    Spacer()
+                }
+                .foregroundStyle(Color.papel)
+            }
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $abierto) {
+            HojaCumple(rotulo: rotulo, mes: p.mes == 0 ? 1 : p.mes, dia: p.dia == 0 ? 1 : p.dia) { m, d in
+                alCambiar(m, d)
+                abierto = false
             }
         }
     }
+}
 
-    private func etiqueta(_ t: String) -> some View {
-        HStack(spacing: 6) {
-            Text(t).font(Tipos.marca(18, .black))
-            Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.gris)
+private struct HojaCumple: View {
+    let rotulo: String
+    @State var mes: Int
+    @State var dia: Int
+    let listo: (Int, Int) -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Grabado(rotulo)
+            HStack(spacing: 0) {
+                Picker("Día", selection: $dia) { ForEach(1 ... 31, id: \.self) { Text("\($0)").tag($0) } }
+                    .pickerStyle(.wheel)
+                Picker("Mes", selection: $mes) { ForEach(1 ... 12, id: \.self) { Text(MESES[$0 - 1]).tag($0) } }
+                    .pickerStyle(.wheel)
+            }
+            HStack(spacing: 12) {
+                Button { listo(0, 0) } label: { Text("Sin cumple") }.tecla(ancha: true)
+                Button { listo(mes, dia) } label: { Text("Listo") }.tecla(.naranja, ancha: true)
+            }
         }
-        .foregroundStyle(Color.papel)
+        .padding(24)
+        .presentationDetents([.medium])
+        .presentationBackground(Color.fondo)
+        .colorScheme(.dark)
     }
 }
 

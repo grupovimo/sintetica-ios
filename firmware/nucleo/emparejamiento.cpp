@@ -9,11 +9,10 @@ namespace sintetica {
 
 namespace {
 Qr g_qr;
-char g_qrContenido[48];  // el último texto codificado: no se recodifica en cada franja
+char g_qrContenido[128];  // el último texto codificado: no se recodifica en cada franja
 bool g_qrOk = false;
 }
 
-namespace {
 void dibujarQr(Lienzo& l, int panelX, int panelY, int panel, const char* contenido) {
   l.pildora(panelX + panel / 2.0f, panelY + panel / 2.0f, panel, panel, 8, paleta::TINTA);
   if (!iguales(contenido, g_qrContenido)) {
@@ -29,6 +28,8 @@ void dibujarQr(Lienzo& l, int panelX, int panelY, int panel, const char* conteni
     for (int x = 0; x < lado; x++)
       if (g_qr.oscuro(x, y)) l.rectangulo(x0 + x * modulo, y0 + y * modulo, modulo, modulo, paleta::PANTALLA);
 }
+
+namespace {
 
 void textoUnidad(char* destino, size_t cap, const char* serie) {
   copiarTexto(destino, cap, "UNIDAD #");
@@ -53,6 +54,17 @@ void dibujarEmparejamiento(Lienzo& l, const char* serie, const char* contenidoQr
     centrado(l, fuentes::MONO_13, unidad, cx, l.alto() * 0.20f, paleta::NARANJA);
     centrado(l, fuentes::VOZ_20, "Escaneame", cx, l.alto() * 0.84f, paleta::TINTA);
     centrado(l, fuentes::MONO_9, estado, cx, l.alto() * 0.92f, paleta::TINTA_SUAVE);
+    return;
+  }
+  if (l.alto() * 4 > l.ancho() * 3) {
+    // Cuadrada (el cubito, 240 × 240): las piezas del manual, una abajo de la otra.
+    const float cx = l.ancho() / 2.0f;
+    constexpr int PANEL = 128;
+    const int y = static_cast<int>(l.alto() * 0.13f);
+    dibujarQr(l, static_cast<int>(cx) - PANEL / 2, y, PANEL, contenidoQr);
+    centrado(l, fuentes::MONO_13, unidad, cx, y - 8, paleta::NARANJA);
+    centrado(l, fuentes::VOZ_20, "Escaneame con la app.", cx, y + PANEL + 34, paleta::TINTA);
+    centrado(l, fuentes::MONO_9, estado, cx, y + PANEL + 58, paleta::TINTA_SUAVE);
     return;
   }
   // Medidas del manual, para la pantalla de 320 × 172.

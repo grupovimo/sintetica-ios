@@ -9,6 +9,28 @@ namespace {
 constexpr const char* CLAVE_GUSTOS = "gustos";
 constexpr uint32_t CALLADO_MS = 60u * 60000u;  // "callate": una hora sin frases espontáneas
 constexpr uint32_t VOZ_ADELANTO = 2400;        // muestras (150 ms) que se mandan de más
+
+// Arma un texto de a pedazos (como el de charla.cpp).
+struct Escritor {
+  char* s;
+  size_t cap, n = 0;
+  Escritor(char* d, size_t c) : s(d), cap(c) {
+    if (cap) s[0] = 0;
+  }
+  void texto(const char* t) {
+    for (size_t i = 0; t[i] && n + 1 < cap; i++) s[n++] = t[i];
+    if (cap) s[n] = 0;
+  }
+  void numero(int v) {
+    char b[12];
+    int k = 0;
+    unsigned u = v < 0 ? 0u : static_cast<unsigned>(v);
+    do b[k++] = static_cast<char>('0' + u % 10), u /= 10;
+    while (u && k < 11);
+    char c[2] = {0, 0};
+    while (k) c[0] = b[--k], texto(c);
+  }
+};
 }  // namespace
 
 size_t Sistema::gustos(char* salida, size_t cap) const {
@@ -59,7 +81,11 @@ void Sistema::hacerAccion(const RespuestaCharla& r, uint32_t ahora) {
   const EntidadesCharla& e = r.e;
   // Cuánto falta (ms) para la hora que pidió (una vez).
   auto falta = [&]() -> uint32_t {
-    if (e.enMinutos >= 0 && e.minuto < 0) return static_cast<uint32_t>(e.enMinutos) * 60000u;
+    // Lo relativo ("en 10 minutos", "10 segundos") cuenta desde ahora: con la
+    // hora del día (que también viene) daba de 0 a 59 s menos (un timer de
+    // un minuto podía durar un segundo).
+    if (e.enSegundos > 0) return static_cast<uint32_t>(e.enSegundos) * 1000u;
+    if (e.enMinutos >= 0) return static_cast<uint32_t>(e.enMinutos) * 60000u;
     const int m = minutoDelDia();
     if (e.minuto < 0 || m < 0) return e.enMinutos >= 0 ? static_cast<uint32_t>(e.enMinutos) * 60000u : 0;
     int d = (e.dia > 0 ? e.dia : 0) * 1440 + e.minuto - m;
@@ -69,6 +95,7 @@ void Sistema::hacerAccion(const RespuestaCharla& r, uint32_t ahora) {
     return static_cast<uint32_t>(d * 60 - seg) * 1000u;
   };
   bool conGlobo = r.frase[0] != 0;
+  fraseTimer_[0] = 0;
   switch (r.accion) {
     case AccionCharla::Alarma:
       if (e.dias && e.minuto >= 0) {
@@ -153,6 +180,87 @@ void Sistema::hacerAccion(const RespuestaCharla& r, uint32_t ahora) {
         notificarEvento(Evento::Animo, 6, static_cast<uint8_t>(r.dato));
       }
       break;
+    case AccionCharla::Timer:
+      if (const uint32_t ms = falta()) {
+        // Un lugar libre o, si no hay, el que termina primero.
+        int k = 0;
+        for (int i = 0; i < MAX_TIMERS; i++) {
+          if (!timers_[i].fin) {
+            k = i;
+            break;
+          }
+          if (timers_[i].fin - ahora < timers_[k].fin - ahora) k = i;
+        }
+        TimerCharla& t = timers_[k];
+        t.fin = ahora + ms;
+        if (!t.fin) t.fin = 1;
+        t.total = ms;
+        const char* n = e.texto;
+        if (iguales(n, "para ", 5)) n += 5;  // "para los fideos" → "los fideos"
+        copiarTexto(t.nombre, sizeof t.nombre, iguales(n, "\xC2\xA1Tiempo!") ? "" : n);
+      }
+      break;
+    case AccionCharla::CancelarTimer: {
+      int n = 0;
+      for (TimerCharla& t : timers_)
+        if (t.fin) t.fin = 0, n++;
+      if (timerSonando_ >= 0) timerSonando_ = -1, n++;
+      if (!n) copiarTexto(fraseTimer_, sizeof fraseTimer_, "No hay ningún timer andando.");
+      break;
+    }
+    case AccionCharla::CuantoFalta: {
+      const int k = timerMasProximo();
+      if (k < 0) {
+        copiarTexto(fraseTimer_, sizeof fraseTimer_, "No hay ningún timer andando.");
+        break;
+      }
+      const uint32_t s = (timers_[k].fin - ahora + 999) / 1000u;
+      Escritor x(fraseTimer_, sizeof fraseTimer_);
+      x.texto("Faltan ");
+      if (s >= 60) {
+        x.numero(static_cast<int>(s / 60));
+        x.texto(s / 60 == 1 ? " minuto" : " minutos");
+        if (s % 60 && s < 600) x.texto(" y "), x.numero(static_cast<int>(s % 60)), x.texto(" segundos");
+      } else {
+        x.numero(static_cast<int>(s));
+        x.texto(" segundos");
+      }
+      if (timers_[k].nombre[0]) x.texto(" para "), x.texto(timers_[k].nombre);
+      x.texto(".");
+      break;
+    }
+    case AccionCharla::Confirmar:
+      if (recConfirmar_ >= 0) confirmarRecordatorio();
+      break;
+    case AccionCharla::ConsultarRecordatorio: {
+      // "¿Tomé la pastilla?": el último recordatorio con "confirmar" de hoy.
+      int k = -1;
+      for (int i = 0; i < config_.nRecordatorios; i++)
+        if (config_.recordatorios[i].confirmar && (k < 0 || recConfirmado_[i] > recConfirmado_[k])) k = i;
+      if (k < 0) {
+        copiarTexto(fraseTimer_, sizeof fraseTimer_, "No tengo nada para confirmar.");
+        break;
+      }
+      const uint32_t ep = epoch(), hecho = recConfirmado_[k];
+      Escritor x(fraseTimer_, sizeof fraseTimer_);
+      if (recConfirmar_ == k) {
+        x.texto("Todavía no. Es la de las ");
+      } else if (hecho && ep && hecho / 86400u == ep / 86400u) {
+        const int m = static_cast<int>((hecho % 86400u) / 60u);
+        x.texto("Sí, la confirmaste a las ");
+        x.numero(m / 60), x.texto(":"), x.texto(m % 60 < 10 ? "0" : ""), x.numero(m % 60), x.texto(".");
+        break;
+      } else {
+        x.texto("Hoy todavía no. Es la de las ");
+      }
+      const int m = config_.recordatorios[k].minuto;
+      x.numero(m / 60), x.texto(":"), x.texto(m % 60 < 10 ? "0" : ""), x.numero(m % 60), x.texto(".");
+      break;
+    }
+    case AccionCharla::Emergencia:
+      // El aviso a la familia lo manda la nube (con el 0xCC); acá, que se note.
+      sonar("ayuda");
+      break;
     default: break;  // Toque, Música: los hace la nube (con el aviso 0xCC)
   }
   if (r.comportamiento[0]) {
@@ -161,7 +269,8 @@ void Sistema::hacerAccion(const RespuestaCharla& r, uint32_t ahora) {
   }
   if (conGlobo) {
     const Config::Cara cara = r.expresion[0] ? config_.resolverCara(r.expresion) : Config::Cara();
-    decir(r.frase, cara, !cara.existe());
+    // Lo que sabe el robot y no la charla (cuánto falta) reemplaza la frase.
+    decir(fraseTimer_[0] ? fraseTimer_ : r.frase, cara, !cara.existe());
   }
 }
 
@@ -202,7 +311,62 @@ void Sistema::responderCharla(const RespuestaCharla& r, bool porComando) {
 
 void Sistema::avisarCharla(const RespuestaCharla& r) { responderCharla(r, false); }
 
+int Sistema::timerMasProximo() const {
+  const uint32_t ahora = hal_.ahoraMs();
+  int k = -1;
+  for (int i = 0; i < MAX_TIMERS; i++)
+    if (timers_[i].fin && (k < 0 || timers_[i].fin - ahora < timers_[k].fin - ahora)) k = i;
+  return k;
+}
+
+uint32_t Sistema::faltaTimer() const {
+  const int k = timerMasProximo();
+  if (k < 0) return 0;
+  const int32_t f = static_cast<int32_t>(timers_[k].fin - hal_.ahoraMs());
+  return f > 0 ? static_cast<uint32_t>(f) : 1;
+}
+
+int Sistema::timersAndando() const {
+  int n = 0;
+  for (const TimerCharla& t : timers_) n += t.fin ? 1 : 0;
+  return n;
+}
+
+// Un timer que terminó: lo dice y suena cada vez más fuerte hasta un toque
+// (o un minuto).
+void Sistema::avanzarTimers(uint32_t ahora) {
+  for (int i = 0; i < MAX_TIMERS; i++) {
+    TimerCharla& t = timers_[i];
+    if (!t.fin || static_cast<int32_t>(ahora - t.fin) < 0) continue;
+    t.fin = 0;
+    timerSonando_ = static_cast<int8_t>(i);
+    timerSonandoDesde_ = ahora;
+    timerProximoBip_ = ahora;
+    copiarTexto(nombreSonando_, sizeof nombreSonando_, t.nombre);
+    if (motor_.dormido()) motor_.despertar(ahora, false);
+    char f[64];
+    Escritor x(f, sizeof f);
+    x.texto("\xC2\xA1Tiempo!");
+    if (t.nombre[0]) x.texto(" "), x.texto(t.nombre), x.texto(".");
+    decir(f, config_.resolverCara("sorpresa"));
+    evento(Evento::Recordatorio);
+    log("terminó un timer");
+  }
+  if (timerSonando_ < 0) return;
+  if (ahora - timerSonandoDesde_ >= 60000u) {
+    timerSonando_ = -1;
+    return;
+  }
+  if (static_cast<int32_t>(ahora - timerProximoBip_) >= 0) {
+    timerProximoBip_ = ahora + 1500;
+    char s[16] = "despertador:1";
+    s[12] = static_cast<char>('0' + mini(5, 1 + static_cast<int>((ahora - timerSonandoDesde_) / 10000u)));
+    sonar(s);
+  }
+}
+
 void Sistema::revisarCharla(uint32_t ahora) {
+  avanzarTimers(ahora);
   if (alarmaCharlaMs_ && !alarma_ && static_cast<int32_t>(ahora - alarmaCharlaMs_) >= 0) {
     alarmaCharlaMs_ = 0;
     sonarAlarma(true);
@@ -212,7 +376,17 @@ void Sistema::revisarCharla(uint32_t ahora) {
     if (motor_.dormido()) motor_.despertar(ahora, false);
     sonar("recordatorio");
     evento(Evento::Recordatorio);
-    decir(recCharla_[0] ? recCharla_ : "\xC2\xA1Tiempo!", config_.resolverCara("sorpresa"));
+    // En el panel del recordatorio, como los de la config (con "Ya está" y
+    // "Después" en el cubito): un recordatorio de la charla no tiene índice.
+    if (recVisible_ < 0) {
+      recVisible_ = REC_CHARLA;
+      recDesde_ = ahora;
+      copiarTexto(recTexto_, sizeof recTexto_, recCharla_[0] ? recCharla_ : "\xC2\xA1Tiempo!");
+      copiarTexto(recNombre_, sizeof recNombre_, "recordatorio:charla");
+      motor_.reaccionar(config_.resolverCara("sorpresa"), ahora, 1500);
+    } else {
+      decir(recCharla_[0] ? recCharla_ : "\xC2\xA1Tiempo!", config_.resolverCara("sorpresa"));
+    }
     log("recordatorio de la charla");
   }
   // "Andá a dormir": cuando se va el globo de las buenas noches.

@@ -75,8 +75,9 @@ struct Agenda: Equatable {
 }
 
 struct Entrantes: Equatable {
-    var url = "", token = "", mercadoPago = false, regenerar = false
+    var url = "", token = "", mercadoPago = false, conectarMercadoPago = false, regenerar = false
     init(_ o: [String: Any]) {
+        conectarMercadoPago = o["conectarMercadoPago"] as? Bool ?? false
         url = o["url"] as? String ?? ""
         token = o["token"] as? String ?? ""
         mercadoPago = o["mercadoPago"] as? Bool ?? false
@@ -227,6 +228,8 @@ extension ApiSintetica {
     func guardarMercadoPago(_ token: String) async throws {
         _ = try await pedirCrudo("/v1/entrantes/mercadopago", "PUT", cuerpo: json(["accessToken": token]))
     }
+    /// Conectar con un botón (OAuth): la URL de Mercado Pago; vuelve a la web.
+    func enlaceMercadoPago() async throws -> String { (try await pedir("/v1/entrantes/mercadopago/conectar"))["url"] as? String ?? "" }
     func sacarMercadoPago() async throws { _ = try await pedirCrudo("/v1/entrantes/mercadopago", "DELETE") }
 
     /// Manda uno de prueba; devuelve a cuántos robots llegó.

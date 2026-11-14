@@ -540,6 +540,7 @@ struct ModAgenda: View {
 /// donde quieras. Cuando llega algo, tus robots te avisan con su cara.
 @MainActor
 struct ModAvisos: View {
+    @Environment(\.openURL) private var abrirMP
     let modelo: ModeloRobot
     @State private var e: Entrantes?
     @State private var error = ""
@@ -642,6 +643,12 @@ struct ModAvisos: View {
                                 Spacer()
                                 Button { Task { try? await api.sacarMercadoPago(); await cargar() } } label: { Text("Sacar") }.tecla(.negra, chica: true)
                             }
+                        } else if e?.conectarMercadoPago == true {
+                            HStack {
+                                Grabado("Cobros y montos", color: Color.tinta.opacity(0.66))
+                                Spacer()
+                                Button { conectarMP() } label: { Text("Conectar") }.tecla(chica: true)
+                            }
                         } else {
                             HStack(spacing: 6) {
                                 SecureField("", text: $mp, prompt: Text("Access token").foregroundColor(Color(hex: 0x5A524A)))
@@ -666,6 +673,14 @@ struct ModAvisos: View {
             Grabado(a, color: Color.tinta.opacity(0.66))
             Spacer()
             Text(b).font(Tipos.marca(12, .black)).foregroundStyle(Color.tinta).lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
+
+    private func conectarMP() {
+        Task {
+            do {
+                if let u = URL(string: try await api.enlaceMercadoPago()) { abrirMP(u) }
+            } catch { self.error = error.localizedDescription }
         }
     }
 

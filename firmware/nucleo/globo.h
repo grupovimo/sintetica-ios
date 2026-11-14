@@ -1,6 +1,6 @@
 // Texto que entra en la pantalla (en varias líneas, achicando la letra si hace
-// falta) y el globo de diálogo del bicho: lo que dice (comando Decir, sus
-// frases, el despertador) sale de su cara en un globo claro.
+// falta) y lo que dice el bicho (comando Decir, sus frases, el despertador):
+// el texto suelto abajo de los ojos, con un fundido.
 #pragma once
 
 #include "lienzo.h"
@@ -9,7 +9,7 @@
 namespace sintetica {
 
 constexpr int MAX_LINEAS_TEXTO = 4;
-constexpr int LARGO_TEXTO_AJUSTADO = 64;
+constexpr int LARGO_TEXTO_AJUSTADO = 128;  // lo que dice (60 bytes) o el cuerpo de una tarjeta (120)
 
 struct TextoAjustado {
   const Fuente* fuente = nullptr;
@@ -35,9 +35,11 @@ void ajustarTexto(const char* s, float cy, float anchoMax, int maxLineas, bool r
                   TextoAjustado* a);
 void dibujarAjustado(Lienzo& l, const TextoAjustado& a, float cx, uint32_t color);
 
-// El globo: el texto ajustado sobre una píldora clara, con la colita hacia
-// (colaX, colaY) (la boca del bicho). alfa = el fundido.
-void dibujarGlobo(Lienzo& l, const char* s, float cx, float cy, float anchoMax, int maxLineas, bool redonda, float W,
-                  float H, float colaX, float colaY, float alfa);
+// Lo que dice: el texto ajustado, centrado en (cx, cy), en la tinta clara.
+// alfa = el fundido.
+// Por defecto en mono chiquita (mayúsculas); grande = la letra de la voz, más
+// grande (el modo Cuidado).
+void dibujarDicho(Lienzo& l, const char* s, float cx, float cy, float anchoMax, int maxLineas, bool redonda, float W,
+                  float H, float alfa, bool grande = false);
 
 }  // namespace sintetica

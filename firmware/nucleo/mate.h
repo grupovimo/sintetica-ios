@@ -145,5 +145,15 @@ inline size_t copiarTexto(char* dst, size_t cap, const char* src, size_t n) {
 inline size_t copiarTexto(char* dst, size_t cap, const char* src) {
   return copiarTexto(dst, cap, src, largo(src));
 }
+// Un número sin signo en decimal (cortado si no entra). Devuelve cuánto escribió.
+inline size_t escribirNumero(char* dst, size_t cap, unsigned v) {
+  char d[12];
+  size_t n = 0;
+  do d[n++] = static_cast<char>('0' + v % 10), v /= 10;
+  while (v);
+  char t[12];
+  for (size_t i = 0; i < n; i++) t[i] = d[n - 1 - i];
+  return copiarTexto(dst, cap, t, n);
+}
 
 }  // namespace sintetica

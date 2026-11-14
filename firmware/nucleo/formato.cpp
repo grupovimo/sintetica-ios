@@ -15,7 +15,8 @@ const char* const NOMBRES_EVENTO[] = {
     "ruido", "musica", "silencio", "notificacion", "llamada", "bateria-baja", "bateria-critica", "enchufado",
     "desenchufado", "cargado", "sin-wifi", "cambio-de-cara", "bicho-cerca", "volvio", "hito",
     "recordatorio", "pomodoro", "despertador", "juego", "animo", "cara-detectada", "oscuridad", "mano-cerca",
-    "toque-recibido", "devolver-toque", "agenda", "llegaste", "te-fuiste", "habito", "crecio"};
+    "toque-recibido", "devolver-toque", "agenda", "llegaste", "te-fuiste", "habito", "crecio",
+    "recordatorio-confirmado", "recordatorio-sin-confirmar"};
 static_assert(sizeof NOMBRES_EVENTO / sizeof NOMBRES_EVENTO[0] == static_cast<int>(Evento::Cantidad), "eventos");
 
 // Memoria de trabajo compartida (no reentrante: el núcleo corre en un solo hilo).
@@ -642,6 +643,13 @@ ResultadoConfig aplicarSobre(Config& c, const char* texto, size_t n) {
     }
     if (!numeroOpcional(j, cara, "tamano", 0.5f, 1.5f, &c.tamano))
       return error(ErrorConfig::Campo, "cara: tamano entre 0.5 y 1.5");
+    const int le = j.buscar(cara, "letra");
+    if (le >= 0) {
+      char l[12];
+      if (j.texto(le, l, sizeof l) <= 0 || !(iguales(l, "normal") || iguales(l, "grande")))
+        return error(ErrorConfig::Campo, "cara: letra es normal o grande");
+      c.letraGrande = iguales(l, "grande");
+    }
   }
 
   int per = j.buscar(0, "personalidad");

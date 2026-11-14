@@ -14,6 +14,7 @@
 #include "motor_vida.h"
 #include "protocolo.h"
 #include "qoi.h"
+#include "sonidos.h"
 #include "sprites.h"
 #include "voz_propia.h"
 
@@ -32,6 +33,13 @@ struct Perfil {
   // false = mantener apretado no muestra el QR (el bicho-celu lo muestra
   // desde su menú y el toque largo queda para la cara).
   bool qrPorMantener = true;
+  // La barra de arriba (el cubito): la hora, la conexión y la batería.
+  bool barra = false;
+  // VOL+ y VOL− (el cubito): "sí" y "no / después" según la pantalla, con las
+  // pistas abajo (Sistema::botonSi, botonNo).
+  bool botones = false;
+  // El resplandor alrededor de los ojos (sin él, ojos lisos: el cubito).
+  bool halo = true;
   // Lo que va en el estado y en los manifiestos de OTA: una OTA solo se
   // acepta si es de este mismo perfil.
   const char* nombre = "sim";
@@ -53,6 +61,12 @@ constexpr uint32_t ALARMA_TONO_MS = 4000;         // un tono cada 4 s,
 constexpr uint32_t ALARMA_SUBE_MS = 10000;        // cada 10 s más fuerte (despertador:1 a despertador:5)
 constexpr uint32_t ALARMA_APAGAR_MS = 1500;       // mantener apretado: apagar
 constexpr uint32_t CARA_CLIMA_MS = 40000;         // en modo clima, la cara reacciona al tiempo cada 40 s
+constexpr uint32_t VISTA_MS = 20000;     // VOL− en reposo: la hora grande o el clima, 20 s
+constexpr uint32_t VOLUMEN_MS = 2000;    // la barrita del volumen, después del último cambio
+constexpr uint32_t PENSANDO_MAX_MS = 12000;  // sin respuesta de la nube: lo dice
+// Cuánto queda una tarjeta si no la tocan (un toque la cierra).
+constexpr uint32_t TARJETA_QR_MS = 120000, TARJETA_PASO_MS = 15u * 60000u, TARJETA_DATO_MS = 30000,
+                   TARJETA_LISTA_MS = 60000;
 }  // namespace tiemposPanel
 
 namespace tiemposBroche {
@@ -81,6 +95,28 @@ class Sistema {
   void tacto(bool apretado);
   void imu(float ax, float ay, float az) { gestos_.imu(ax, ay, az, hal_.ahoraMs()); }
   void evento(Evento e);
+  // Hablarle (el cubito): mientras graba, Oyendo (la cara de escuchar y unas
+  // barritas que siguen tu voz: nivelVoz de 0 a 1); al soltar, Pensando (tres
+  // puntitos) hasta que contesta (lo que dice) o 20 s. Con fundido.
+  enum class Escucha : uint8_t { Nada, Oyendo, Pensando };
+  void escucha(Escucha e);
+  // Un paso de lo que está haciendo (CmdTrabajo): se ve abajo de los
+  // puntitos de pensar y estira la espera. Si no estaba pensando, empieza.
+  void pasoTrabajo(uint8_t estado, const char* texto);
+  int pasosTrabajo() const { return nTrabajo_; }
+  // Los botones del cubito (13/11, botones.cpp). VOL+ es "sí": apaga la
+  // alarma o el timer que suena, confirma el recordatorio, contesta "bien" o
+  // "hecho", devuelve el toque de un amigo. VOL− es "no / después": pospone,
+  // cierra la tarjeta, corta lo que dice y, si no hay nada, muestra la vista
+  // siguiente (la hora grande, el clima). true si hizo algo (si no, VOL+ habla).
+  bool botonSi();
+  bool botonNo();
+  // El volumen (voz.volumen, 10 a 100): de a 10, con una barrita en pantalla.
+  void cambiarVolumen(int pasos);
+  bool mostrandoVolumen() const { return volumenHasta_ && static_cast<int32_t>(hal_.ahoraMs() - volumenHasta_) < 0; }
+  int volumen() const { return config_.voz.volumen; }
+  void nivelVoz(float n) { nivelVoz_ = n < 0 ? 0 : n > 1 ? 1 : n; }
+  Escucha escucha() const { return escucha_; }
   // Algo que mirar (un dedo en la pantalla táctil, la dirección del sonido), de -1 a 1.
   void seguir(float x, float y) {
     actividad();
@@ -124,11 +160,13 @@ class Sistema {
   // Reproduce una animación de la config (-1 para). unaVez: si no, repite.
   void reproducir(int animacion, bool unaVez);
   int animacionVisible() const { return animVisible_; }
-  // El recordatorio que se ve (-1 = ninguno). Un toque lo cierra.
+  // El recordatorio que se ve (-1 = ninguno; REC_CHARLA = uno pedido
+  // charlando, sin índice en la config). Un toque lo cierra.
+  static constexpr int8_t REC_CHARLA = 127;
   int recordatorioVisible() const { return recVisible_; }
   // El panel (recordatorio, reloj o pomodoro): la cara se achica arriba y
   // abajo va el texto. 0 = solo la cara, 1 = el panel entero.
-  enum class Panel : uint8_t { Ninguno, Recordatorio, Reloj, Pomodoro, Globo, Despertador, Clima, Juego };
+  enum class Panel : uint8_t { Ninguno, Recordatorio, Reloj, Pomodoro, Globo, Despertador, Clima, Juego, Timer, Tarjeta };
   Panel panel() const { return panel_; }
   float fasePanel() const { return fasePanel_; }
   // Pomodoro: si corre, en qué tramo está y cuánto le falta.
@@ -141,6 +179,12 @@ class Sistema {
   // Una situación (las pide el motor): si el Hablador quiere, dice una frase
   // (con las plantillas de la v1.9: {de}, {titulo}…).
   void hablar(Situacion s, Plantillas extra = {});
+  // Una tarjeta a pantalla (comando Tarjeta, la manda la charla): un QR, un
+  // paso de una receta ("PASO 2/6"), un dato grande o una lista corta. Un
+  // toque la cierra; Ninguna la cierra.
+  enum class Tarjeta : uint8_t { Ninguna, Qr, Paso, Dato, Lista };
+  void mostrarTarjeta(Tarjeta t, int i = 0, int n = 0, const char* titulo = "", const char* cuerpo = "");
+  Tarjeta tarjeta() const { return tarjetaVisible() ? tarjeta_.tipo : Tarjeta::Ninguna; }
   // El texto del globo que se ve (o el del despertador).
   const char* textoGlobo() const { return globoTexto_; }
   bool globoVisible() const { return globo_; }
@@ -203,6 +247,17 @@ class Sistema {
   // La alarma y el recordatorio de una vez que se pidieron charlando (ms del reloj; 0 = ninguno).
   uint32_t alarmaCharla() const { return alarmaCharlaMs_; }
   uint32_t recordatorioCharla() const { return recCharlaMs_; }
+  // Los timers de la charla ("poneme un timer de 10 minutos para los fideos"):
+  // hasta MAX_TIMERS, con cuenta regresiva en pantalla. Cuánto falta (ms) para
+  // el más próximo (0 = ninguno) y si está sonando uno que terminó.
+  static constexpr int MAX_TIMERS = 3;
+  uint32_t faltaTimer() const;
+  int timersAndando() const;
+  bool timerSonando() const { return timerSonando_ >= 0; }
+  // El recordatorio con "confirmar" que espera (-1 = ninguno): insiste cada 5
+  // min hasta un toque o "ya la tomé"; a los 30 min avisa sin confirmar.
+  int recordatorioPorConfirmar() const { return recConfirmar_; }
+  void confirmarRecordatorio();
   const char* textoRecordatorioCharla() const { return recCharla_; }
   // v3: el texto de un episodio: la línea del diario (como la manda el 0x4D)
   // o el recuerdo de ayer. false si no hay una frase que sirva.
@@ -227,6 +282,11 @@ class Sistema {
 
   // Identidad y vínculo.
   void fijarSerie(const char* serie);  // lo graba el taller al armar la unidad
+  // El taller (por USB, con la placa en la mano) puede darle el WiFi y la
+  // nube sin la app: el mismo marco que 0x16 / 0x17 ([op][datos]).
+  void tallerRed(const uint8_t* d, size_t n) {
+    if (n && (d[0] == protocolo::CmdRed || d[0] == protocolo::CmdNube)) comandoRed(d[0], d, n);
+  }
   const char* serie() const { return serie_; }
   const char* identificador() const { return id_; }
   const char* codigo() const { return codigo_; }
@@ -245,6 +305,12 @@ class Sistema {
   void dormir();
   const Perfil& perfil() const { return perfil_; }
   void qrPorMantener(bool si) { perfil_.qrPorMantener = si; }
+  // Sin la pantalla del QR (la compu se vincula sola, desde su menú): la lógica
+  // del vínculo sigue igual, solo no se dibuja y se ve la cara.
+  void sinPantallaQr(bool si) { sinPantallaQr_ = si; }
+  // El globo lo dibuja el anfitrión (el escritorio, con su letra): la cara
+  // sigue igual y el texto sale por textoGlobo().
+  void globoAfuera(bool si) { globoAfuera_ = si; }
   // Muestra el QR para vincular otro celu un rato (lo mismo que mantener el botón).
   void mostrarQr();
   // Imágenes guardadas: largo 0 = espacio vacío.
@@ -272,6 +338,8 @@ class Sistema {
   Contexto contexto() const;
   void vigilar(uint32_t ahora);
   void dibujarDepuracion();
+  void dibujarContenido();
+  void dibujarBarra(uint32_t ahora);
   void enviarVida();
   void enviarRegistro();
   void leerMemoria();
@@ -382,6 +450,26 @@ class Sistema {
   uint32_t ultimoCuadro_ = 0;
   float fps_ = 0;
   int ultimaBateria_ = -1, ultimoCargando_ = -1;
+  float bateriaSuave_ = -1;  // la lectura suavizada (ver vigilar)
+  uint32_t bateriaMuestra_ = 0;
+  bool bateriaLlena_ = false;  // terminó de cargar: 100 % hasta que baje de verdad
+  bool bleConectado_ = false;
+  Escucha escucha_ = Escucha::Nada, escuchaVista_ = Escucha::Nada;
+  // Lo que está haciendo mientras piensa (CmdTrabajo, la charla agéntica):
+  // los últimos pasos, abajo de los puntitos.
+  static constexpr int MAX_PASOS_TRABAJO = 3;
+  struct PasoTrabajo {
+    uint8_t estado = 0;  // 0 haciendo, 1 hecho, 2 falló
+    char texto[64] = {};
+  };
+  PasoTrabajo trabajo_[MAX_PASOS_TRABAJO];
+  int nTrabajo_ = 0;
+  uint32_t escuchaDesde_ = 0, escuchaCara_ = 0;
+  float nivelVoz_ = 0, faseEscucha_ = 0, barras_[5] = {};
+  void avanzarEscucha(uint32_t ahora, uint32_t dt);
+  void dibujarEscucha();
+  float faseBarra_ = 0;  // el fundido de la barra (se va con la cara dormida)
+  uint32_t barraAntes_ = 0;
   uint32_t sinWifiDesde_ = 0;
   bool avisoSinWifi_ = false;
   Config config_;
@@ -398,6 +486,8 @@ class Sistema {
   uint8_t claves_[4][16] = {};
   uint8_t nClaves_ = 0;
   bool emparejando_ = false;
+  bool sinPantallaQr_ = false;
+  bool globoAfuera_ = false;
   uint32_t emparejarHasta_ = 0;  // 0 = hasta que se vincule
   bool autenticado_ = false;
   bool vistaPrevia_ = false;
@@ -470,7 +560,10 @@ class Sistema {
   char recTexto_[LARGO_RECORDATORIO] = {};  // copia: sigue el fundido aunque cambie la config
   char recNombre_[16] = {};        // "recordatorio:<n>", la expresión visible del estado
   bool tragarSoltar_ = false;      // el toque que cerró un recordatorio no hace nada más
-  uint32_t caraHasta_ = 0;         // reloj: hasta cuándo se ve la cara por un toque
+  uint32_t caraHasta_ = 0;
+  uint8_t vistaBoton_ = 0;         // VOL− en reposo: 1 la hora grande, 2 el clima (0 = la cara)
+  uint32_t vistaHasta_ = 0;
+  uint32_t volumenHasta_ = 0;         // reloj: hasta cuándo se ve la cara por un toque
   bool pomoCorriendo_ = false, pomoDescanso_ = false;
   uint32_t pomoRestanteMs_ = 0;
   // El globo (lo que dice), el despertador y el clima.
@@ -479,6 +572,21 @@ class Sistema {
   Config::Cara caraPendiente_;
   bool hayPendiente_ = false, globo_ = false, pendienteHablando_ = false;
   uint32_t globoHasta_ = 0;
+  struct DatosTarjeta {
+    Tarjeta tipo = Tarjeta::Ninguna;
+    uint8_t i = 0, n = 0;
+    char titulo[32] = {};
+    char cuerpo[LARGO_TEXTO_AJUSTADO] = {};
+  } tarjeta_;
+  uint32_t tarjetaHasta_ = 0;
+  bool tarjetaVisible() const {
+    return tarjeta_.tipo != Tarjeta::Ninguna && static_cast<int32_t>(hal_.ahoraMs() - tarjetaHasta_) < 0;
+  }
+  void dibujarPistas(const char* si, const char* no);
+  void dibujarVolumen();
+  void dibujarCuenta(uint32_t restanteMs, float queda, const char* etiqueta, uint32_t color, bool anillo);
+  uint32_t colorOjos() const { return config_.hayColorOjos ? config_.colorOjos : paleta::NARANJA; }
+  void dibujarTarjeta(float cx, float W, float H, float f);
   Hablador hablador_;
   bool alarma_ = false, alarmaApretado_ = false, tragarAlarma_ = false;
   uint32_t alarmaDesde_ = 0, alarmaTono_ = 0, alarmaToque_ = 0, pospuestaHasta_ = 0;
@@ -518,8 +626,29 @@ class Sistema {
   EstadoCharla charla_;
   uint32_t alarmaCharlaMs_ = 0, recCharlaMs_ = 0, calladoHasta_ = 0;
   char recCharla_[LARGO_TEXTO_CHARLA] = {};
+  struct TimerCharla {
+    uint32_t fin = 0, total = 0;  // fin = 0: libre
+    char nombre[LARGO_TEXTO_CHARLA] = {};
+  };
+  TimerCharla timers_[MAX_TIMERS];
+  int8_t recConfirmar_ = -1;
+  bool recAvisoSinConfirmar_ = false;
+  uint32_t recConfirmarDesde_ = 0, recInsistir_ = 0;
+  // Cuándo se confirmó cada recordatorio por última vez (epoch local; 0 = nunca).
+  uint32_t recConfirmado_[MAX_RECORDATORIOS] = {};
+  void avanzarConfirmacion(uint32_t ahora);
+  int8_t timerSonando_ = -1;
+  uint32_t timerSonandoDesde_ = 0, timerProximoBip_ = 0;
+  char nombreSonando_[LARGO_TEXTO_CHARLA] = {}, fraseTimer_[64] = {};
+  int timerMasProximo() const;
+  void avanzarTimers(uint32_t ahora);
   bool dormirTrasGlobo_ = false;
   VozPropia voz_;
+  // Los sonidos con nombre, si el perfil tiene parlante (Hal::audio) y no los
+  // arma solo (sin Hal::sonido).
+  Sonidos sonidos_;
+  uint32_t sonDesde_ = 0, sonEnviadas_ = 0;
+  void avanzarSonidos(uint32_t ahora);
   float tamanoVisto_ = 1;  // cara.tamano, con su fundido
   VistaRostro vistaCara() const {
     VistaRostro v = vistaRostro_;

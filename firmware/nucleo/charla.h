@@ -18,7 +18,8 @@ namespace sintetica {
 // El orden es el de ACCIONES_CHARLA (charla_base.h): un test lo verifica.
 enum class AccionCharla : uint8_t {
   Ninguna, Alarma, CancelarAlarma, Posponer, ApagarAlarma, Recordatorio, Habito, Jugar, Modo, Gusto,
-  OlvidarGusto, Toque, Musica, Dormir, Despertar, Dueno, Volumen, Callar, Animo, Cantidad
+  OlvidarGusto, Toque, Musica, Dormir, Despertar, Dueno, Volumen, Callar, Animo, Emergencia, Timer, CancelarTimer,
+  CuantoFalta, Confirmar, ConsultarRecordatorio, Cantidad
 };
 const char* nombreAccionCharla(AccionCharla a);
 
@@ -32,6 +33,7 @@ constexpr int LARGO_LISTA_GUSTOS = MAX_GUSTOS * LARGO_GUSTO;  // separados por '
 struct EntidadesCharla {
   int16_t minuto = -1;      // del día, ya resuelto (-1 = no dijo una hora)
   int16_t enMinutos = -1;   // "en 10 minutos" (-1 = no)
+  int16_t enSegundos = -1;  // "en 10 segundos": los segundos justos (enMinutos, redondeado para arriba)
   int8_t dia = -1;          // días desde hoy: 0 hoy, 1 mañana... (-1 = no dijo)
   int8_t semana = -1;       // si dijo un día de la semana: 0 lunes ... 6 domingo
   uint8_t dias = 0;         // repetir: bit 0 lunes ... bit 6 domingo (0 = una vez)

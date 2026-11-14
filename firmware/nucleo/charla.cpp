@@ -22,6 +22,9 @@ constexpr uint8_t ROBOT = 4;      // el nombre del robot ("Toto"): nunca es el d
 // Bits de "necesita" (los de charla_base.h). N_CONFIRMA: preguntó "¿Te llamás
 // Zoe?" y espera un sí o un no (solo en EstadoCharla::espera).
 constexpr uint8_t N_HORA = 1, N_TEXTO = 2, N_JUEGO = 4, N_HABITO = 8, N_QUIEN = 16, N_CONFIRMA = 32;
+// N_LIBRE: preguntó algo abierto ("¿y vos?", "¿cómo te fue?"): lo que le
+// contesten, aunque no sea una intención, tiene respuesta (según el tono).
+constexpr uint8_t N_LIBRE = 64;
 // El grupo de respuestas de una intención con la pregunta antes de hacer algo
 // (los otros: 0 respuestas, 1 falta, 2 sin).
 constexpr int G_CONFIRMAR = 3;
@@ -445,6 +448,7 @@ struct HoraDicha {
   bool am = false, pm = false;
   bool resuelta = false;  // ya es la hora del día (vino de antes)
   int16_t en = -1;      // minutos (relativo)
+  int16_t seg = -1;     // si lo dijo en segundos: cuántos (relativo; en, redondeado para arriba)
   int8_t dia = -1;      // 0 hoy, 1 mañana, 2 pasado
   int8_t semana = -1;
   uint8_t dias = 0;
@@ -583,6 +587,7 @@ void leerHoras(Frase& f, HoraDicha& h) {
       else if (f.empieza(u, "segundo")) factor = -1;
       if (factor) {
         int total = factor > 0 ? static_cast<int>(v) * factor : (static_cast<int>(v) + 59) / 60;
+        h.seg = factor < 0 ? static_cast<int16_t>(v > 3600 ? 3600 : v) : -1;
         int fin = u + 1;
         if (factor == 60 && f.es(fin, "y") && f.es(fin + 1, "media")) total += 30, fin += 2;
         else if (factor == 60 && f.es(fin, "y") && f.es(fin + 1, "cuarto")) total += 15, fin += 2;
@@ -1060,6 +1065,11 @@ void charlar(const char* texto, size_t n, const ContextoCharla& ctx, EstadoCharl
           extra |= 1u << i;
       }
     const bool libre = (it.necesita & (N_TEXTO | N_QUIEN)) != 0;
+    if (it.noCon[0]) {
+      bool fuera = false;
+      for (int i = 0; i < f.n && !fuera; i++) fuera = enLista(it.noCon, f, i);
+      if (fuera) continue;
+    }
     Coincidencia c;
     for (int j = 0; j < it.nPatrones; j++) probarPatron(PATRONES_CHARLA[it.patron + j], f, extra, libre, &c);
     if (c.puntaje > mc.puntaje && (!libre || textoSirve(it, f, c.ultima))) mc = c, mejor = k;
@@ -1079,12 +1089,15 @@ void charlar(const char* texto, size_t n, const ContextoCharla& ctx, EstadoCharl
     const bool sirveHabito = (es & N_HABITO) && e.habito >= 0;
     if (sirveHora || sirveTexto || sirveJuego || sirveHabito) seguimos = true;
   }
-  if (!seguimos && vigente && (INTENCIONES_CHARLA[estado.ultima].marcas & M_SIGUE) && (mejor < 0 || mc.puntaje < 85)) {
+  const bool esSi = mejor >= 0 && mejor == buscarIntencionCharla("si") && !(estado.espera & N_CONFIRMA);
+  if (!seguimos && vigente && (INTENCIONES_CHARLA[estado.ultima].marcas & M_SIGUE) && (mejor < 0 || mc.puntaje < 85 || esSi)) {
     const bool conY = f.es(0, "y") || f.es(0, "mejor") || f.es(0, "no") || f.es(0, "tambien");
+    // "¿Otro chiste?" / "¿Te digo más?": "sí", "dale" o "bueno" siguen con lo mismo.
+    const bool siSigue = f.n <= 2 && (f.es(0, "si") || f.es(0, "dale") || f.es(0, "bueno") || f.es(0, "obvio"));
     bool otro = false;
     for (int i = 0; i < f.n; i++)
       if (f.es(i, "otro") || f.es(i, "otra") || (f.es(i, "de") && f.es(i + 1, "nuevo")) || f.es(i, "mas")) otro = true;
-    if ((conY && (horaNueva || hd.dia >= 0 || hd.semana >= 0)) || (otro && f.n <= 4)) seguimos = true;
+    if ((conY && (horaNueva || hd.dia >= 0 || hd.semana >= 0)) || (otro && f.n <= 4) || siSigue) seguimos = true;
   }
 
   // ¿Contesta un "¿Te llamás Zoe?"? Con "sí", hace lo que preguntó (con lo
@@ -1116,6 +1129,23 @@ void charlar(const char* texto, size_t n, const ContextoCharla& ctx, EstadoCharl
   azar.sembrar(ctx.semilla ^ hashTexto(texto ? texto : "", n) ^ (static_cast<uint32_t>(estado.respuesta) << 16));
   const char* preset = ctx.preset;
 
+  if ((it < 0 || (!seguimos && !confirmado && !cancelado && confianza < 85)) && vigente && (estado.espera & N_LIBRE) &&
+      f.n > 0) {
+    // Le contestó a una pregunta suya: según el tono de lo que dijo (una
+    // coincidencia floja, como "trabajar" con el pomodoro, no gana).
+    static const char* const BIEN[] = {"bien", "genial", "barbaro", "joya", "lindo", "buenisimo", "contento", "contenta",
+                                       "feliz", "divertido", "espectacular", "excelente", "piola"};
+    static const char* const MAL[] = {"mal", "cansado", "cansada", "triste", "aburrido", "aburrida", "horrible", "feo",
+                                      "agotado", "agotada", "podrido", "podrida", "estresado", "estresada", "embole"};
+    int tono = 0;
+    for (int i = 0; i < f.n; i++) {
+      for (const char* b : BIEN) tono += f.es(i, b) ? 1 : 0;
+      for (const char* m : MAL) tono -= f.es(i, m) ? 1 : 0;
+    }
+    const int k = buscarIntencionCharla(tono > 0 ? "respuesta-libre-bien" : tono < 0 ? "respuesta-libre-mal" : "respuesta-libre");
+    if (k >= 0) it = k, confianza = 70;
+  }
+
   if (it < 0) {
     // No entendió: con gracia, y que pruebe la IA si hay.
     Valores v;
@@ -1139,7 +1169,8 @@ void charlar(const char* texto, size_t n, const ContextoCharla& ctx, EstadoCharl
   r->confianza = static_cast<uint8_t>(maxi(0, mini(100, confianza)));
 
   // El texto libre (el recordatorio, el gusto, el nombre, a quién).
-  const bool quiereTexto = (in.necesita & N_TEXTO) || accion == AccionCharla::Musica || accion == AccionCharla::Recordatorio;
+  const bool quiereTexto = (in.necesita & N_TEXTO) || accion == AccionCharla::Musica || accion == AccionCharla::Recordatorio ||
+                           accion == AccionCharla::Timer;  // el nombre del timer ("para los fideos")
   const bool quiereQuien = (in.necesita & N_QUIEN) != 0;
   if (seguimos && (estado.espera & (N_TEXTO | N_QUIEN)) && !e.texto[0]) {
     // Contestó lo que faltaba: todo lo que dijo (sin la hora).
@@ -1238,6 +1269,7 @@ void charlar(const char* texto, size_t n, const ContextoCharla& ctx, EstadoCharl
       e.dia = 1;
   } else if (h.en >= 0) {
     e.enMinutos = h.en;
+    e.enSegundos = h.seg;
     if (ahora >= 0) {
       const int total = ahora + h.en;
       e.minuto = static_cast<int16_t>(total % 1440);
@@ -1296,7 +1328,14 @@ void charlar(const char* texto, size_t n, const ContextoCharla& ctx, EstadoCharl
   if (e.minuto >= 0) Escritor(bALas, sizeof bALas).hora(e.minuto);
   {
     Escritor x(bCuando, sizeof bCuando);
-    if (e.enMinutos >= 0 && hd.h < 0) {
+    if (e.enSegundos > 0 && hd.h < 0) {
+      // "en 10 segundos", "en 1 minuto y 30 segundos"
+      x.texto("en ");
+      const int m = e.enSegundos / 60, s = e.enSegundos % 60;
+      if (m) x.numero(m), x.texto(m == 1 ? " minuto" : " minutos");
+      if (m && s) x.texto(" y ");
+      if (s) x.numero(s), x.texto(s == 1 ? " segundo" : " segundos");
+    } else if (e.enMinutos >= 0 && hd.h < 0) {
       x.texto("en ");
       if (e.enMinutos < 60 || e.enMinutos % 60) {
         x.numero(e.enMinutos);
@@ -1460,6 +1499,11 @@ void charlar(const char* texto, size_t n, const ContextoCharla& ctx, EstadoCharl
 
   estado.ultima = static_cast<int16_t>(it);
   estado.espera = grupo == G_CONFIRMAR ? N_CONFIRMA : falta;
+  // Si lo que contesta es una pregunta, espera la respuesta (sea lo que sea).
+  if (!estado.espera && grupo == 0) {
+    const size_t l = largo(r->frase);
+    if (l && r->frase[l - 1] == '?') estado.espera = N_LIBRE;
+  }
   estado.respuesta = static_cast<uint16_t>(k < 0 ? 0xFFFF : k);
   estado.cuando = ctx.segundos;
   estado.e = e;

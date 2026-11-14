@@ -10,10 +10,6 @@ float anchoTramo(const Fuente& f, const char* s, int a, int b) {
   copiarTexto(t, sizeof t, s + a, static_cast<size_t>(b - a));
   return anchoTexto(f, t);
 }
-
-constexpr uint32_t FONDO_GLOBO = paleta::TINTA;
-constexpr uint32_t LETRA_GLOBO = paleta::PANTALLA;
-constexpr float RELLENO_X = 10, RELLENO_Y = 6;
 }  // namespace
 
 bool partirLineas(const Fuente& f, const char* s, const float* anchos, int max, bool cortar, TextoAjustado* a) {
@@ -72,10 +68,10 @@ void ajustarTexto(const char* s, float cy, float anchoMax, int maxLineas, bool r
     bool cortar, mayus;
   };
   if (maxLineas > MAX_LINEAS_TEXTO) maxLineas = MAX_LINEAS_TEXTO;
-  const Intento intentos[] = {{&fuentes::VOZ_20, maxLineas, false, false},
-                              {&fuentes::VOZ_20, maxLineas, true, false},
-                              {&fuentes::MONO_13, maxLineas + 1, true, true},
-                              {&fuentes::MONO_9, MAX_LINEAS_TEXTO, true, true}};
+  const Intento intentos[] = {{&fuentes::TEXTO_22, maxLineas, false, false},
+                              {&fuentes::TEXTO_22, maxLineas, true, false},
+                              {&fuentes::TEXTO_17, maxLineas + 1, true, false},
+                              {&fuentes::TEXTO_13, MAX_LINEAS_TEXTO, true, false}};
   for (const Intento& in : intentos) {
     copiarTexto(a->texto, sizeof a->texto, s);
     if (in.mayus) mayusculasUtf8(a->texto);
@@ -113,21 +109,31 @@ void dibujarAjustado(Lienzo& l, const TextoAjustado& a, float cx, uint32_t color
   }
 }
 
-void dibujarGlobo(Lienzo& l, const char* s, float cx, float cy, float anchoMax, int maxLineas, bool redonda, float W,
-                  float H, float colaX, float colaY, float alfa) {
+void dibujarDicho(Lienzo& l, const char* s, float cx, float cy, float anchoMax, int maxLineas, bool redonda, float W,
+                  float H, float alfa, bool grande) {
   TextoAjustado a;
-  ajustarTexto(s, cy, anchoMax - 2 * RELLENO_X, maxLineas, redonda, W, H, RELLENO_X + 4, &a);
-  const float w = a.ancho + 2 * RELLENO_X, h = a.n * a.lh + 2 * RELLENO_Y;
-  const float r = minf(14, h / 2);
+  if (grande) {
+    ajustarTexto(s, cy, anchoMax, maxLineas, redonda, W, H, 8, &a);
+  } else {
+    // Redondeada: en 3 renglones de la de 17 y, si no entra, en la de 13.
+    const Fuente* fs[] = {&fuentes::TEXTO_17, &fuentes::TEXTO_13};
+    const int maxs[] = {3, MAX_LINEAS_TEXTO};
+    for (int k = 0; k < 2; k++) {
+      copiarTexto(a.texto, sizeof a.texto, s);
+      a.fuente = fs[k];
+      a.lh = static_cast<float>(fs[k]->ascenso + fs[k]->descenso) - 1;
+      bool ok = false;
+      for (int n = 1; n <= maxs[k] && !ok; n++) {
+        float anchos[MAX_LINEAS_TEXTO];
+        for (int i = 0; i < n; i++) anchos[i] = anchoMax;
+        a.top = cy - n * a.lh / 2;
+        ok = partirLineas(*fs[k], a.texto, anchos, n, true, &a);
+      }
+      if (ok) break;
+    }
+  }
   l.opacidad(alfa);
-  // La colita: un triángulo desde el borde de arriba hacia la boca.
-  const float arriba = cy - h / 2 + 1;
-  const float bx = limitar(colaX, cx - w / 2 + r + 6, cx + w / 2 - r - 6);
-  const float puntaY = maxf(colaY, arriba - 14);
-  const Punto cola[3] = {{bx - 7, arriba + 2}, {bx + 7, arriba + 2}, {mezclar(bx, colaX, 0.5f), puntaY}};
-  if (puntaY < arriba - 2) l.poligono(cola, 3, FONDO_GLOBO);
-  l.pildora(cx, cy, w, h, r, FONDO_GLOBO);
-  dibujarAjustado(l, a, cx, LETRA_GLOBO);
+  dibujarAjustado(l, a, cx, paleta::TINTA);
 }
 
 }  // namespace sintetica

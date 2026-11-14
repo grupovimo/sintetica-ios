@@ -63,6 +63,8 @@ enum Op : uint8_t {
   CmdMusica = 0x4B,      // [u8 bpm][u8 flags: bit 0 sonando][n][título][n][artista] (v1.9)
   CmdCharlar = 0x4C,     // [n][texto 1-200 bytes]: lo charla él (charla sin IA) → [0xCC]... (v1.10)
   CmdDiario = 0x4D,      // → n × [0xCD][0][u16 día][u8 i][u8 n][u8 tipo][u8 dato][u8 etapa][texto] (v3; también aviso)
+  CmdTarjeta = 0x4E,     // [u8 tipo: 0 cerrar, 1 QR, 2 paso, 3 dato, 4 lista][u8 i][u8 n][n][título][cuerpo hasta 120 bytes] (v4)
+  CmdTrabajo = 0x4F,     // [u8 estado: 0 haciendo, 1 hecho, 2 falló][texto 1-60 bytes]: un paso de lo que está haciendo (v4)
   // Imagen
   ImgInicio = 0x20,      // u8 espacio (0-7 imágenes, 8-19 sprites), u32 largo, u32 crc32
   ImgBloque = 0x21,      // u32 desplazamiento, datos

@@ -39,8 +39,8 @@
     "te-extrane": {
       "probabilidad": 0.9, "enfriamiento": 86400,
       "frases": {
-        "todos": ["Te extrañé, {dueno}.", "¿Dónde estabas?", "Pensé que no volvías."],
-        "grunon": ["Mirá quién apareció.", "No te hablo. Bueno, sí."],
+        "todos": ["Te extrañé, {dueno}.", "¡Volviste! Qué bueno verte.", "¡Hola! ¿Cómo te fue?"],
+        "grunon": ["Mirá quién apareció.", "Hola, che. Justo pensaba en vos."],
         "carinoso": ["¡Te extrañé un montón!"],
         "timido": ["Te extrañé... un poco."]
       }
@@ -50,7 +50,7 @@
       "frases": {
         "todos": ["Me aburro...", "¿Jugamos a algo?", "Hola, ¿hay alguien?", "Qué día largo."],
         "picaro": ["Si no me tocás, me pongo a cantar.", "Pssst... acá estoy."],
-        "grunon": ["Nadie me da bola."],
+        "grunon": ["Bueno, me entretengo solo."],
         "curioso": ["¿Qué estás haciendo?"],
         "electrico": ["¡Hagamos algo YA!"],
         "timido": ["..."]
@@ -204,8 +204,8 @@
     "tardaste": {
       "probabilidad": 0.9, "enfriamiento": 72000,
       "frases": {
-        "todos": ["¡Tardaste! Te estaba esperando.", "¿Dónde estabas? ¡Tardaste!"],
-        "grunon": ["Tarde. Como siempre."],
+        "todos": ["¡Volviste! Te estaba esperando.", "¡Hola! ¿Cómo te fue?"],
+        "grunon": ["Ya era hora, je."],
         "carinoso": ["¡Por fin! Te esperé un montón."]
       }
     },

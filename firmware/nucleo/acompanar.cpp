@@ -336,13 +336,13 @@ void Sistema::dibujarJuego(float cx, float W, float H, float alfa) {
     const float r = H * (redonda ? 0.07f : 0.1f);
     const float x = cx - W * (redonda ? 0.22f : 0.3f);
     lienzo_.opacidad(alfa);
-    lienzo_.pildora(x, cy, 2 * r, 2 * r, r, juegoFase_ == 1 ? 0x3DDC84u : paleta::LINEA);
+    lienzo_.pildora(x, cy, 2 * r, 2 * r, r, juegoFase_ == 1 ? paleta::LIMA : paleta::LINEA);
   }
   lienzo_.opacidad(alfa);
   const bool grande = juego_ == Juego::Dado && juegoTexto_[0] >= '1' && juegoTexto_[0] <= '6' && !juegoTexto_[1];
   if (grande) {
-    const Fuente& fu = fuentes::VOZ_20;
-    const float esc = redonda ? 2.6f : 3.0f;
+    const Fuente& fu = fuentes::NUMERO_46;
+    const float esc = redonda ? 1.3f : 1.5f;
     dibujarTextoEscalado(lienzo_, fu, juegoTexto_, cx - anchoTexto(fu, juegoTexto_) * esc / 2,
                          cy + fu.ascenso * 0.72f * esc / 2, esc, paleta::TINTA);
     return;

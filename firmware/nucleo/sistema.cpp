@@ -72,9 +72,12 @@ void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
   lienzo_.iniciar(pixeles, perfil.ancho, perfil.alto, perfil.filasFranja);
   vista_ = Vista::para(perfil.ancho, perfil.alto, perfil.redonda);
   // El resplandor de los ojos cuesta: el broche (sin FPU) no lo dibuja.
-  vistaRostro_ = VistaRostro::para(perfil.ancho, perfil.alto, perfil.redonda, perfil.boton != Perfil::Boton::Broche);
+  vistaRostro_ = VistaRostro::para(perfil.ancho, perfil.alto, perfil.redonda,
+                                   perfil.halo && perfil.boton != Perfil::Boton::Broche);
   horaRef_ = horaRefMs_ = 0;
   ultimaBateria_ = ultimoCargando_ = -1;
+  bateriaSuave_ = -1;
+  bateriaLlena_ = false;
   sinWifiDesde_ = 0;
   avisoSinWifi_ = false;
   depurar_ = false;
@@ -92,6 +95,13 @@ void Sistema::iniciar(const Hal& hal, uint16_t* pixeles, const Perfil& perfil) {
   recMinuto_ = -1;
   tragarSoltar_ = false;
   caraHasta_ = 0;
+  vistaBoton_ = 0;
+  vistaHasta_ = volumenHasta_ = 0;
+  tarjeta_.tipo = Tarjeta::Ninguna;
+  tarjetaHasta_ = 0;
+  escucha_ = escuchaVista_ = Escucha::Nada;
+  nTrabajo_ = 0;
+  faseEscucha_ = 0;
   reiniciarPomodoro();
   faseProtector_ = 0;
   globo_ = hayPendiente_ = false;
@@ -245,6 +255,7 @@ void Sistema::falla(uint32_t ahora) {
 }
 
 void Sistema::bleConexion(bool conectado) {
+  bleConectado_ = conectado;
   autenticado_ = vistaPrevia_;
   receptor_.reiniciar();
   log(conectado ? "celu conectado" : "celu desconectado");
@@ -358,7 +369,32 @@ float Sistema::tamanoObjetivo() const {
 }
 
 void Sistema::vigilar(uint32_t ahora) {
-  const Contexto c = contexto();
+  Contexto c = contexto();
+  // La batería se lee del voltaje, que tiembla (92, 90, 91…): se suaviza y el
+  // número solo cambia cuando se mueve de verdad (un punto entero), sin subir
+  // a batería ni bajar cargando. Al enchufar o desenchufar arranca de nuevo.
+  if (c.bateria >= 0) {
+    const bool reinicio = bateriaSuave_ < 0 || (c.cargando == 1 && ultimoCargando_ == 0) ||
+                          absf(c.bateria - bateriaSuave_) > 15;  // un salto así no es ruido
+    // Una muestra por segundo: el promedio mira unos 20 s para atrás.
+    const bool muestra = reinicio || ahora - bateriaMuestra_ >= 1000;
+    if (muestra) bateriaMuestra_ = ahora;
+    if (reinicio) bateriaSuave_ = static_cast<float>(c.bateria);
+    else if (muestra) bateriaSuave_ += (c.bateria - bateriaSuave_) * 0.05f;
+    int b = ultimaBateria_ < 0 || reinicio ? static_cast<int>(bateriaSuave_ + 0.5f) : ultimaBateria_;
+    if (!reinicio && absf(bateriaSuave_ - b) >= 1.0f) {
+      const int nuevo = static_cast<int>(bateriaSuave_ + 0.5f);
+      if (c.cargando == 1 ? nuevo > b : nuevo < b) b = nuevo;
+    }
+    // Terminó de cargar (el cargador corta y el aviso se apaga): el voltaje se
+    // asienta un poco solo y bajaba de 94 a 93 enchufado. Como un celu: lleno
+    // hasta que se gaste de verdad.
+    if (ultimoCargando_ == 1 && c.cargando == 0 && b >= 85) bateriaLlena_ = true;
+    if (c.cargando == 1 || bateriaSuave_ < 80) bateriaLlena_ = false;
+    c.bateria = bateriaLlena_ ? 100 : b;
+  } else {
+    bateriaSuave_ = -1;
+  }
   if (c.bateria >= 0 && ultimaBateria_ >= 0) {
     if (c.bateria < 20 && ultimaBateria_ >= 20) evento(Evento::BateriaBaja);
     if (c.bateria < 5 && ultimaBateria_ >= 5) evento(Evento::BateriaCritica);
@@ -879,6 +915,11 @@ void Sistema::tacto(bool apretado) {
     if (!apretado) tragarAlarma_ = false;
     return;
   }
+  // Sonando un timer: un toque lo calla (y no hace nada más).
+  if (timerSonando_ >= 0) {
+    if (apretado) timerSonando_ = -1, tragarAlarma_ = true;
+    return;
+  }
   // Jugando, los toques son del juego.
   if (juego_ != Juego::Ninguno) {
     tactoJuego(apretado, ahora);
@@ -918,10 +959,18 @@ void Sistema::tacto(bool apretado) {
   }
   // Un toque cierra el recordatorio, y ese toque no hace nada más.
   if (apretado && recVisible_ >= 0) {
+    if (recConfirmar_ == recVisible_) confirmarRecordatorio();  // el toque lo confirma
     cerrarRecordatorio();
     motor_.interaccion(ahora);
     tragarSoltar_ = true;
     hablar(Situacion::RecordatorioHecho);
+    return;
+  }
+  // Un toque cierra la tarjeta (y nada más).
+  if (apretado && tarjetaVisible()) {
+    tarjetaHasta_ = ahora;
+    motor_.interaccion(ahora);
+    tragarSoltar_ = true;
     return;
   }
   // Un toque cierra el globo (y tampoco hace nada más).
@@ -978,15 +1027,139 @@ void Sistema::botonBroche(bool apretado, uint32_t ahora) {
 }
 
 void Sistema::dibujarPantalla(uint32_t ahora) {
-  (void)ahora;
   if (apagado_) {
     lienzo_.limpiar(0x000000);
     return;
   }
-  if (emparejando_) {
+  if (emparejando_ && !sinPantallaQr_) {
     dibujarEmparejamiento(lienzo_, serie_, qr_, "ESPERANDO VÍNCULO", perfil_.redonda);
     return;
   }
+  dibujarContenido();
+  if (faseEscucha_ > 0.001f) dibujarEscucha();
+  if (perfil_.barra) dibujarBarra(ahora);
+  if (mostrandoVolumen()) dibujarVolumen();
+}
+
+void Sistema::escucha(Escucha e) {
+  const uint32_t ahora = hal_.ahoraMs();
+  if (e != Escucha::Nada) {
+    actividad();
+    if (motor_.dormido()) motor_.despertar(ahora, false);
+  }
+  if (e == Escucha::Oyendo || e == Escucha::Nada) nTrabajo_ = 0;
+  escucha_ = e;
+  escuchaDesde_ = ahora;
+  escuchaCara_ = 0;
+}
+
+void Sistema::pasoTrabajo(uint8_t estado, const char* texto) {
+  const uint32_t ahora = hal_.ahoraMs();
+  if (escucha_ != Escucha::Pensando) {
+    nTrabajo_ = 0;  // lo de otra vez
+    escucha(Escucha::Pensando);
+  }
+  escuchaDesde_ = ahora;  // trabajando no es "no contesta"
+  // El mismo texto que estaba haciendo: se actualiza (haciendo → hecho).
+  int k = nTrabajo_ - 1;
+  if (k < 0 || trabajo_[k].estado != 0) {
+    if (nTrabajo_ == MAX_PASOS_TRABAJO) {
+      for (int i = 1; i < MAX_PASOS_TRABAJO; i++) trabajo_[i - 1] = trabajo_[i];
+      nTrabajo_--;
+    }
+    k = nTrabajo_++;
+  }
+  trabajo_[k].estado = estado;
+  copiarTexto(trabajo_[k].texto, sizeof trabajo_[k].texto, texto);
+}
+
+void Sistema::avanzarEscucha(uint32_t ahora, uint32_t dt) {
+  // Pensando termina cuando contesta (aparece lo que dice o una tarjeta) o, a
+  // los 12 s sin respuesta, lo dice (antes volvía callado y no se sabía si
+  // había escuchado).
+  if (escucha_ == Escucha::Pensando && (globo_ || tarjetaVisible())) escucha_ = Escucha::Nada;
+  if (escucha_ == Escucha::Pensando && ahora - escuchaDesde_ > tiemposPanel::PENSANDO_MAX_MS) {
+    escucha_ = Escucha::Nada;
+    decir("No me lleg\xC3\xB3 la respuesta. Prob\xC3\xA1 de nuevo.", config_.resolverCara("triste"));
+  }
+  if (escucha_ != Escucha::Nada) {
+    escuchaVista_ = escucha_;
+    // La cara se sostiene de a ratos (vuelve sola cuando deja de escuchar).
+    if (!escuchaCara_ || ahora - escuchaCara_ >= 400) {
+      escuchaCara_ = ahora;
+      motor_.reaccionar(config_.resolverCara(escucha_ == Escucha::Oyendo ? "escuchando" : "pensando"), ahora, 900);
+    }
+  }
+  const float paso = static_cast<float>(dt < 200 ? dt : 200) / tiemposPanel::FUNDIDO_MS;
+  faseEscucha_ = escucha_ != Escucha::Nada ? minf(1, faseEscucha_ + paso) : maxf(0, faseEscucha_ - paso);
+  // Las barritas: suben rápido con la voz y bajan despacio, cada una con su vaivén.
+  const float t = ahora / 1000.0f;
+  for (int i = 0; i < 5; i++) {
+    const float meta = nivelVoz_ * (0.55f + 0.45f * absf(seno(t * (5.0f + i * 1.7f) + i)));
+    barras_[i] += (meta - barras_[i]) * (meta > barras_[i] ? 0.6f : 0.15f);
+  }
+}
+
+void Sistema::dibujarEscucha() {
+  const float W = static_cast<float>(perfil_.ancho), H = static_cast<float>(perfil_.alto);
+  const float cx = W / 2;
+  lienzo_.opacidad(suave(faseEscucha_));
+  if (escuchaVista_ == Escucha::Oyendo) {
+    // Ondas lima a los costados de la cara que se abren con tu voz.
+    const VistaRostro v = vistaCara();
+    const float cy = v.origenY, voz = (barras_[0] + barras_[2] + barras_[4]) / 3;
+    const float r0 = minf(W, H) * 0.34f;
+    for (int k = 0; k < 2; k++) {
+      const float r = r0 + k * 16.0f, abre = 0.30f + 0.22f * voz + (k ? 0.04f : 0);
+      lienzo_.opacidad(suave(faseEscucha_) * (k ? 0.25f + 0.45f * voz : 1.0f));
+      for (int lado = -1; lado <= 1; lado += 2) {
+        Punto arco[9];
+        for (int i = 0; i < 9; i++) {
+          const float ang = -abre + 2 * abre * i / 8.0f;
+          arco[i] = {cx + lado * coseno(ang) * r, cy + seno(ang) * r};
+        }
+        lienzo_.trazo(arco, 9, 5, paleta::LIMA);
+      }
+    }
+  } else {
+    // Pensando: tres puntitos violeta que laten, abajo de la cara; si está
+    // trabajando, abajo los pasos (gris haciendo, lima hecho, rojo falló).
+    const Fuente& fu = fuentes::TEXTO_13;
+    const float lh = static_cast<float>(fu.ascenso + fu.descenso);
+    const float y = H * (perfil_.alto * 4 > perfil_.ancho * 3 ? 0.74f : 0.86f) - nTrabajo_ * lh * 0.75f;
+    const float t = hal_.ahoraMs() / 1000.0f;
+    for (int i = 0; i < 3; i++) {
+      const float late = 0.35f + 0.65f * maxf(0, seno(t * 5.0f - i * 0.9f));
+      lienzo_.opacidad(suave(faseEscucha_) * late);
+      lienzo_.pildora(cx + (i - 1) * 16.0f, y, 10, 10, 5, paleta::VIOLETA);
+    }
+    lienzo_.opacidad(suave(faseEscucha_));
+    for (int k = 0; k < nTrabajo_; k++) {
+      const PasoTrabajo& p = trabajo_[k];
+      char linea[sizeof p.texto + 4];
+      size_t m = copiarTexto(linea, sizeof linea, p.texto);
+      if (p.estado == 0) copiarTexto(linea + m, sizeof linea - m, "\xE2\x80\xA6");
+      // Que entre: se corta de a una letra (sin partir los UTF-8).
+      const float anchoMax = W - 44;
+      for (size_t q = largo(linea); q > 1 && anchoTexto(fu, linea) > anchoMax; q = largo(linea)) {
+        while (q > 0 && (static_cast<uint8_t>(linea[q - 1]) & 0xC0) == 0x80) q--;
+        linea[q - 1] = 0;
+      }
+      const float w = anchoTexto(fu, linea) + (p.estado == 1 ? 16 : 0);
+      const float x = cx - w / 2, base = y + 14 + (k + 1) * lh;
+      const uint32_t color = p.estado == 1 ? paleta::LIMA : p.estado == 2 ? paleta::ROJO : paleta::TINTA_SUAVE;
+      if (p.estado == 1) {
+        const float cy = base - fu.ascenso * 0.36f;
+        const Punto tilde[3] = {{x + 1, cy}, {x + 4.5f, cy + 3.5f}, {x + 11, cy - 4}};
+        lienzo_.trazo(tilde, 3, 2.2f, color);
+      }
+      dibujarTexto(lienzo_, fu, linea, x + (p.estado == 1 ? 16 : 0), base, color);
+    }
+  }
+  lienzo_.opacidad(1);
+}
+
+void Sistema::dibujarContenido() {
   if (panel_ != Panel::Ninguno && fasePanel_ > 0) {
     dibujarPanel();
     if (depurar_) dibujarDepuracion();
@@ -1021,6 +1194,76 @@ void Sistema::dibujarPantalla(uint32_t ahora) {
     lienzo_.opacidad(1);
   }
   if (depurar_) dibujarDepuracion();
+}
+
+// La barra de arriba: la hora a la izquierda; a la derecha, el Bluetooth, el
+// WiFi (naranja con la nube) y la batería (con un rayito si carga). Se va con
+// un fundido cuando duerme o se apaga la pantalla.
+void Sistema::dibujarBarra(uint32_t ahora) {
+  const uint32_t dt = barraAntes_ ? ahora - barraAntes_ : 0;
+  barraAntes_ = ahora;
+  const float objetivo = motor_.dormido() || faseProtector_ > 0 ? 0 : 1;
+  const float paso = static_cast<float>(dt < 200 ? dt : 200) / tiemposPanel::FUNDIDO_MS;
+  faseBarra_ = objetivo > faseBarra_ ? minf(objetivo, faseBarra_ + paso) : maxf(objetivo, faseBarra_ - paso);
+  if (faseBarra_ <= 0.001f) return;
+  const float W = static_cast<float>(perfil_.ancho);
+  constexpr float Y = 15;  // el centro de la barra (más grande desde el 13/11: se lee de lejos)
+  lienzo_.opacidad(faseBarra_);
+  const Fuente& fu = fuentes::TEXTO_13;
+  const float baseTexto = Y + fu.ascenso / 2.0f - 2;
+  const int m = minutoDelDia();
+  if (m >= 0) {
+    char t[6] = "--:--";
+    t[0] = static_cast<char>('0' + m / 600), t[1] = static_cast<char>('0' + (m / 60) % 10);
+    t[3] = static_cast<char>('0' + (m % 60) / 10), t[4] = static_cast<char>('0' + m % 10);
+    dibujarTexto(lienzo_, fu, t[0] == '0' ? t + 1 : t, 12, baseTexto, paleta::TINTA);
+  }
+  float x = W - 12;
+  // La batería: el cuerpo, la puntita, el nivel y el porcentaje al lado.
+  const int b = ultimaBateria_;
+  if (b >= 0) {
+    const float bw = 24, bh = 12;
+    const float cx = x - bw / 2 - 2;
+    lienzo_.pildoraContorno(cx, Y, bw, bh, 3, 1.6f, paleta::TINTA);
+    lienzo_.pildora(cx + bw / 2 + 2, Y, 2.5f, 5, 1.2f, paleta::TINTA);
+    const float nivel = (bw - 5) * limitar(b / 100.0f, 0, 1);
+    if (nivel >= 1)
+      lienzo_.pildora(cx - (bw - 5) / 2 + nivel / 2, Y, nivel, bh - 5, 1.5f, b < 20 ? paleta::ROJO : paleta::TINTA);
+    if (ultimoCargando_ == 1) {
+      const Punto rayo[6] = {{cx + 1.5f, Y - 7}, {cx - 4, Y + 1}, {cx, Y + 1}, {cx - 1.5f, Y + 7}, {cx + 4, Y - 1}, {cx, Y - 1}};
+      lienzo_.poligono(rayo, 6, paleta::AMARILLO);
+    }
+    x -= bw + 8;
+    char pc[6];
+    const size_t k = escribirNumero(pc, sizeof pc, b);
+    copiarTexto(pc + k, sizeof pc - k, "%");
+    const float w = anchoTexto(fu, pc);
+    dibujarTexto(lienzo_, fu, pc, x - w, baseTexto, b < 20 ? paleta::ROJO : paleta::TINTA_SUAVE);
+    x -= w + 8;
+  }
+  // El WiFi: un punto y dos arcos (naranja si llega a la nube).
+  if (redConfigurada_) {
+    const uint32_t c = nube_ ? paleta::NARANJA : wifi_ ? paleta::TINTA : paleta::LINEA;
+    const float cx = x - 7, base = Y + 4;
+    lienzo_.pildora(cx, base, 2.4f, 2.4f, 1.2f, c);
+    for (int i = 1; i <= 2; i++) {
+      Punto arco[7];
+      const float r = 3.5f * i + 1;
+      for (int k = 0; k < 7; k++) {
+        const float a = 3.14159265f * (0.25f + 0.5f * k / 6.0f);
+        arco[k] = {cx + coseno(a) * r, base - seno(a) * r};
+      }
+      lienzo_.trazo(arco, 7, 1.4f, c);
+    }
+    x -= 20;
+  }
+  // El Bluetooth: la runa, solo con un celu conectado.
+  if (bleConectado_) {
+    const float cx = x - 4;
+    const Punto runa[6] = {{cx - 3, Y - 2.5f}, {cx + 3, Y + 2.5f}, {cx, Y + 5}, {cx, Y - 5}, {cx + 3, Y - 2.5f}, {cx - 3, Y + 2.5f}};
+    lienzo_.trazo(runa, 6, 1.3f, paleta::TINTA);
+  }
+  lienzo_.opacidad(1);
 }
 
 void Sistema::dibujarDepuracion() {
@@ -1088,6 +1331,9 @@ void Sistema::tick() {
   motor_.clima(climaVigente() && situacionClima(clima_) == Situacion::ClimaLluvia);
   motor_.tick(ahora, contexto());
   avanzarVoz(ahora);
+  avanzarSonidos(ahora);
+  avanzarEscucha(ahora, dtCuadro);
+  avanzarConfirmacion(ahora);
   avanzarSprites(dtCuadro);
   avanzarPanel(ahora, dtCuadro);
   avanzarProtector(ahora, dtCuadro);
@@ -1256,6 +1502,11 @@ const char* Sistema::vocalizacion(const char* sonido) const {
 void Sistema::sonar(const char* nombre) {
   // "voz": volumen 0 silencia todo.
   if (config_.voz.volumen == 0) return;
+  // De noche, dormido, ni ronquidos ni balbuceos: solo lo que tiene que
+  // despertar (el despertador, un recordatorio, un timer, la ayuda).
+  if (motor_.dormido() && !iguales(nombre, "despertador:", 12) && !iguales(nombre, "recordatorio") &&
+      !iguales(nombre, "ayuda"))
+    return;
   // Con la voz propia, los de "voz.sonidos" (y las vocalizaciones "voz:…")
   // los balbucea ella y no salen por Hal::sonido: el que tiene parlante no
   // los duplica. Si ya está diciendo algo, no lo pisa (y tampoco suena).
@@ -1270,7 +1521,33 @@ void Sistema::sonar(const char* nombre) {
     return;
   }
   if (iguales(nombre, "voz:", 4)) return;  // una vocalización sin voz propia: nada
-  if (hal_.sonido) hal_.sonido(nombre);
+  if (hal_.sonido) {
+    hal_.sonido(nombre);
+  } else if (hal_.audio && !voz_.hablando() &&
+             sonidos_.empezar(nombre, static_cast<int>(config_.voz.tipo), config_.voz.volumen)) {
+    sonDesde_ = hal_.ahoraMs();
+    sonEnviadas_ = 0;
+  }
+}
+
+// Como la voz: adelantado un poco, a ritmo del reloj. La voz manda: si empieza
+// a hablar, el sonido se corta.
+void Sistema::avanzarSonidos(uint32_t ahora) {
+  if (!sonidos_.sonando()) return;
+  if (voz_.hablando() || !hal_.audio) {
+    sonidos_.parar();
+    return;
+  }
+  constexpr uint32_t ADELANTO = 2400;  // 150 ms, como la voz
+  const uint32_t objetivo = (ahora - sonDesde_) * (MUESTRAS_POR_SEGUNDO_VOZ / 1000) + ADELANTO;
+  int16_t b[256];
+  while (sonEnviadas_ < objetivo && sonidos_.sonando()) {
+    const uint32_t quiero = objetivo - sonEnviadas_;
+    const size_t k = sonidos_.generar(b, quiero < 256 ? quiero : 256);
+    if (k) hal_.audio(b, k);
+    sonEnviadas_ += static_cast<uint32_t>(k);
+    if (!k) break;
+  }
 }
 
 // Un evento que genera el sistema (recordatorio, pomodoro): además del
@@ -1548,10 +1825,58 @@ void Sistema::mostrarRecordatorio(int i, uint32_t ahora) {
   c.vida = r.caraVida, c.dibujo = r.caraDibujo;
   motor_.fijar(c);  // por los resortes: la cara cambia sin corte
   if (r.sonido) sonar("recordatorio");
+  if (r.confirmar && recConfirmar_ != i) {
+    // La primera vez: empieza a esperar la confirmación.
+    recConfirmar_ = static_cast<int8_t>(i);
+    recConfirmarDesde_ = ahora;
+    recAvisoSinConfirmar_ = false;
+  }
+  if (r.confirmar) recInsistir_ = ahora + 5u * 60000u;
+  if (recConfirmar_ == i && ahora != recConfirmarDesde_) {
+    log("recordatorio: insiste");
+    return;  // insistir no es un recordatorio nuevo (ni para la nube ni para el registro)
+  }
   evento(Evento::Recordatorio);
   motor_.anotarRegistro(4, static_cast<uint8_t>(i));
   notificarEvento(Evento::Recordatorio, 4, static_cast<uint8_t>(i));
   log("recordatorio");
+}
+
+void Sistema::confirmarRecordatorio() {
+  if (recConfirmar_ < 0) return;
+  const int i = recConfirmar_;
+  recConfirmar_ = -1;
+  const uint32_t ep = epoch();
+  recConfirmado_[i] = ep ? ep : 1;
+  if (recVisible_ == i) cerrarRecordatorio();
+  evento(Evento::RecordatorioConfirmado);
+  notificarEvento(Evento::RecordatorioConfirmado, 4, static_cast<uint8_t>(i));
+  const int c = config_.vida.indiceComportamiento("orgulloso");
+  if (c >= 0) motor_.comportamiento(c, hal_.ahoraMs());
+  log("recordatorio confirmado");
+}
+
+void Sistema::avanzarConfirmacion(uint32_t ahora) {
+  if (recConfirmar_ < 0) return;
+  if (recConfirmar_ >= config_.nRecordatorios) {
+    recConfirmar_ = -1;  // cambió la config
+    return;
+  }
+  const uint32_t pasaron = ahora - recConfirmarDesde_;
+  if (!recAvisoSinConfirmar_ && pasaron >= 30u * 60000u) {
+    recAvisoSinConfirmar_ = true;
+    evento(Evento::RecordatorioSinConfirmar);
+    notificarEvento(Evento::RecordatorioSinConfirmar, 4, static_cast<uint8_t>(recConfirmar_));
+    log("recordatorio sin confirmar: aviso");
+  }
+  if (pasaron >= 60u * 60000u) {
+    recConfirmar_ = -1;  // una hora: deja de insistir
+    return;
+  }
+  if (recVisible_ < 0 && static_cast<int32_t>(ahora - recInsistir_) >= 0) {
+    if (panel_ == Panel::Recordatorio && fasePanel_ > 0) return;
+    mostrarRecordatorio(recConfirmar_, ahora);
+  }
 }
 
 void Sistema::cerrarRecordatorio() {
@@ -1590,6 +1915,24 @@ void Sistema::avanzarPomodoro(uint32_t ahora, uint32_t dt) {
   notificarEvento(Evento::Pomodoro);
 }
 
+void Sistema::mostrarTarjeta(Tarjeta t, int i, int n, const char* titulo, const char* cuerpo) {
+  const uint32_t ahora = hal_.ahoraMs();
+  if (t == Tarjeta::Ninguna) {
+    tarjetaHasta_ = ahora;  // se va con el fundido (los datos quedan hasta la próxima)
+    return;
+  }
+  tarjeta_.tipo = t;
+  tarjeta_.i = static_cast<uint8_t>(i), tarjeta_.n = static_cast<uint8_t>(n);
+  copiarTexto(tarjeta_.titulo, sizeof tarjeta_.titulo, titulo ? titulo : "");
+  copiarTexto(tarjeta_.cuerpo, sizeof tarjeta_.cuerpo, cuerpo ? cuerpo : "");
+  using namespace tiemposPanel;
+  tarjetaHasta_ = ahora + (t == Tarjeta::Qr ? TARJETA_QR_MS : t == Tarjeta::Paso ? TARJETA_PASO_MS
+                           : t == Tarjeta::Dato ? TARJETA_DATO_MS : TARJETA_LISTA_MS);
+  if (motor_.dormido()) motor_.despertar(ahora, true);
+  motor_.interaccion(ahora);
+  ultimaActividad_ = ahora;
+}
+
 void Sistema::avanzarPanel(uint32_t ahora, uint32_t dt) {
   if (recVisible_ >= 0 && ahora - recDesde_ >= tiemposPanel::RECORDATORIO_MS) cerrarRecordatorio();
   // Los que vencieron mientras se veía otro, cuando ese ya se fue.
@@ -1605,13 +1948,18 @@ void Sistema::avanzarPanel(uint32_t ahora, uint32_t dt) {
       (panel_ != Panel::Globo || fasePanel_ <= 0))
     mostrarGlobo(ahora);
   const bool caraPorToque = static_cast<int32_t>(ahora - caraHasta_) < 0;
+  if (vistaBoton_ && static_cast<int32_t>(ahora - vistaHasta_) >= 0) vistaBoton_ = 0, vistaHasta_ = 0;
   Panel deseado = Panel::Ninguno;
   if (recVisible_ >= 0) deseado = Panel::Recordatorio;
   else if (alarma_) deseado = Panel::Despertador;
   else if (juego_ != Juego::Ninguno) deseado = Panel::Juego;
+  else if (tarjetaVisible()) deseado = Panel::Tarjeta;  // le gana al globo: lo que dice se oye igual
   else if (globo_) deseado = Panel::Globo;
+  else if (vistaBoton_ == 1) deseado = Panel::Reloj;  // VOL− en reposo: la hora grande o el clima, un rato
+  else if (vistaBoton_ == 2) deseado = Panel::Clima;
   else if (config_.modo == Modo::Reloj && !caraPorToque) deseado = Panel::Reloj;
   else if (config_.modo == Modo::Pomodoro) deseado = Panel::Pomodoro;
+  else if (timersAndando() && !caraPorToque) deseado = Panel::Timer;
   else if (config_.modo == Modo::Clima && !caraPorToque) deseado = Panel::Clima;
   // En modo clima, la cara reacciona al tiempo cada tanto.
   if (panel_ == Panel::Clima && deseado == Panel::Clima && climaVigente() && static_cast<int32_t>(ahora - proximaCaraClima_) >= 0) {
@@ -1643,7 +1991,7 @@ void Sistema::avanzarProtector(uint32_t ahora, uint32_t dt) {
     return;
   }
   const bool quiere = !apagado_ && !emparejando_ && !motor_.dormido() && recVisible_ < 0 && animPedida_ < 0 && !alarma_ &&
-                      !globo_ &&
+                      !globo_ && !tarjetaVisible() &&
                       ahora - ultimaActividad_ >= config_.protector.espera * 1000u;
   const float paso = static_cast<float>(dt < 200 ? dt : 200) / tiemposPanel::FUNDIDO_MS;
   const float antes = faseProtector_;
@@ -1656,13 +2004,21 @@ void Sistema::dibujarPanel() {
   const float f = suave(fasePanel_);
   const float W = static_cast<float>(lienzo_.ancho()), H = static_cast<float>(lienzo_.alto());
   const bool redonda = perfil_.redonda;
-  // La cara se achica y sube; abajo aparece el texto.
+  // La cara se achica y sube; abajo aparece el texto. Lo que dice, en las
+  // pantallas altas (la redonda y la cuadrada), entra abajo sin mover la cara:
+  // habla y el texto aparece, nada más.
+  const bool alta = H * 4 > W * 3;
+  const bool quieta = alta && panel_ == Panel::Globo;
+  // El timer y el pomodoro en las pantallas altas: un anillo que se vacía, con
+  // la cara chiquita adentro, arriba del número.
+  const bool anillo = alta && (panel_ == Panel::Timer || panel_ == Panel::Pomodoro);
+  const float fc = quieta ? 0 : f;
   VistaRostro v = vistaCara();
-  v.unidad = mezclar(v.unidad, v.unidad * 0.45f, f);
-  v.origenY = mezclar(v.origenY, H * 0.27f, f);
+  v.unidad = mezclar(v.unidad, v.unidad * (anillo ? 0.22f : 0.45f), fc);
+  v.origenY = mezclar(v.origenY, H * (anillo ? 0.40f : 0.27f), fc);
   dibujarRostro(lienzo_, v, motor_.cuadro(), &cache_, opSprites_, ocultarOjos_);
   const int dibujo = motor_.dibujo();
-  const float op = motor_.opacidadDibujo() * (1 - f);
+  const float op = motor_.opacidadDibujo() * (1 - fc);
   if (dibujo >= 0 && op > 0.001f) {
     lienzo_.opacidad(op);
     dibujarExpresion(lienzo_, vista_, config_.expresiones[dibujo], motor_.estado());
@@ -1671,20 +2027,21 @@ void Sistema::dibujarPanel() {
   const float cx = W / 2;
   if (panel_ == Panel::Recordatorio) {
     // Centrado y, si hace falta, en varias líneas que entren en la pantalla
-    // (en la redonda, en el ancho del círculo a esa altura).
-    const float cy = H * 0.66f;
+    // (en la redonda, en el ancho del círculo a esa altura). Con botones,
+    // un poco más arriba: abajo van las pistas.
+    const float cy = H * (perfil_.botones ? 0.58f : 0.66f);
     struct Intento {
       const Fuente* f;
       int max;
       bool cortar, mayus;
     };
-    const Intento intentos[] = {{&fuentes::VOZ_20, redonda ? 3 : 2, false, false},
-                                {&fuentes::VOZ_20, redonda ? 3 : 2, true, false},
-                                {&fuentes::MONO_13, 3, true, true},
-                                {&fuentes::MONO_9, 4, true, true}};
+    const Intento intentos[] = {{&fuentes::TEXTO_22, redonda ? 3 : 2, false, false},
+                                {&fuentes::TEXTO_22, redonda ? 3 : 2, true, false},
+                                {&fuentes::TEXTO_17, 3, true, false},
+                                {&fuentes::TEXTO_13, 4, true, false}};
     char t[LARGO_RECORDATORIO];
     Lineas l;
-    const Fuente* fu = &fuentes::MONO_9;
+    const Fuente* fu = &fuentes::TEXTO_13;
     float top = 0, lh = 0;
     for (const Intento& in : intentos) {
       copiarTexto(t, sizeof t, recTexto_);
@@ -1713,6 +2070,7 @@ void Sistema::dibujarPanel() {
       copiarTexto(linea, sizeof linea, t + l.ini[i], l.fin[i] - l.ini[i]);
       dibujarTexto(lienzo_, *fu, linea, cx - anchoTexto(*fu, linea) / 2, top + i * lh + fu->ascenso, paleta::TINTA);
     }
+    dibujarPistas("Ya est\xC3\xA1", "Despu\xC3\xA9s");
   } else if (panel_ == Panel::Reloj) {
     char t[6] = "--:--";
     const int m = minutoDelDia();
@@ -1720,57 +2078,215 @@ void Sistema::dibujarPanel() {
       t[0] = static_cast<char>('0' + m / 600), t[1] = static_cast<char>('0' + (m / 60) % 10);
       t[3] = static_cast<char>('0' + (m % 60) / 10), t[4] = static_cast<char>('0' + m % 10);
     }
-    const Fuente& fu = fuentes::VOZ_20;
-    const float esc = redonda ? 2.4f : 2.8f;
+    const Fuente& fu = fuentes::NUMERO_46;
+    const float esc = redonda ? 1.2f : 1.4f;
     const float alto = fu.ascenso * 0.72f * esc;
-    dibujarTextoEscalado(lienzo_, fu, t, cx - anchoTexto(fu, t) * esc / 2, H * (redonda ? 0.64f : 0.68f) + alto / 2, esc,
-                         paleta::TINTA);
+    const float base = H * (redonda ? 0.64f : 0.66f) + alto / 2;
+    dibujarTextoEscalado(lienzo_, fu, t[0] == '0' ? t + 1 : t, cx - anchoTexto(fu, t[0] == '0' ? t + 1 : t) * esc / 2,
+                         base, esc, paleta::TINTA);
+    // Abajo, la fecha: "viernes 13 de noviembre".
+    const uint32_t e = epoch();
+    if (e && alta) {
+      static const char* const DIAS[] = {"domingo", "lunes", "martes", "mi\xC3\xA9rcoles", "jueves", "viernes", ("s\xC3\xA1" "bado")};
+      static const char* const MESES[] = {"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                                          "agosto", "septiembre", "octubre", "noviembre", "diciembre"};
+      const int32_t dias = static_cast<int32_t>(e / 86400);
+      // De días desde 1970 a año, mes y día (el algoritmo de Howard Hinnant).
+      const int32_t z = dias + 719468, era = z / 146097, doe = z - era * 146097;
+      const int32_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+      const int32_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100), mp = (5 * doy + 2) / 153;
+      const int32_t dia = doy - (153 * mp + 2) / 5 + 1, mes = mp < 10 ? mp + 3 : mp - 9;
+      char f2[48];
+      size_t n = copiarTexto(f2, sizeof f2, DIAS[(dias + 4) % 7]);
+      f2[n++] = ' ';
+      n += escribirNumero(f2 + n, sizeof f2 - n, static_cast<unsigned>(dia));
+      n += copiarTexto(f2 + n, sizeof f2 - n, " de ");
+      copiarTexto(f2 + n, sizeof f2 - n, MESES[mes - 1]);
+      const Fuente& fe = fuentes::TEXTO_17;
+      dibujarTexto(lienzo_, fe, f2, cx - anchoTexto(fe, f2) / 2, base + 30, paleta::TINTA_SUAVE);
+    }
   } else if (panel_ == Panel::Pomodoro) {
-    // La cuenta regresiva, una barra de progreso y en qué tramo va.
-    const uint32_t s = (pomoRestanteMs_ + 999) / 1000;
-    const uint32_t mm = s / 60, ss = s % 60;
-    char t[8];
-    int k = 0;
-    if (mm >= 100) t[k++] = static_cast<char>('0' + mm / 100);
-    t[k++] = static_cast<char>('0' + (mm / 10) % 10), t[k++] = static_cast<char>('0' + mm % 10), t[k++] = ':';
-    t[k++] = static_cast<char>('0' + ss / 10), t[k++] = static_cast<char>('0' + ss % 10), t[k] = 0;
-    const Fuente& fu = fuentes::VOZ_20;
-    const float esc = redonda ? 2.0f : 2.4f;
-    const float alto = fu.ascenso * 0.72f * esc;
-    const float base = H * (redonda ? 0.60f : 0.62f) + alto / 2;
-    dibujarTextoEscalado(lienzo_, fu, t, cx - anchoTexto(fu, t) * esc / 2, base, esc, paleta::TINTA);
+    // La cuenta regresiva y en qué tramo va (violeta: concentrado).
     const float total = (pomoDescanso_ ? config_.pomodoro.descanso : config_.pomodoro.trabajo) * 60000.0f;
-    const float progreso = limitar(1 - pomoRestanteMs_ / total, 0, 1);
-    const float bw = W * (redonda ? 0.5f : 0.6f), by = base + 12, bh = 5;
-    lienzo_.pildora(cx, by, bw, bh, bh / 2, paleta::LINEA);
-    const float pw = bw * progreso;
-    if (pw >= 1) lienzo_.pildora(cx - bw / 2 + pw / 2, by, pw, bh, minf(bh / 2, pw / 2), paleta::NARANJA);
-    const char* etiqueta = !pomoCorriendo_ ? "PAUSA" : (pomoDescanso_ ? "DESCANSO" : "TRABAJO");
-    dibujarTexto(lienzo_, fuentes::MONO_9, etiqueta, cx - anchoTexto(fuentes::MONO_9, etiqueta) / 2, by + 18,
-                 paleta::TINTA_SUAVE);
+    const char* etiqueta = !pomoCorriendo_ ? "En pausa" : (pomoDescanso_ ? "Descanso" : "Concentrado");
+    dibujarCuenta(pomoRestanteMs_, limitar(pomoRestanteMs_ / total, 0, 1), etiqueta,
+                  pomoDescanso_ ? paleta::LIMA : paleta::VIOLETA, anillo);
   } else if (panel_ == Panel::Globo || panel_ == Panel::Despertador) {
-    // Lo que dice, en un globo claro que sale de la boca.
-    const float cy = H * (redonda ? 0.68f : 0.71f);
-    const float anchoMax = redonda ? W * 0.84f : W - 28;
-    const float boca = v.origenY + v.unidad * 0.32f;
-    dibujarGlobo(lienzo_, textoGlobo(), cx, cy, anchoMax, redonda ? 3 : 2, redonda, W, H, cx, boca, f);
+    // Lo que dice: el texto suelto abajo de los ojos, con el fundido del panel.
+    // Con la cara quieta, abajo de la boca; si no, abajo de la cara achicada.
+    const float cy = quieta ? H * 0.82f : H * (redonda ? 0.68f : alta ? 0.66f : 0.71f);
+    const float anchoMax = redonda ? W * (quieta ? 0.62f : 0.84f) : W - 28;
+    if (!globoAfuera_)
+      dibujarDicho(lienzo_, textoGlobo(), cx, cy, anchoMax, alta ? 3 : 2, redonda, W, H, f, config_.letraGrande);
     if (panel_ == Panel::Despertador) {
       // Cuánto suena: unos puntitos que laten, cada vez más.
       const int nivel = alarma_ ? mini(5, 1 + static_cast<int>((hal_.ahoraMs() - alarmaDesde_) / tiemposPanel::ALARMA_SUBE_MS)) : 1;
       const float late = 0.55f + 0.45f * seno(hal_.ahoraMs() / 1000.0f * 6.0f);
       const float y = H * (redonda ? 0.86f : 0.95f);
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 5 && !perfil_.botones; i++) {
         lienzo_.opacidad(f * (i < nivel ? late : 0.25f));
         lienzo_.pildora(cx + (i - 2) * 12.0f, y, 6, 6, 3, paleta::NARANJA);
       }
       lienzo_.opacidad(f);
+      dibujarPistas("Apagar", "10 min");
+    } else if (preguntando_) {
+      dibujarPistas("Bien", "M\xC3\xA1s o menos");
+    } else if (habPregunta_ >= 0) {
+      dibujarPistas("Hecho", "Todav\xC3\xAD" "a no");
     }
   } else if (panel_ == Panel::Clima) {
     dibujarClima(cx, W, H, f);
+  } else if (panel_ == Panel::Timer) {
+    // La cuenta regresiva del timer más próximo y su nombre.
+    const int k = timerMasProximo();
+    const uint32_t restante = faltaTimer();
+    float queda = 0;
+    char et[LARGO_TEXTO_CHARLA + 4] = "Timer";
+    if (k >= 0) {
+      queda = limitar(restante / static_cast<float>(timers_[k].total ? timers_[k].total : 1), 0, 1);
+      if (timers_[k].nombre[0]) {
+        copiarTexto(et, sizeof et, timers_[k].nombre);
+        if (static_cast<uint8_t>(et[0]) >= 'a' && static_cast<uint8_t>(et[0]) <= 'z') et[0] = static_cast<char>(et[0] - 32);
+      }
+      if (timersAndando() > 1) {
+        const size_t l = largo(et);
+        copiarTexto(et + l, sizeof et - l, " +1");
+      }
+    }
+    dibujarCuenta(restante, queda, et, colorOjos(), anillo);
   } else if (panel_ == Panel::Juego) {
     dibujarJuego(cx, W, H, f);
+  } else if (panel_ == Panel::Tarjeta) {
+    dibujarTarjeta(cx, W, H, f);
   }
   lienzo_.opacidad(1);
+}
+
+// Una cuenta regresiva (timer, pomodoro): el número grande, qué es abajo y lo
+// que queda: en las pantallas altas un anillo que se vacía; en las anchas, una
+// barrita que se vacía.
+void Sistema::dibujarCuenta(uint32_t restanteMs, float queda, const char* etiqueta, uint32_t color, bool anillo) {
+  const float W = static_cast<float>(lienzo_.ancho()), H = static_cast<float>(lienzo_.alto()), cx = W / 2;
+  const uint32_t sg = (restanteMs + 999) / 1000;
+  const uint32_t hh = sg / 3600, mm = (sg / 60) % 60, ss = sg % 60;
+  // "9:32", "12:05" o "1:05:00".
+  char t[12];
+  size_t n = escribirNumero(t, sizeof t, hh ? hh : mm);
+  if (hh) t[n++] = ':', t[n++] = static_cast<char>('0' + mm / 10), t[n++] = static_cast<char>('0' + mm % 10);
+  t[n++] = ':';
+  t[n++] = static_cast<char>('0' + ss / 10), t[n++] = static_cast<char>('0' + ss % 10), t[n] = 0;
+  const Fuente& fn = fuentes::NUMERO_46;
+  const Fuente& fe = fuentes::TEXTO_13;
+  if (anillo) {
+    const float cy = H * 0.56f, r = minf(W, H) * 0.36f;
+    constexpr int N = 72;
+    Punto aro[N + 1];
+    for (int i = 0; i <= N; i++) {
+      const float a = 6.2831853f * i / N - 1.5707963f;
+      aro[i] = {cx + coseno(a) * r, cy + seno(a) * r};
+    }
+    lienzo_.trazo(aro, N + 1, 10, paleta::BOTON);
+    const int m = static_cast<int>(N * queda + 0.5f);
+    if (m >= 1) lienzo_.trazo(aro, m + 1, 10, color);
+    const float base = cy + fn.ascenso * 0.36f;
+    dibujarTexto(lienzo_, fn, t, cx - anchoTexto(fn, t) / 2, base, paleta::TINTA);
+    if (etiqueta && etiqueta[0])
+      dibujarTexto(lienzo_, fe, etiqueta, cx - anchoTexto(fe, etiqueta) / 2, base + 22, paleta::TINTA_SUAVE);
+    return;
+  }
+  const float base = H * (perfil_.redonda ? 0.66f : 0.70f) + fn.ascenso * 0.36f;
+  dibujarTexto(lienzo_, fn, t, cx - anchoTexto(fn, t) / 2, base, paleta::TINTA);
+  const float bw = W * (perfil_.redonda ? 0.5f : 0.6f), by = base + 10, bh = 5;
+  lienzo_.pildora(cx, by, bw, bh, bh / 2, paleta::BOTON);
+  const float pw = bw * queda;
+  if (pw >= 1) lienzo_.pildora(cx - bw / 2 + pw / 2, by, pw, bh, minf(bh / 2, pw / 2), color);
+  if (etiqueta && etiqueta[0])
+    dibujarTexto(lienzo_, fe, etiqueta, cx - anchoTexto(fe, etiqueta) / 2, by + 18, paleta::TINTA_SUAVE);
+}
+
+// Una tarjeta: "un mensaje por pantalla", que se lea de lejos.
+void Sistema::dibujarTarjeta(float cx, float W, float H, float) {  // el fundido ya viene en la opacidad
+  const DatosTarjeta& t = tarjeta_;
+  const bool redonda = perfil_.redonda;
+  const Fuente& fe = fuentes::TEXTO_13;
+  auto etiqueta = [&](const char* e, float base, uint32_t color) {
+    if (e[0]) dibujarTexto(lienzo_, fe, e, cx - anchoTexto(fe, e) / 2, base, color);
+  };
+  if (t.tipo == Tarjeta::Qr) {
+    // A pantalla entera: la cara se va bajo un velo negro y queda el QR.
+    lienzo_.rectangulo(0, 0, static_cast<int>(W), static_cast<int>(H), paleta::PANTALLA);
+    const float lado = minf(W, H) * (redonda ? 0.58f : 0.70f);
+    const float y = H * (redonda ? 0.17f : 0.08f);
+    dibujarQr(lienzo_, static_cast<int>(cx - lado / 2), static_cast<int>(y), static_cast<int>(lado), t.cuerpo);
+    etiqueta(t.titulo, y + lado + 20, paleta::TINTA);
+    return;
+  }
+  if (t.tipo == Tarjeta::Paso) {
+    // "Panqueques · paso 2 de 6", unas rayitas de avance y el paso en la
+    // letra más grande que entre.
+    char et[sizeof t.titulo + 24];
+    size_t m = copiarTexto(et, sizeof et, t.titulo);
+    m += copiarTexto(et + m, sizeof et - m, m ? " \xC2\xB7 paso " : "Paso ");
+    m += escribirNumero(et + m, sizeof et - m, t.i);
+    if (t.n) {
+      m += copiarTexto(et + m, sizeof et - m, " de ");
+      escribirNumero(et + m, sizeof et - m, t.n);
+    }
+    const float y0 = H * (redonda ? 0.50f : 0.48f);
+    etiqueta(et, y0, paleta::TINTA_SUAVE);
+    if (t.n > 1 && t.n <= 12) {
+      const float paso = minf(26, (W * 0.7f) / t.n), ancho = paso - 5;
+      for (int i = 0; i < t.n; i++)
+        lienzo_.pildora(cx + (i - (t.n - 1) / 2.0f) * paso, y0 + 12, ancho, 5, 2.5f, i < t.i ? colorOjos() : paleta::BOTON);
+    }
+    TextoAjustado a;
+    ajustarTexto(t.cuerpo, H * (redonda ? 0.72f : 0.75f), redonda ? W * 0.80f : W - 24, 3, redonda, W, H, 8, &a);
+    dibujarAjustado(lienzo_, a, cx, paleta::TINTA);
+    return;
+  }
+  if (t.tipo == Tarjeta::Dato) {
+    // El dato bien grande y abajo, chiquito, lo que se preguntó.
+    const Fuente& fn = fuentes::NUMERO_46;
+    const float anchoMax = redonda ? W * 0.76f : W - 20;
+    const float w = anchoTexto(fn, t.cuerpo);
+    float abajo;
+    if (w <= anchoMax) {
+      const float base = H * 0.66f + fn.ascenso * 0.36f;
+      dibujarTexto(lienzo_, fn, t.cuerpo, cx - w / 2, base, paleta::TINTA);
+      abajo = base + 24;
+    } else {  // no entra en los números grandes: ajustado en renglones
+      TextoAjustado a;
+      ajustarTexto(t.cuerpo, H * 0.68f, anchoMax, 3, redonda, W, H, 8, &a);
+      dibujarAjustado(lienzo_, a, cx, paleta::TINTA);
+      abajo = a.top + a.n * a.lh + 16;
+    }
+    etiqueta(t.titulo, minf(abajo, H - 10), paleta::TINTA_SUAVE);
+    return;
+  }
+  // Lista: el título y hasta 4 renglones (separados por "\n"), con su puntito.
+  const Fuente& fl = fuentes::TEXTO_17;
+  const float lh = static_cast<float>(fl.ascenso + fl.descenso) + 4;
+  const float anchoMax = redonda ? W * 0.68f : W - 44;
+  const float x0 = cx - anchoMax / 2;
+  const float y0 = H * 0.48f;
+  if (t.titulo[0]) dibujarTexto(lienzo_, fuentes::TEXTO_17, t.titulo, x0 - 4, y0, colorOjos());
+  const char* s = t.cuerpo;
+  float y = y0 + 10 + fl.ascenso;
+  for (int r = 0; r < 4 && *s; r++) {
+    const char* fin = s;
+    while (*fin && *fin != '\n') fin++;
+    char l[LARGO_TEXTO_AJUSTADO];
+    copiarTexto(l, sizeof l, s, static_cast<size_t>(fin - s));
+    // Si no entra, se corta (de a una letra, sin partir los UTF-8).
+    for (size_t q = largo(l); q > 1 && anchoTexto(fl, l) > anchoMax - 16; q = largo(l)) {
+      while (q > 0 && (static_cast<uint8_t>(l[q - 1]) & 0xC0) == 0x80) q--;
+      l[q - 1] = 0;
+    }
+    lienzo_.pildoraContorno(x0 + 4, y - fl.ascenso * 0.36f, 11, 11, 5.5f, 2, paleta::TINTA);
+    dibujarTexto(lienzo_, fl, l, x0 + 16, y, paleta::TINTA);
+    y += lh;
+    s = *fin ? fin + 1 : fin;
+  }
 }
 
 // El modo clima: el ícono, la temperatura grande y la máxima y la mínima.
@@ -1786,8 +2302,8 @@ void Sistema::dibujarClima(float cx, float W, float H, float alfa) {
   lienzo_.opacidad(alfa);
   char g[12] = "--\xC2\xB0";
   if (hay) textoTemperatura(clima_.temperatura(), g, sizeof g);
-  const Fuente& fu = fuentes::VOZ_20;
-  const float esc = redonda ? 1.9f : 2.3f;
+  const Fuente& fu = fuentes::NUMERO_46;
+  const float esc = redonda ? 0.9f : 1.0f;
   const float alto = fu.ascenso * 0.72f * esc;
   const float x = redonda ? W * 0.5f : W * 0.49f;
   const float base = iy + alto / 2 - (hay ? 6 : 0);
@@ -1796,18 +2312,18 @@ void Sistema::dibujarClima(float cx, float W, float H, float alfa) {
   char m[40], a[12], b[12];
   textoTemperatura(clima_.maxima, a, sizeof a);
   textoTemperatura(clima_.minima, b, sizeof b);
-  size_t n = copiarTexto(m, sizeof m, "M\xC3\x81X ");
+  size_t n = copiarTexto(m, sizeof m, "M\xC3\xA1x ");
   n += copiarTexto(m + n, sizeof m - n, a);
-  n += copiarTexto(m + n, sizeof m - n, " \xC2\xB7 M\xC3\x8DN ");
+  n += copiarTexto(m + n, sizeof m - n, " \xC2\xB7 M\xC3\xADn ");
   copiarTexto(m + n, sizeof m - n, b);
-  const Fuente& mo = fuentes::MONO_9;
+  const Fuente& mo = fuentes::TEXTO_13;
   const float mx = redonda ? cx - anchoTexto(mo, m) / 2 : x;
   dibujarTexto(lienzo_, mo, m, mx, redonda ? H * 0.80f : base + 15, paleta::TINTA_SUAVE);
 }
 
 size_t Sistema::estadoBle(uint8_t* salida, size_t cap) const {
   protocolo::EstadoPublico p;
-  const int bat = hal_.bateria ? hal_.bateria() : -1;
+  const int bat = ultimaBateria_ >= 0 ? ultimaBateria_ : hal_.bateria ? hal_.bateria() : -1;
   p.bateria = bat < 0 ? 255 : static_cast<uint8_t>(bat);
   p.humor = static_cast<int8_t>(motor_.humor() * 100);
   p.modo = static_cast<uint8_t>(config_.modo);
@@ -2420,6 +2936,30 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
         char t[LARGO_FRASE];
         copiarTexto(t, sizeof t, reinterpret_cast<const char*>(d + 2 + ne), nt);
         decir(t, cara, !cara.existe());
+        return responder(car, op, Ok);
+      }
+      case CmdTarjeta: {
+        // [u8 tipo][u8 i][u8 n][n][título][cuerpo]
+        if (n < 5 || d[1] > static_cast<uint8_t>(Tarjeta::Lista) || 5u + d[4] > n)
+          return responder(car, op, Malformado, "[u8 tipo][u8 i][u8 n][n][título][cuerpo]");
+        const size_t nt = d[4], nc = n - 5 - nt;
+        const char* ti = reinterpret_cast<const char*>(d + 5);
+        const char* cu = ti + nt;
+        if (nt >= sizeof tarjeta_.titulo || nc >= sizeof tarjeta_.cuerpo || !textoUtf8Valido(ti, nt) || !textoUtf8Valido(cu, nc))
+          return responder(car, op, Malformado, "título hasta 31 bytes y cuerpo hasta 120, UTF-8");
+        char t[sizeof tarjeta_.titulo], c[sizeof tarjeta_.cuerpo];
+        copiarTexto(t, sizeof t, ti, nt);
+        copiarTexto(c, sizeof c, cu, nc);
+        mostrarTarjeta(static_cast<Tarjeta>(d[1]), d[2], d[3], t, c);
+        return responder(car, op, Ok);
+      }
+      case CmdTrabajo: {
+        // [u8 estado][texto]
+        if (n < 3 || d[1] > 2 || n - 2 >= sizeof trabajo_[0].texto || !textoUtf8Valido(reinterpret_cast<const char*>(d + 2), n - 2))
+          return responder(car, op, Malformado, "[u8 estado 0-2][texto 1-60 bytes UTF-8]");
+        char t[sizeof trabajo_[0].texto];
+        copiarTexto(t, sizeof t, reinterpret_cast<const char*>(d + 2), n - 2);
+        pasoTrabajo(d[1], t);
         return responder(car, op, Ok);
       }
       case CmdClima: {

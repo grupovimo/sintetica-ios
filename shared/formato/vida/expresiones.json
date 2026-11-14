@@ -17,7 +17,7 @@
   "mareado": { "izq": { "h": 0.26 }, "der": { "h": 0.17, "w": 0.09 }, "spin": 1, "ftilt": 0.06, "movimiento": "bamboleo", "particula": "estrella" },
   "escuchando": { "ojo": { "w": 0.115, "h": 0.25 }, "pulse": 1, "gy": 0.03, "ey": 0.03, "movimiento": "escuchar" },
   "hablando": { "pulse": 0.5, "mw": 0.06, "movimiento": "hablar" },
-  "pensando": { "izq": { "lb": 0.25 }, "der": { "lt": 0.28, "lta": 0.25 }, "gx": -0.14, "gy": 0.14, "ftilt": 0.08, "orbit": 0.12, "movimiento": "pensar", "particula": "burbuja" },
+  "pensando": { "izq": { "lb": 0.25 }, "der": { "lt": 0.28, "lta": 0.25 }, "gx": -0.14, "gy": 0.14, "ftilt": 0.08, "orbit": 0.12, "movimiento": "pensar" },
   "confundido": { "izq": { "h": 0.26, "tilt": 0.25 }, "der": { "h": 0.18, "tilt": -0.3, "lt": 0.15 }, "ftilt": -0.1, "movimiento": "duda", "particula": "pregunta" },
   "curioso": { "izq": { "w": 0.13, "h": 0.29 }, "der": { "h": 0.19, "lt": 0.18 }, "gx": 0.08, "ftilt": -0.13, "fscale": 1.1, "movimiento": "acercarse" },
   "aburrido": { "ojo": { "h": 0.21, "lt": 0.3 }, "gy": -0.05, "gx": -0.06, "mcurve": -0.15, "movimiento": "suspiro" },

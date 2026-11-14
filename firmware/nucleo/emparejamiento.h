@@ -13,6 +13,10 @@ constexpr const char* PREFIJO_QR = "SINTETICA:V1/";
 
 // Rectangular: la del manual (320 × 172). Redonda (broche, 240 × 240): el QR
 // centrado, la unidad arriba y "Escaneame" abajo, todo dentro del círculo.
+// Un QR sobre papel claro en el cuadrado (x, y, lado). Si el contenido no
+// entra (más de 106 bytes), solo el papel.
+void dibujarQr(Lienzo& l, int panelX, int panelY, int panel, const char* contenido);
+
 void dibujarEmparejamiento(Lienzo& l, const char* serie, const char* contenidoQr, const char* estado,
                            bool redonda = false);
 
