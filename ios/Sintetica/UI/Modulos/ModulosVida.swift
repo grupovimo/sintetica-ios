@@ -197,7 +197,7 @@ struct ModJugar: View {
                     Button { jugar(j) } label: {
                         VStack(spacing: 10) {
                             Image(systemName: icono(j)).font(.system(size: 26, weight: .bold))
-                            Text((NOMBRES_JUEGO[j] ?? j).uppercased()).font(Tipos.angosta(10, .black)).lineLimit(2).multilineTextAlignment(.center)
+                            Text((NOMBRES_JUEGO[j] ?? j)).font(S1Tipo.captionFuerte).lineLimit(2).multilineTextAlignment(.center)
                                 .minimumScaleFactor(0.7)
                         }
                         .foregroundStyle(jugando == j ? Color.s1InvTexto : Color.tinta)

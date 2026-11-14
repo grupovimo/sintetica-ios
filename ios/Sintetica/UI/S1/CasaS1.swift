@@ -12,6 +12,8 @@ enum IrA {
     /// Le dice algo ya (los "de un toque") y muestra la Charla.
     case charlar(String)
     case pestana(PestanaS1)
+    /// Cierra la pantalla de un módulo (las que arman su propio header).
+    case cerrarModulo
 }
 
 /// La raíz: la S1 elegida con sus tabs; sin ninguna, Mis S1.
@@ -56,6 +58,7 @@ struct CasaS1: View {
     @State private var cerca = false
     @State private var borrador = ""
     @State private var enfocarCharla = false
+    @State private var pago: PagoRecibido?
 
     var body: some View {
         let modelo = sesion.modelo
@@ -77,7 +80,13 @@ struct CasaS1: View {
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(item: $abierto) { m in
-            DetalleModulo(ruta: $ruta, sesion: sesion, modulo: m)
+            DetalleModulo(ruta: $ruta, sesion: sesion, modulo: m, pago: m == .pagaron ? pago : nil)
+        }
+        .onChange(of: sesion.pagoNuevo) { _, p in
+            guard let p else { return }
+            pago = p
+            sesion.pagoNuevo = nil
+            abierto = .pagaron
         }
         .task {
             await sesion.abrir()
@@ -85,7 +94,7 @@ struct CasaS1: View {
         }
         .onChange(of: modelo.fase) { _, _ in mirarEncender() }
         .fullScreenCover(isPresented: $laboratorio) { LaboratorioVista(modelo: modelo, rack: rackLab) }
-        .fullScreenCover(isPresented: $encender) { EncenderVista(modelo: modelo) }
+        .fullScreenCover(isPresented: $encender) { EncenderVista(sesion: sesion) }
         .sheet(isPresented: $cerca) { CercaVista(modelo: modelo) }
     }
 
@@ -124,44 +133,103 @@ struct CasaS1: View {
             pestana = .charla
             Task { await sesion.enviar(t) }
         case let .pestana(p): pestana = p
+        case .cerrarModulo: abierto = nil
         }
     }
 }
 
-/// Un módulo en su pantalla: el header con su nombre, atrás y la S1 de 72;
-/// abajo el módulo, que se guarda solo.
+/// Un módulo en su pantalla: el header con su nombre, atrás y la S1 de 72
+/// (o EL dato de la pantalla); abajo el módulo, que se guarda solo. Desde
+/// uno se puede abrir otro (encima).
 @MainActor
 struct DetalleModulo: View {
     @Binding var ruta: [Ruta]
     let sesion: SesionS1
     let modulo: Modulo
+    var pago: PagoRecibido? = nil
     @Environment(\.dismiss) private var cerrar
     @State private var laboratorio = false
     @State private var rackLab: LaboratorioVista.Rack = .expresiones
     @State private var cerca = false
+    @State private var siguiente: Modulo?
 
     var body: some View {
         let modelo = sesion.modelo
-        VStack(spacing: 0) {
-            HeaderS1(titulo: modulo.nombre, sesion: sesion, atras: { cerrar() })
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if modelo.guardado == .error, !modelo.errorGuardado.isEmpty {
-                        AvisoConsola(texto: modelo.errorGuardado, error: true)
+        Group {
+            if modulo.pantallaPropia {
+                propia
+            } else {
+                VStack(spacing: 0) {
+                    HeaderS1(titulo: modulo.nombre, sesion: sesion, atras: { cerrar() }, conPantalla: !modulo.conPantallaGrande, dato: dato)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if modelo.guardado == .error, !modelo.errorGuardado.isEmpty {
+                                AvisoConsola(texto: modelo.errorGuardado, error: true)
+                            }
+                            if case .conectando = modelo.fase {
+                                EstadoCargando(renglones: 3)
+                            } else if case let .error(m, _) = modelo.fase {
+                                EstadoSinConexion(nombre: sesion.nombre, detalle: m) { Task { await sesion.reintentar() } }
+                            } else {
+                                contenido
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
+                        .padding(.bottom, 48)
                     }
-                    contenido
+                    .scrollDismissesKeyboard(.interactively)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 24)
-                .padding(.bottom, 48)
             }
-            .scrollDismissesKeyboard(.interactively)
         }
         .background(FondoConsola())
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(item: $siguiente) { m in
+            DetalleModulo(ruta: $ruta, sesion: sesion, modulo: m)
+        }
         .fullScreenCover(isPresented: $laboratorio) { LaboratorioVista(modelo: modelo, rack: rackLab) }
         .sheet(isPresented: $cerca) { CercaVista(modelo: modelo) }
+    }
+
+    private func ir(_ a: IrA) {
+        switch a {
+        case let .modulo(m): if m == modulo { return } else { siguiente = m }
+        case let .laboratorio(r): rackLab = r; laboratorio = true
+        case .cerca: cerca = true
+        case .misS1: ruta.append(.misS1)
+        case .cuenta: ruta.append(.cuenta)
+        case .cerrarModulo: cerrar()
+        case .charla, .charlar, .pestana:
+            if case let .charlar(t) = a { Task { await sesion.enviar(t) } }
+            cerrar()
+        }
+    }
+
+    /// EL dato de esta pantalla en el header (regla 7).
+    private var dato: AnyView? {
+        switch modulo {
+        case .cuidado:
+            if let r = sesion.modelo.config.recordatorios.first(where: { $0.prendido && $0.texto.lowercased().contains("pastilla") }) {
+                return AnyView(PantallaPastilla(hora: r.hora))
+            }
+            return nil
+        case .listas:
+            if let l = sesion.listaEnPantalla { return AnyView(PantallaLista(titulo: l.titulo, items: l.items)) }
+            return nil
+        case .recordatorios, .rutinas, .agenda:
+            return sesion.timer.activo ? sesion.timer.pantalla() : nil
+        default:
+            return nil
+        }
+    }
+
+    @ViewBuilder private var propia: some View {
+        switch modulo {
+        case .timer: TimerVista(sesion: sesion, ir: ir)
+        case .cobrar: CobrarS1(sesion: sesion, ir: ir)
+        default: TePagaronS1(sesion: sesion, pago: pago, ir: ir)
+        }
     }
 
     @ViewBuilder private var contenido: some View {
@@ -169,26 +237,30 @@ struct DetalleModulo: View {
         switch modulo {
         case .listas: ModListas(sesion: sesion)
         case .recordatorios: ModRecordatorios(modelo: modelo)
-        case .agenda: ModAgenda(modelo: modelo)
-        case .habitos: ModHabitos(modelo: modelo)
+        case .agenda: AgendaS1(sesion: sesion)
+        case .habitos: HabitosS1(sesion: sesion)
         case .dia: ModDia(modelo: modelo)
         case .jugar: ModJugar(modelo: modelo)
-        case .cara: ModCara(modelo: modelo)
+        case .rutinas: RutinasS1(sesion: sesion)
+        case .cara: SuCaraS1(sesion: sesion, ir: ir)
         case .imagenes: ModImagenes(modelo: modelo)
-        case .modos: ModModos(modelo: modelo)
+        case .modos: SuPantallaS1(sesion: sesion, ir: ir)
         case .caracter: ModCaracter(modelo: modelo)
         case .habla: ModHabla(modelo: modelo)
         case .voz: ModVoz(modelo: modelo)
-        case .memoria: ModMemoria(modelo: modelo)
-        case .integraciones:
-            ModIntegraciones(modelo: modelo)
-            ModAvisos(modelo: modelo)
+        case .memoria: MemoriaS1(sesion: sesion)
+        case .diario: DiarioS1(sesion: sesion)
+        case .integraciones: TuIAS1(sesion: sesion, ir: ir)
+        case .iaGasto: IAGastoS1(sesion: sesion)
         case .reflejos: ModReflejos(modelo: modelo)
         case .amigos: ModAmigos(modelo: modelo)
-        case .cuidado: ModCuidado(modelo: modelo)
+        case .cuidado: CuidadoS1(sesion: sesion, ir: ir)
+        case .chicos: ChicosS1(sesion: sesion, ir: ir)
+        case .avisosCelu: AvisosCeluS1(sesion: sesion)
         case .avisos: ModAvisos(modelo: modelo)
+        case .timer, .cobrar, .pagaron: EmptyView()
         case .ajustes:
-            ModAjustes(modelo: modelo, laboratorio: { r in rackLab = r; laboratorio = true }, cerca: { cerca = true }, volver: {
+            LaS1Vista(sesion: sesion, ir: ir, volver: {
                 EleccionS1.compartida.elegir(nil)
                 Navegacion.alInicio(&ruta)
                 cerrar()

@@ -77,10 +77,10 @@ struct InicioS1: View {
         let modelo = sesion.modelo
         let conectado = modelo.conectado
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-            TeclaAtajo(icono: .timer, nombre: "Timer") { ir(.charla("Poné un timer de 10 minutos")) }
+            TeclaAtajo(icono: .timer, nombre: "Timer") { ir(.modulo(.timer)) }
             TeclaAtajo(icono: .lista, nombre: "Lista") { ir(.modulo(.listas)) }
             TeclaAtajo(icono: .recordar, nombre: "Recordar") { ir(.modulo(.recordatorios)) }
-            TeclaAtajo(icono: .cobrar, nombre: "Cobrar") { ir(.modulo(.avisos)) }
+            TeclaAtajo(icono: .cobrar, nombre: "Cobrar") { ir(.modulo(.cobrar)) }
         }
         .padding(.top, 16)
         hablar(conectado).padding(.top, 12)
@@ -119,9 +119,11 @@ struct InicioS1: View {
             case .habla: texto = "Hablando"
             }
         }
-        return TeclaHablar(texto: texto, activa: c.activa) {
+        return TeclaHablar(texto: texto, activa: c.activa, alApretar: {
             if sesion.puedeHablar { sesion.hablar() } else { ir(.charla("")) }
-        }
+        }, alSoltar: {
+            if sesion.puedeHablar { sesion.soltarHablar() }
+        })
         .disabled(!conectado && sesion.puedeHablar)
         .onDisappear { if sesion.conversacion.activa { sesion.conversacion.cortar() } }
     }
@@ -156,9 +158,19 @@ struct InicioS1: View {
     /// Lo próximo que va a mostrar: los recordatorios de hoy y el despertador.
     @ViewBuilder private var hoyEnSuPantalla: some View {
         let proximos = ProximosS1.de(sesion.modelo.config, limite: 3)
-        if !proximos.isEmpty {
+        let timer = sesion.timer
+        if !proximos.isEmpty || timer.t != nil {
             Seccion("Hoy en su pantalla")
             VStack(spacing: 0) {
+                if timer.t != nil {
+                    Button { ir(.modulo(.timer)) } label: {
+                        FilaS1(titulo: timer.etiqueta.isEmpty ? "Timer" : timer.etiqueta,
+                               detalle: timer.listo ? "¡Listo!" : timer.pausado ? "En pausa" : "Timer · quedan \(timer.texto)") {
+                            MarcoPantalla(tamano: .lista) { timer.pantalla() }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
                 ForEach(proximos) { p in
                     Button { ir(.modulo(p.modulo)) } label: {
                         FilaS1(titulo: p.titulo, detalle: p.detalle, valor: p.hora) { IconoEnCirculo(icono: p.icono) }

@@ -98,32 +98,35 @@ enum Nucleo {
         return fotos
     }
 
-    static func vistaPrevia() { sintetica_vista_previa() }
+    static func vistaPrevia() { if iniciado { sintetica_vista_previa() } }
     static func tick() { if iniciado { sintetica_tick() } }
     static var ancho: Int { Int(sintetica_ancho()) }
     static var alto: Int { Int(sintetica_alto()) }
     static func tacto(_ apretado: Bool) { if iniciado { sintetica_tacto(apretado ? 1 : 0) } }
     static func evento(_ e: Int) { if iniciado { sintetica_evento(Int32(e)) } }
-    static func bleConexion(_ conectado: Bool) { sintetica_ble_conexion(conectado ? 1 : 0) }
+    static func bleConexion(_ conectado: Bool) { if iniciado { sintetica_ble_conexion(conectado ? 1 : 0) } }
 
     static func bleEscribir(_ car: Int, _ datos: Data) {
+        guard iniciado else { return }
         datos.withUnsafeBytes { p in
             sintetica_ble_escribir(Int32(car), p.bindMemory(to: UInt8.self).baseAddress, datos.count)
         }
     }
 
     static func estado() -> Data {
+        guard iniciado else { return Data() }
         var b = [UInt8](repeating: 0, count: 128)
         let n = sintetica_ble_estado(&b, b.count)
         return Data(b.prefix(n))
     }
 
     static var expresiones: [String] {
-        (0 ..< Int(sintetica_cantidad_expresiones())).map { String(cString: sintetica_nombre_expresion(Int32($0))) }
+        guard iniciado else { return [] }
+        return (0 ..< Int(sintetica_cantidad_expresiones())).map { String(cString: sintetica_nombre_expresion(Int32($0))) }
     }
-    static var expresionVisible: String { String(cString: sintetica_expresion_visible()) }
+    static var expresionVisible: String { iniciado ? String(cString: sintetica_expresion_visible()) : "" }
     static var version: String { String(cString: sintetica_version()) }
-    static var imagenVisible: Int { Int(sintetica_imagen_visible()) }
+    static var imagenVisible: Int { iniciado ? Int(sintetica_imagen_visible()) : -1 }
 
     /// Valida una config con el mismo núcleo del robot. nil = válida; si no, por qué.
     static func validar(_ json: String) -> String? {

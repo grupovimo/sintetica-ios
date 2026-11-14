@@ -10,6 +10,9 @@ struct HeaderS1: View {
     var atras: (() -> Void)? = nil
     /// Sin la de 72 cuando la pantalla ya muestra la de 160 (APP.md).
     var conPantalla = true
+    /// EL dato de esta pantalla en su pantalla de 72 (el timer, el QR, la
+    /// lista, la pastilla: APP.md, regla 7); sin él, su cara del momento.
+    var dato: AnyView? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -32,7 +35,13 @@ struct HeaderS1: View {
                 if let sesion { ChipEstado(estado: sesion.estado) }
             }
             Spacer(minLength: 0)
-            if conPantalla, let sesion { PantallaS1(sesion: sesion) }
+            if conPantalla, let sesion {
+                if let dato, sesion.estado != .sinConexion {
+                    MarcoPantalla(tamano: .header) { dato }
+                } else {
+                    PantallaS1(sesion: sesion)
+                }
+            }
         }
         .padding(.horizontal, 20)
         .frame(height: 72)

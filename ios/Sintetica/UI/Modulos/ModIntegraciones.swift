@@ -46,7 +46,7 @@ struct ModIntegraciones: View {
                 HStack(spacing: 16) {
                     Image(systemName: "icloud.slash.fill").font(.system(size: 30, weight: .bold))
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("SOLO CON LA NUBE").font(Tipos.marca(18, .black))
+                        Text("Solo con la nube").font(Tipos.marca(18, .black))
                         Text("Sumalo a tu cuenta.").font(Tipos.texto).opacity(0.75)
                     }
                 }
@@ -120,7 +120,7 @@ struct ModIntegraciones: View {
                     .background(RoundedRectangle(cornerRadius: 15).fill(LinearGradient(colors: [Color(hex: 0x3A3632), Color(hex: 0x1D1B18)], startPoint: .top, endPoint: .bottom)))
                 VStack(alignment: .leading, spacing: 4) {
                     Grabado("Tu IA · Claude o ChatGPT", color: Color.tinta.opacity(0.66))
-                    Text(clientes.isEmpty ? "QUE LA MANEJE TU IA" : "\(clientes.count) CONECTADA\(clientes.count > 1 ? "S" : "")")
+                    Text(clientes.isEmpty ? "Que la maneje tu IA" : "\(clientes.count) conectada\(clientes.count > 1 ? "s" : "")")
                         .font(Tipos.marca(17, .black)).foregroundStyle(Color.tinta).lineLimit(1).minimumScaleFactor(0.6)
                 }
             }
@@ -140,7 +140,6 @@ struct ModIntegraciones: View {
                 }
                 .buttonStyle(.plain)
                 .sensoryFeedback(.success, trigger: copiado)
-                Text("Agregala como conector.").font(Tipos.chico).foregroundStyle(Color.tinta.opacity(0.8))
             }
             HStack {
                 Spacer()
@@ -241,9 +240,9 @@ struct ModIntegraciones: View {
 
     private var estadoTelegram: String {
         guard let t = telegram else { return "BUSCANDO…" }
-        if !t.activo { return "APAGADO EN ESTA NUBE" }
-        if t.vinculado { return t.nombre.isEmpty ? "VINCULADO" : "CON \(t.nombre.uppercased())" }
-        return "QUE TE HABLE"
+        if !t.activo { return "Apagado en esta nube" }
+        if t.vinculado { return t.nombre.isEmpty ? "Vinculado" : "Con \(t.nombre)" }
+        return "Que te hable"
     }
 
     /// Abre el link del bot directo en el celu y se fija cada tanto si ya quedó.

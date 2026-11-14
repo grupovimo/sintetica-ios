@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Los módulos: cada uno se abre en su pantalla (header + atrás) y se guarda solo.
 enum Modulo: String, CaseIterable, Identifiable, Hashable {
-    case listas, recordatorios, agenda, habitos, dia, jugar
-    case cara, imagenes, modos, caracter, habla, voz, memoria, integraciones, reflejos
-    case amigos, cuidado, avisos
+    case listas, recordatorios, agenda, habitos, dia, jugar, timer, cobrar, pagaron, rutinas
+    case cara, imagenes, modos, caracter, habla, voz, memoria, diario, integraciones, iaGasto, reflejos
+    case amigos, cuidado, chicos, avisosCelu, avisos
     case ajustes
     var id: String { rawValue }
 
@@ -16,6 +16,10 @@ enum Modulo: String, CaseIterable, Identifiable, Hashable {
         case .habitos: "Hábitos"
         case .dia: "Su día"
         case .jugar: "Jugar"
+        case .timer: "Timer"
+        case .cobrar: "Cobrar"
+        case .pagaron: "Te pagaron"
+        case .rutinas: "Rutinas"
         case .cara: "Su cara"
         case .imagenes: "Imágenes"
         case .modos: "Su pantalla"
@@ -23,11 +27,15 @@ enum Modulo: String, CaseIterable, Identifiable, Hashable {
         case .habla: "Habla"
         case .voz: "Voz"
         case .memoria: "Memoria"
+        case .diario: "El diario"
         case .integraciones: "Tu IA"
+        case .iaGasto: "IA y gasto"
         case .reflejos: "Reflejos"
         case .amigos: "Amigos"
         case .cuidado: "Cuidado"
-        case .avisos: "Avisos"
+        case .chicos: "Chicos"
+        case .avisosCelu: "Avisos del celu"
+        case .avisos: "Avisos de afuera"
         case .ajustes: "La S1"
         }
     }
@@ -38,8 +46,11 @@ enum Modulo: String, CaseIterable, Identifiable, Hashable {
         case .recordatorios: .recordar
         case .agenda: .sistema("calendar")
         case .habitos: .check
-        case .dia: .hoy
+        case .dia: .sistema("sun.max")
         case .jugar: .sistema("dice")
+        case .timer: .timer
+        case .cobrar, .pagaron: .cobrar
+        case .rutinas: .hoy
         case .cara: .sistema("face.smiling")
         case .imagenes: .sistema("photo")
         case .modos: .cubo
@@ -47,14 +58,24 @@ enum Modulo: String, CaseIterable, Identifiable, Hashable {
         case .habla: .charla
         case .voz: .sistema("waveform")
         case .memoria: .sistema("book.closed")
+        case .diario: .sistema("sparkles")
         case .integraciones: .sistema("bolt")
+        case .iaGasto: .sistema("key")
         case .reflejos: .sistema("cable.connector")
         case .amigos: .sistema("person.2")
         case .cuidado: .sistema("pills")
-        case .avisos: .sistema("bell")
+        case .chicos: .sistema("dice")
+        case .avisosCelu: .sistema("bell")
+        case .avisos: .sistema("tray.and.arrow.down")
         case .ajustes: .sistema("gearshape")
         }
     }
+
+    /// Las que arman su pantalla entera (su header, el scroll y el botón fijo).
+    var pantallaPropia: Bool { self == .timer || self == .cobrar || self == .pagaron }
+
+    /// Las que muestran su pantalla de 160 (sin la de 72 en el header).
+    var conPantallaGrande: Bool { self == .cara || self == .habitos }
 
     /// Voz: solo si el modelo tiene micrófono o parlante.
     func bloqueado(_ m: ModeloProducto) -> Bool { self == .voz && !m.tiene(.microfono) && !m.tiene(.parlante) }

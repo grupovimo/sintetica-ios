@@ -90,12 +90,13 @@ struct Rejilla: View {
     }
 }
 
-/// La tecla Hablar: naranja, de 72, con su trama de parlante. Al apretarla
-/// (no al soltarla) arranca; así se siente como "mantené para hablar".
+/// La tecla Hablar: naranja, de 72, con su trama de parlante. "Mantené para
+/// hablar": al apretarla arranca y al soltarla termina.
 struct TeclaHablar: View {
     let texto: String
     var activa = false
     let alApretar: () -> Void
+    var alSoltar: () -> Void = {}
     @State private var apretada = false
     @Environment(\.isEnabled) private var habilitada
 
@@ -126,7 +127,11 @@ struct TeclaHablar: View {
                     apretada = true
                     alApretar()
                 }
-                .onEnded { _ in apretada = false }
+                .onEnded { _ in
+                    guard apretada else { return }
+                    apretada = false
+                    alSoltar()
+                }
         )
         .animation(.easeOut(duration: 0.08), value: apretada)
         .sensoryFeedback(.impact(weight: .medium), trigger: apretada)

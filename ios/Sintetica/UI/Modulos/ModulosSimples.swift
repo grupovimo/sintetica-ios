@@ -15,7 +15,7 @@ struct ModCaracter: View {
                 .frame(maxWidth: .infinity)
             VStack(spacing: 10) {
                 Grabado(tocado ? "Carácter · a tu medida" : "Carácter", color: Color.tinta.opacity(0.66))
-                Text((NOMBRES_PRESET[preset] ?? preset).uppercased()).font(Tipos.marca(36, .black)).tracking(-1.4)
+                Text(NOMBRES_PRESET[preset] ?? preset).font(S1Tipo.titulo)
                     .foregroundStyle(Color.tinta).lineLimit(1).minimumScaleFactor(0.6)
                 Text(DICE_PRESET[preset] ?? "").font(Tipos.texto).foregroundStyle(Color.tinta.opacity(0.8))
             }
@@ -125,7 +125,7 @@ struct ModCara: View {
                     }
                 }
                 .frame(width: 64, height: 44)
-                Text(t.uppercased()).font(Tipos.marca(8.5, .heavy)).lineLimit(1).minimumScaleFactor(0.6)
+                Text(t).font(S1Tipo.captionFuerte).lineLimit(1).minimumScaleFactor(0.6)
                     .foregroundStyle(elegida ? Color.papel : Color.gris)
             }
             .padding(8)
@@ -143,7 +143,7 @@ struct ModCara: View {
             VStack(spacing: 8) {
                 Circle().fill(color).frame(width: 22, height: 22).opacity(elegido ? 1 : 0.35)
                     .shadow(color: elegido ? color : .clear, radius: 7)
-                Text(nombre.uppercased()).font(Tipos.marca(8.5, .heavy)).foregroundStyle(elegido ? Color.papel : Color.gris)
+                Text(nombre).font(S1Tipo.captionFuerte).foregroundStyle(elegido ? Color.papel : Color.gris)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -320,7 +320,6 @@ struct ModModos: View {
                             .accessibilityAddTraits(c.segundosGaleria == o.segundos ? [.isSelected] : [])
                     }
                 }
-                Label("Un toque pasa a la siguiente", systemImage: "hand.tap.fill").font(Tipos.chico).foregroundStyle(Color.tinta.opacity(0.8))
             }
             if c.modo == "pomodoro" {
                 VisorMasMenos(rotulo: "Foco", valor: String(format: "%02d min", c.trabajo),
@@ -329,7 +328,6 @@ struct ModModos: View {
                 VisorMasMenos(rotulo: "Descanso", valor: String(format: "%02d min", c.descanso),
                               menos: { modelo.cambiar { $0.moverPomodoro(trabajo: false, -1) } },
                               mas: { modelo.cambiar { $0.moverPomodoro(trabajo: false, 1) } })
-                Label("Un toque arranca o pausa", systemImage: "hand.tap.fill").font(Tipos.chico).foregroundStyle(Color.tinta.opacity(0.8))
             }
         }
     }
@@ -340,12 +338,12 @@ struct ModModos: View {
                 Circle().fill(elegido ? Color.led : Color.grisClaro).frame(width: 9, height: 9).shadow(color: elegido ? Color.led : .clear, radius: 5)
                 Spacer()
                 if !listo {
-                    Text("PRONTO").font(Tipos.marca(8.5, .heavy)).tracking(1).padding(.horizontal, 6).padding(.vertical, 4)
+                    Text("Pronto").font(Tipos.marca(8.5, .heavy)).padding(.horizontal, 6).padding(.vertical, 4)
                         .background(RoundedRectangle(cornerRadius: 5).fill(Color.tinta.opacity(0.12)))
                 }
             }
             Image(systemName: icono).font(.system(size: 22, weight: .semibold))
-            Text(nombre.uppercased()).font(Tipos.marca(15, .black)).lineLimit(1).minimumScaleFactor(0.7)
+            Text(nombre).font(S1Tipo.seccion).lineLimit(1).minimumScaleFactor(0.7)
         }
         .foregroundStyle(elegido ? Color.s1InvTexto : Color.tinta)
         .padding(14)
@@ -369,7 +367,7 @@ struct ModVoz: View {
                 HStack(spacing: 18) {
                     Image(systemName: "lock.fill").font(.system(size: 34, weight: .bold))
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("SIN VOZ").font(Tipos.marca(20, .black))
+                        Text("Sin voz").font(Tipos.marca(20, .black))
                         Text("Llega con los que hablan.").font(Tipos.texto).opacity(0.75)
                     }
                 }

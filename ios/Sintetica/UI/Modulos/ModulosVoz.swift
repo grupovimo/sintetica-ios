@@ -403,7 +403,7 @@ struct IAPropiaVista: View {
     private func cual(_ t: String, _ si: Bool, _ led: EstadoLed) -> some View {
         HStack(spacing: 5) {
             Led(estado: si ? led : .apagado, tamano: 7)
-            Text(t.uppercased()).font(Tipos.marca(9.5, .heavy)).foregroundStyle(si ? Color.tinta : Color.tinta.opacity(0.45))
+            Text(t).font(S1Tipo.captionFuerte).foregroundStyle(si ? Color.tinta : Color.tinta.opacity(0.45))
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(si ? [.isSelected] : [])

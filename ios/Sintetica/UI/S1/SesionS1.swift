@@ -59,20 +59,63 @@ final class SesionS1 {
     var charla: Charla?
     var hilo: [MensajeS1] = []
     var pensando = false
+    /// El timer que está corriendo (lo ven Inicio, Hoy, los headers y Timer).
+    let timer: TimerS1
+    /// Los cobros con Mercado Pago (Cobrar y Te pagaron).
+    let cobros = CobrosS1()
+    /// Acaba de llegar un pago: CasaS1 abre "Te pagaron".
+    var pagoNuevo: PagoRecibido?
+    /// La lista abierta en Listas (la muestra el header: regla 7).
+    var listaEnPantalla: (titulo: String, items: [String])?
     @ObservationIgnored private var abierta = false
+    @ObservationIgnored private var oyente: UUID?
+    @ObservationIgnored private var soltar: Task<Void, Never>?
+    @ObservationIgnored private var apretadaEn = Date.distantPast
+
+    /// La sesión abierta ahora (para Cuenta, que abre el Laboratorio).
+    static weak var actual: SesionS1?
 
     init(id: String) {
         self.id = id
         modelo = ModeloRobot(id: id)
+        timer = TimerS1(id: id)
+        timer.mandar = { [weak self] t in
+            guard let self else { return }
+            Task { await self.enviar(t) }
+        }
+        timer.nombreRobot = { [weak self] in self?.nombre ?? "Tu S1" }
     }
 
     func abrir() async {
         guard !abierta else { return }
         abierta = true
+        SesionS1.actual = self
         conversacion.alCara = { [modelo] n in modelo.caraDeConversacion(n) }
         conversacion.alMirar = { [modelo] x, y in modelo.mirar(x, y) }
+        if !modelo.esDemo {
+            oyente = EnVivo.compartido.escuchar { [weak self] e in self?.recibir(e) }
+        }
         await modelo.abrir()
         await mirarCharlaYVoz()
+    }
+
+    /// Lo de la cuenta que le importa a la sesión: los pagos y lo que hizo
+    /// ella sola (un timer pedido por la voz).
+    private func recibir(_ e: EventoNube) {
+        switch e.tipo {
+        case "entrante":
+            guard (e.datos["tipo"] as? String) == "pago" else { return }
+            let robots = e.datos["robots"] as? [String] ?? []
+            if !robots.isEmpty, !robots.contains(id) { return }
+            pagoNuevo = PagoRecibido(monto: e.datos["titulo"] as? String ?? "", de: e.datos["de"] as? String ?? "", cuando: Date())
+            Task { await cobros.cargar() }
+        case "charla":
+            guard e.bicho == id else { return }
+            let accion = e.datos["accion"] as? String ?? ""
+            if accion == "cobro" { Task { await cobros.cargar() } }
+        default:
+            break
+        }
     }
 
     func reintentar() async {
@@ -83,6 +126,9 @@ final class SesionS1 {
     func cerrar() {
         conversacion.cortar()
         modelo.cerrar()
+        if let o = oyente { EnVivo.compartido.dejar(o) }
+        oyente = nil
+        if SesionS1.actual === self { SesionS1.actual = nil }
         abierta = false
     }
 
@@ -129,10 +175,34 @@ final class SesionS1 {
 
     // --- La voz ---
 
-    /// Mantené para hablar: arranca la charla en tiempo real (si ya está, la corta).
+    /// Mantené para hablar: al apretar arranca la charla en tiempo real (si ya
+    /// estaba, la corta).
     func hablar() {
-        if conversacion.activa { conversacion.cortar(); return }
+        soltar?.cancel()
+        apretadaEn = Date()
+        if conversacion.activa { conversacion.cortar(); apretadaEn = .distantPast; return }
         Task { await conversacion.empezar(id: id) }
+    }
+
+    /// Al soltar: deja de escucharte. Si ya te está contestando, termina de
+    /// hablar y corta; si todavía no contestó, le da unos segundos.
+    func soltarHablar() {
+        guard Date().timeIntervalSince(apretadaEn) > 0.35 else { return }
+        soltar?.cancel()
+        soltar = Task { [weak self] in
+            var hablo = false
+            for _ in 0 ..< 120 {
+                guard let self, !Task.isCancelled else { return }
+                let e = self.conversacion.estado
+                if e == .quieto { return }
+                if e == .habla { hablo = true }
+                if hablo && e == .escucha { break }
+                try? await Task.sleep(for: .milliseconds(100))
+                if !hablo && Date().timeIntervalSince(self.apretadaEn) > 15 { break }
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.conversacion.cortar()
+        }
     }
 
     // --- La charla ---
@@ -158,6 +228,9 @@ final class SesionS1 {
             do {
                 let r = try await Cuenta.compartida.api.charlarDetalle(id, cortarBytes(t, MAX_CHARLA))
                 charla?.quedan = r.quedan
+                if r.accion == "timer" { timer.desdeCharla(t) }
+                if t.lowercased().contains("timer"), t.lowercased().contains("cancel") { timer.cancelarDesdeCharla(t) }
+                if r.accion == "cobro" { Task { await cobros.cargar() } }
                 hilo.append(MensajeS1(deMi: false, texto: r.texto, expresion: r.expresion.isEmpty ? (modelo.estado?.expresion ?? "contento") : r.expresion,
                                       hizo: !r.accion.isEmpty))
             } catch let e as ErrorApi {

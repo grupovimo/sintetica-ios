@@ -8,13 +8,7 @@ import UIKit
 /// Lo que muestran los módulos de la nube si el robot no está en la cuenta.
 struct SoloNube: View {
     var body: some View {
-        Bandeja {
-            HStack(spacing: 16) {
-                Image(systemName: "icloud.slash.fill").font(.system(size: 30, weight: .bold))
-                Text("SOLO CON LA NUBE").font(Tipos.marca(18, .black))
-            }
-            .foregroundStyle(Color.tinta)
-        }
+        EstadoVacio(texto: "Solo con la nube.", expresion: "pensando")
     }
 }
 
@@ -164,7 +158,7 @@ struct ModAmigos: View {
         Bandeja {
             HStack(spacing: 10) {
                 Led(estado: a.conectado ? .verde : .apagado)
-                Text(a.nombre.uppercased()).font(Tipos.marca(18, .black)).foregroundStyle(Color.tinta).lineLimit(1)
+                Text(a.nombre).font(S1Tipo.seccion).foregroundStyle(Color.tinta).lineLimit(1)
                 Spacer()
                 Button { borrar = a } label: { Image(systemName: "xmark") }.tecla(.negra, cuadrada: true).accessibilityLabel("Dejar de ser amigos")
             }
@@ -173,7 +167,7 @@ struct ModAmigos: View {
                     Button { Task { await tocar(a, t) } } label: {
                         VStack(spacing: 6) {
                             Image(systemName: SIMBOLO_TOQUE[t] ?? "hand.point.up.left.fill").font(.system(size: 22, weight: .bold))
-                            Text((NOMBRE_TOQUE[t] ?? t).uppercased()).font(Tipos.angosta(10, .black)).lineLimit(1)
+                            Text((NOMBRE_TOQUE[t] ?? t)).font(S1Tipo.captionFuerte).lineLimit(1)
                         }
                         .foregroundStyle(mandando == "\(a.id):\(t)" ? Color.s1InvTexto : Color.tinta)
                         .frame(maxWidth: .infinity, minHeight: 64)
@@ -456,7 +450,7 @@ struct ModAgenda: View {
         Bandeja(relleno: 10, espacio: 8) {
             Text("\(n)").font(Tipos.marca(12, .black)).foregroundStyle(Color.tinta.opacity(0.55))
             Image(systemName: icono).font(.system(size: 22, weight: .semibold)).foregroundStyle(Color.tinta).frame(maxWidth: .infinity)
-            Text(t.uppercased()).font(Tipos.angosta(10, .black)).foregroundStyle(Color.tinta).multilineTextAlignment(.center)
+            Text(t).font(S1Tipo.captionFuerte).foregroundStyle(Color.tinta).multilineTextAlignment(.center)
                 .lineLimit(2).minimumScaleFactor(0.7).frame(maxWidth: .infinity)
         }
     }
@@ -697,7 +691,7 @@ struct ModAvisos: View {
             HStack {
                 Image(systemName: x?.icono ?? "bell.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(Color.brasa)
                 Spacer()
-                Text((x?.nombre ?? t).uppercased()).font(Tipos.marca(12, .black)).foregroundStyle(Color.papel)
+                Text((x?.nombre ?? t)).font(S1Tipo.captionFuerte).foregroundStyle(Color.papel)
             }
             ZStack {
                 Color.black

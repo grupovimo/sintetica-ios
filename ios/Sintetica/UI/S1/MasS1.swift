@@ -16,16 +16,16 @@ struct MasS1: View {
 
     private static func de(_ m: Modulo) -> Tecla { Tecla(id: m.rawValue, nombre: m.nombre, icono: m.icono, destino: .modulo(m)) }
 
-    private static let todosLosDias: [Tecla] = [Modulo.listas, .recordatorios, .agenda, .habitos, .dia, .jugar].map(MasS1.de)
-    private static let ella: [Tecla] = [MasS1.de(.cara), MasS1.de(.imagenes), MasS1.de(.modos), MasS1.de(.caracter), MasS1.de(.habla), MasS1.de(.voz),
-                                 MasS1.de(.memoria), Tecla(id: "diario", nombre: "El diario", icono: .sistema("sparkles"), destino: .laboratorio(.vida)),
-                                 MasS1.de(.integraciones), MasS1.de(.reflejos)]
-    private static let suGente: [Tecla] = [Modulo.amigos, .cuidado, .avisos].map(MasS1.de)
+    private static let todosLosDias: [Tecla] = [Modulo.listas, .agenda, .habitos, .rutinas, .timer, .cobrar, .recordatorios, .dia, .jugar]
+        .map(MasS1.de)
+    private static let ella: [Tecla] = [Modulo.cara, .modos, .memoria, .diario, .integraciones, .iaGasto, .imagenes, .caracter, .habla, .voz, .reflejos]
+        .map(MasS1.de)
+    private static let suGente: [Tecla] = [Modulo.amigos, .cuidado, .chicos].map(MasS1.de)
     private static let vos: [Tecla] = [
-        MasS1.de(.ajustes),
+        MasS1.de(.avisosCelu),
         Tecla(id: "mis", nombre: "Mis S1", icono: .cubo, destino: .misS1),
         Tecla(id: "cuenta", nombre: "Cuenta", icono: .sistema("person"), destino: .cuenta),
-        Tecla(id: "lab", nombre: "Laboratorio", icono: .sistema("flask"), destino: .laboratorio(.expresiones)),
+        MasS1.de(.avisos),
     ]
 
     var body: some View {

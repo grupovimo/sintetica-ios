@@ -78,7 +78,7 @@ struct ModImagenes: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Grabado("Protector", color: Color.tinta.opacity(0.66))
-                    Text(c.protector.map { String(format: "BAHÍA %02d", $0 + 1) } ?? "APAGADO").font(Tipos.marca(20, .black)).foregroundStyle(Color.tinta)
+                    Text(c.protector.map { String(format: "Imagen %d", $0 + 1) } ?? "Apagado").font(Tipos.marca(20, .black)).foregroundStyle(Color.tinta)
                 }
                 Spacer()
                 if c.protector != nil {

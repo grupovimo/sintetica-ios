@@ -126,11 +126,11 @@ struct BloqueSpotify: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Grabado("Spotify" + (m.nombre.isEmpty ? "" : " · \(m.nombre)"), color: Color.tinta.opacity(0.66))
                             if !m.conectada {
-                                Text("QUE BAILE TU MÚSICA").font(Tipos.marca(15, .black)).foregroundStyle(Color.tinta).lineLimit(1).minimumScaleFactor(0.6)
+                                Text("Que baile tu música").font(Tipos.marca(15, .black)).foregroundStyle(Color.tinta).lineLimit(1).minimumScaleFactor(0.6)
                             } else if let s = m.suena, !s.titulo.isEmpty {
                                 SuenaAhora(suena: s)
                             } else {
-                                Text("CONECTADO").font(Tipos.marca(15, .black)).foregroundStyle(Color.tinta)
+                                Text("Conectado").font(Tipos.marca(15, .black)).foregroundStyle(Color.tinta)
                             }
                         }
                         Spacer(minLength: 0)

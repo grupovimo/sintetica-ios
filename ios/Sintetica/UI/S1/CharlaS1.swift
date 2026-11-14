@@ -139,19 +139,24 @@ struct CharlaS1: View {
                 .frame(height: 48)
                 .background(forma.fill(Color.s1Campo))
                 .overlay(forma.strokeBorder(Color.s1Linea, lineWidth: 1))
-            Button(action: enviar) {
-                ZStack {
-                    if vacio {
-                        Rejilla(tamano: 28)
-                    } else {
-                        IconoS1(.mandar, tamano: 22)
+            if vacio && sesion.puedeHablar {
+                HablarRedondo(activa: sesion.conversacion.activa, alApretar: { sesion.hablar() }, alSoltar: { sesion.soltarHablar() })
+                    .disabled(!sesion.modelo.conectado)
+            } else {
+                Button(action: enviar) {
+                    ZStack {
+                        if vacio {
+                            Rejilla(tamano: 28)
+                        } else {
+                            IconoS1(.mandar, tamano: 22)
+                        }
                     }
+                    .frame(width: 48, height: 48)
                 }
-                .frame(width: 48, height: 48)
+                .buttonStyle(EstiloRelieve(naranja: true, radio: 24))
+                .disabled(vacio || sesion.pensando || !puede)
+                .accessibilityLabel("Mandar")
             }
-            .buttonStyle(EstiloRelieve(naranja: true, radio: 24))
-            .disabled(vacio || sesion.pensando || !puede)
-            .accessibilityLabel("Mandar")
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -184,5 +189,50 @@ struct PuntitosPensando: View {
         }
         .frame(height: 20)
         .accessibilityLabel("Pensando")
+    }
+}
+
+/// El botón redondo de la charla vacío: mantené para hablar (apretar arranca,
+/// soltar termina).
+struct HablarRedondo: View {
+    let activa: Bool
+    let alApretar: () -> Void
+    let alSoltar: () -> Void
+    @State private var apretada = false
+    @Environment(\.isEnabled) private var habilitada
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.s1NaranjaCanto).offset(y: apretada ? 1 : 4)
+            Circle().fill(LinearGradient(colors: [Color.s1NaranjaBrillo, Color.s1Naranja], startPoint: .top, endPoint: .bottom))
+                .offset(y: apretada ? 3 : 0)
+            Group {
+                if activa { IconoS1(.sistema("stop.fill"), tamano: 18).foregroundStyle(Color.s1TintaFija) } else { Rejilla(tamano: 28) }
+            }
+            .offset(y: apretada ? 3 : 0)
+        }
+        .frame(width: 48, height: 48)
+        .padding(.bottom, 4)
+        .opacity(habilitada ? 1 : 0.4)
+        .contentShape(Circle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard habilitada, !apretada else { return }
+                    apretada = true
+                    alApretar()
+                }
+                .onEnded { _ in
+                    guard apretada else { return }
+                    apretada = false
+                    alSoltar()
+                }
+        )
+        .animation(.easeOut(duration: 0.08), value: apretada)
+        .sensoryFeedback(.impact(weight: .medium), trigger: apretada)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Mantené para hablar")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { alApretar() }
     }
 }

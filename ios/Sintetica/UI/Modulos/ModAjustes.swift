@@ -51,7 +51,7 @@ struct ModAjustes: View {
             }
             Bandeja {
                 HStack {
-                    Text(modelo.esNube ? "SACARLO DE TU CUENTA" : modelo.esDemo ? "REINICIARLO" : "DESVINCULARLO")
+                    Text(modelo.esNube ? "Sacarla de tu cuenta" : modelo.esDemo ? "Reiniciarla" : "Desvincularla")
                         .font(Tipos.marca(14, .black)).foregroundStyle(Color.tinta).lineLimit(1).minimumScaleFactor(0.6)
                     Spacer()
                     Button { quitar() } label: { Text(quitando ? "…" : seguro ? "¿Seguro?" : "Sacar") }.tecla(.negra, chica: true).disabled(quitando)

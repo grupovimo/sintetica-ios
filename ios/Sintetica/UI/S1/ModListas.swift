@@ -34,6 +34,9 @@ struct ModListas: View {
                 }
             }
             .task { await cargar() }
+            .onChange(of: lista, initial: true) { _, l in
+                sesion.listaEnPantalla = l.map { ($0.nombre.capitalized, $0.items.filter { !$0.hecho }.map(\.texto)) }
+            }
             .onAppear {
                 oyente = EnVivo.compartido.escuchar { e in
                     if e.tipo == "listas" { Task { await cargar() } }
