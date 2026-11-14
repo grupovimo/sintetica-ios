@@ -74,6 +74,9 @@ struct Hal {
   uint8_t (*otaTerminar)() = nullptr;
   uint8_t (*otaDescargar)(const ManifiestoOta& m, const char* url) = nullptr;
   void (*otaCancelar)() = nullptr;
+  // Reiniciar la placa (CmdReiniciar). Vuelve enseguida: el perfil reinicia un
+  // rato después, para que llegue la respuesta. nullptr = no se puede.
+  void (*reiniciar)() = nullptr;
   // Salidas opcionales.
   void (*sonido)(const char* nombre) = nullptr;
   void (*led)(uint32_t rgb) = nullptr;

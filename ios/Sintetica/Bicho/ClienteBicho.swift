@@ -118,6 +118,7 @@ final class ClienteBicho {
     /// Otra red además de la de casa (el celu compartiendo internet), hasta 3.
     func sumarRed(_ ssid: String, clave: String) async throws { try await exigir(.comando, Comando.sumarRed(ssid, clave: clave)); try await actualizarEstado() }
     func olvidarUnaRed(_ ssid: String) async throws { try await exigir(.comando, Comando.olvidarUnaRed(ssid)) }
+    func reiniciar() async throws { try await exigir(.comando, Comando.reiniciar()) }
     /// Las redes que tiene guardadas (la primera es la de casa).
     func redes() async throws -> [String] {
         let r = try await exigir(.comando, Comando.redes())

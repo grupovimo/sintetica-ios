@@ -183,6 +183,8 @@ struct LaS1Vista: View {
     @State private var quitando = false
     @State private var nueva: VersionFirmware?
     @State private var actualizando = false
+    @State private var seguroReinicio = false
+    @State private var reiniciando = false
 
     var body: some View {
         let modelo = sesion.modelo
@@ -261,6 +263,17 @@ struct LaS1Vista: View {
                 }
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
+                        Text("Reiniciar").font(S1Tipo.cuerpoFuerte).foregroundStyle(Color.s1Tinta)
+                        Text("Vuelve en unos segundos").font(S1Tipo.caption).foregroundStyle(Color.s1Tinta2)
+                    }
+                    Spacer()
+                    Button { reiniciar() } label: { Text(reiniciando ? "…" : seguroReinicio ? "¿Seguro?" : "Reiniciar") }.tecla(chica: true)
+                        .disabled(reiniciando || !modelo.conectado || modelo.esDemo)
+                }
+                .padding(.vertical, 12)
+                .overlay(alignment: .top) { Rectangle().fill(Color.s1Linea).frame(height: 1) }
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("Desvincular").font(S1Tipo.cuerpoFuerte).foregroundStyle(Color.s1Tinta)
                         Text(modelo.esNube ? "Se borra de tu cuenta" : "Se olvida de este celu").font(S1Tipo.caption).foregroundStyle(Color.s1Tinta2)
                     }
@@ -308,6 +321,22 @@ struct LaS1Vista: View {
             _ = await sesion.modelo.comando(["evento": "nombre"])
             aviso = await sesion.modelo.decir("¡Acá estoy!") ?? "Está sonando."
             try? await Task.sleep(for: .seconds(3))
+            aviso = ""
+        }
+    }
+
+    private func reiniciar() {
+        if !seguroReinicio {
+            seguroReinicio = true
+            Task { try? await Task.sleep(for: .seconds(5)); seguroReinicio = false }
+            return
+        }
+        seguroReinicio = false
+        reiniciando = true
+        Task {
+            if let e = await sesion.modelo.reiniciar() { error = e } else { aviso = "Reiniciando." }
+            try? await Task.sleep(for: .seconds(10))
+            reiniciando = false
             aviso = ""
         }
     }

@@ -207,6 +207,7 @@ extension ApiSintetica {
 
     /// expresion, nombre, evento o reproducir.
     func comando(_ id: String, _ c: [String: String]) async throws { _ = try await pedir("/v1/bichos/\(id)/comando", "POST", c) }
+    func reiniciar(_ id: String) async throws { _ = try await pedir("/v1/bichos/\(id)/comando", "POST", ["reiniciar": true]) }
 
     func imagenes(_ id: String) async throws -> [EspacioImagen] {
         ((try await pedir("/v1/bichos/\(id)/imagenes"))["imagenes"] as? [[String: Any]] ?? []).compactMap { o in

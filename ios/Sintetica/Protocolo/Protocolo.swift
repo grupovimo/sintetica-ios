@@ -38,7 +38,7 @@ enum Op {
     static let expresion: UInt8 = 0x10, nombre: UInt8 = 0x11, evento: UInt8 = 0x12
     static let vincular: UInt8 = 0x13, autenticar: UInt8 = 0x14, desvincular: UInt8 = 0x15
     static let red: UInt8 = 0x16, nube: UInt8 = 0x17, olvidarRed: UInt8 = 0x18, reproducir: UInt8 = 0x19
-    static let sumarRed: UInt8 = 0x50, redes: UInt8 = 0x51
+    static let sumarRed: UInt8 = 0x50, redes: UInt8 = 0x51, reiniciar: UInt8 = 0x52
     // v1.4: el motor de vida.
     static let hora: UInt8 = 0x1A, vida: UInt8 = 0x1B, memoria: UInt8 = 0x1C, restaurar: UInt8 = 0x1D, registro: UInt8 = 0x1E
     static let comportamiento: UInt8 = 0x1F
@@ -122,6 +122,8 @@ enum Comando {
     static func redes() -> [UInt8] { [Op.redes] }
     /// Olvida una red.
     static func olvidarUnaRed(_ ssid: String) -> [UInt8] { [Op.redes] + corto(ssid, 32) }
+    /// Reinicia la placa (contesta antes).
+    static func reiniciar() -> [UInt8] { [Op.reiniciar] }
     static func nube(url: String, usuario: String, clave: String) -> [UInt8] {
         [Op.nube] + corto(url, 160) + corto(usuario, 64) + corto(clave, 128)
     }

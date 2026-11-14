@@ -708,6 +708,20 @@ final class ModeloRobot {
         return nil
     }
 
+    /// Reinicia la placa (vuelve sola en unos segundos). Error o nil.
+    func reiniciar() async -> String? {
+        do {
+            switch via {
+            case .nube: try await api.reiniciar(id)
+            case .ble: guard let cliente else { return "Sin conexión." }; try await cliente.reiniciar()
+            case .demo: return nil
+            }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     /// Lo saca de la cuenta (nube), lo desvincula (BLE) o lo reinicia (prueba).
     func quitar() async -> String? {
         do {

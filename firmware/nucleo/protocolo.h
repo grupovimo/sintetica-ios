@@ -67,6 +67,7 @@ enum Op : uint8_t {
   CmdTrabajo = 0x4F,     // [u8 estado: 0 haciendo, 1 hecho, 2 falló][texto 1-60 bytes]: un paso de lo que está haciendo (v4)
   CmdSumarRed = 0x50,    // [n][ssid][n][clave]: otra red además de la de casa (el celu), hasta 3 en total (v4.1)
   CmdRedes = 0x51,       // vacío → [0xD1][0][u8 cantidad] + n × [n][ssid] (la 1ª es la de casa); [n][ssid] = olvidar esa (v4.1)
+  CmdReiniciar = 0x52,   // vacío: contesta Ok y reinicia (sin el reinicio del perfil, NoImplementado) (v4.1)
   // Imagen
   ImgInicio = 0x20,      // u8 espacio (0-7 imágenes, 8-19 sprites), u32 largo, u32 crc32
   ImgBloque = 0x21,      // u32 desplazamiento, datos

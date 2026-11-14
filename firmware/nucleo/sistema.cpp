@@ -3019,6 +3019,14 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
         evento(static_cast<Evento>(d[1]));
         return responder(car, op, Ok);
       }
+      case CmdReiniciar: {
+        if (n != 1) return responder(car, op, Malformado, "vacío");
+        if (!hal_.reiniciar) return responder(car, op, NoImplementado);
+        log("Reinicio pedido");
+        responder(car, op, Ok);
+        hal_.reiniciar();
+        return;
+      }
       case CmdRed:
       case CmdNube:
       case CmdOlvidarRed:
