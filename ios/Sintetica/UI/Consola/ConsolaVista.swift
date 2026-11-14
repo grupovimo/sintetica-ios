@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Los diez módulos de la consola.
 enum Modulo: String, CaseIterable, Identifiable {
-    case caracter, cara, imagenes, dia, cuidado, recordatorios, habitos, agenda, modos, reflejos, integraciones, amigos, avisos, habla, jugar, voz, ajustes
+    case caracter, cara, imagenes, dia, cuidado, recordatorios, habitos, agenda, memoria, modos, reflejos, integraciones, amigos, avisos, habla, jugar, voz, ajustes
     var id: String { rawValue }
 
     var nombre: String {
@@ -15,6 +15,7 @@ enum Modulo: String, CaseIterable, Identifiable {
         case .recordatorios: "Recordatorios"
         case .habitos: "Hábitos"
         case .agenda: "Agenda"
+        case .memoria: "Memoria"
         case .modos: "Modos"
         case .reflejos: "Reflejos"
         case .integraciones: "Integraciones"
@@ -37,6 +38,7 @@ enum Modulo: String, CaseIterable, Identifiable {
         case .recordatorios: "alarm"
         case .habitos: "checkmark.seal.fill"
         case .agenda: "calendar"
+        case .memoria: "brain.head.profile"
         case .modos: "square.grid.2x2"
         case .reflejos: "cable.connector"
         case .integraciones: "point.3.connected.trianglepath.dotted"
@@ -199,6 +201,7 @@ struct ConsolaVista: View {
         case .recordatorios: ModRecordatorios(modelo: modelo)
         case .habitos: ModHabitos(modelo: modelo)
         case .agenda: ModAgenda(modelo: modelo)
+        case .memoria: ModMemoria(modelo: modelo)
         case .modos: ModModos(modelo: modelo)
         case .reflejos: ModReflejos(modelo: modelo)
         case .integraciones: ModIntegraciones(modelo: modelo)
