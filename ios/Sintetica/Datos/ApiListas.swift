@@ -55,6 +55,13 @@ extension ApiSintetica {
         RespuestaCharla(try await pedir("/v1/bichos/\(id)/charla", "POST", ["texto": texto]))
     }
 
+    /// Lo de hoy según la nube (la agenda y los recordatorios que faltan, en
+    /// la hora de Argentina): [(título, "HH:MM" o "" si es todo el día)].
+    func hoy(_ id: String) async throws -> [(titulo: String, hora: String)] {
+        let o = try await pedir("/v1/bichos/\(id)/hoy")
+        return (o["cosas"] as? [[String: Any]] ?? []).map { ($0["titulo"] as? String ?? "", $0["hora"] as? String ?? "") }
+    }
+
     // --- Listas (web/src/lib/consola/modulos/Listas.svelte) ---
     func listas() async throws -> (listas: [ListaNube], porDefecto: String) {
         let o = try await pedir("/v1/listas")

@@ -36,11 +36,12 @@ struct HoyS1: View {
             }
         }
         .background(FondoConsola())
+        .task { await sesion.cargarHoy() }
     }
 
     @ViewBuilder private var contenido: some View {
         let c = sesion.modelo.config
-        let hoy = ProximosS1.de(c, limite: 20)
+        let hoy = ProximosS1.de(c, limite: 20, agenda: sesion.agendaHoy)
         let manana = ProximosS1.de(c, limite: 5, ahora: Date().addingTimeInterval(86400), soloDesdeAhora: false)
         let timer = sesion.timer
         Seccion("Ahora", arriba: 0)

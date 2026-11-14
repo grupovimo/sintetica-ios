@@ -67,6 +67,8 @@ final class SesionS1 {
     var pagoNuevo: PagoRecibido?
     /// La lista abierta en Listas (la muestra el header: regla 7).
     var listaEnPantalla: (titulo: String, items: [String])?
+    /// Lo de la agenda de hoy (Google o iCal), de la nube: lo suman Inicio y Hoy.
+    var agendaHoy: [(titulo: String, hora: String)] = []
     @ObservationIgnored private var abierta = false
     @ObservationIgnored private var oyente: UUID?
     @ObservationIgnored private var soltar: Task<Void, Never>?
@@ -97,6 +99,16 @@ final class SesionS1 {
         }
         await modelo.abrir()
         await mirarCharlaYVoz()
+        await cargarHoy()
+    }
+
+    /// La agenda de hoy: lo que la nube dice que hay hoy menos los
+    /// recordatorios (esos ya salen de la config, al instante).
+    func cargarHoy() async {
+        guard !modelo.esDemo, Cuenta.compartida.activa,
+              let l = try? await Cuenta.compartida.api.hoy(id) else { return }
+        let recs = Set(modelo.config.recordatorios.map { $0.texto.lowercased() })
+        agendaHoy = l.filter { !$0.titulo.isEmpty && !recs.contains($0.titulo.lowercased()) }
     }
 
     /// Lo de la cuenta que le importa a la sesión: los pagos y lo que hizo
@@ -113,6 +125,8 @@ final class SesionS1 {
             guard e.bicho == id else { return }
             let accion = e.datos["accion"] as? String ?? ""
             if accion == "cobro" { Task { await cobros.cargar() } }
+        case "agenda":
+            Task { await cargarHoy() }
         default:
             break
         }
@@ -121,6 +135,7 @@ final class SesionS1 {
     func reintentar() async {
         await modelo.abrir()
         await mirarCharlaYVoz()
+        await cargarHoy()
     }
 
     func cerrar() {
@@ -271,6 +286,10 @@ enum CuadroVivo {
 final class EleccionS1 {
     static let compartida = EleccionS1()
     private(set) var id: String?
+
+    /// La tab que pidió un widget (sintetica://hoy, sintetica://inicio): la
+    /// abre CasaS1 y la vuelve a nil.
+    var pestanaPedida: PestanaS1?
 
     init() { id = UserDefaults.standard.string(forKey: "s1.elegida") }
 

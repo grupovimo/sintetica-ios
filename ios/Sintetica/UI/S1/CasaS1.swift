@@ -75,6 +75,12 @@ struct CasaS1: View {
             TabBarS1(actual: $pestana, nombre: sesion.nombre)
         }
         .background(FondoConsola())
+        .onChange(of: EleccionS1.compartida.pestanaPedida, initial: true) { _, p in
+            guard let p else { return }
+            abierto = nil
+            pestana = p
+            EleccionS1.compartida.pestanaPedida = nil
+        }
         .overlay(alignment: .top) { avisoArriba }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: modelo.aviso)
         .navigationBarBackButtonHidden()

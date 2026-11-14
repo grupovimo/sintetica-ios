@@ -157,7 +157,7 @@ struct InicioS1: View {
 
     /// Lo próximo que va a mostrar: los recordatorios de hoy y el despertador.
     @ViewBuilder private var hoyEnSuPantalla: some View {
-        let proximos = ProximosS1.de(sesion.modelo.config, limite: 3)
+        let proximos = ProximosS1.de(sesion.modelo.config, limite: 3, agenda: sesion.agendaHoy)
         let timer = sesion.timer
         if !proximos.isEmpty || timer.t != nil {
             Seccion("Hoy en su pantalla")
@@ -191,8 +191,9 @@ struct InicioS1: View {
     }
 }
 
-/// Lo que viene hoy (recordatorios prendidos que tocan hoy y el despertador),
-/// ordenado por hora, desde ahora.
+/// Lo que viene hoy (recordatorios prendidos que tocan hoy, el despertador y
+/// la agenda de la nube), ordenado por hora, desde ahora. Lo de todo el día va
+/// primero.
 struct ProximosS1: Identifiable, Equatable {
     let id: String
     let titulo: String
@@ -201,7 +202,8 @@ struct ProximosS1: Identifiable, Equatable {
     let icono: Icono
     let modulo: Modulo
 
-    static func de(_ c: ConfigDoc, limite: Int, ahora: Date = Date(), soloDesdeAhora: Bool = true) -> [ProximosS1] {
+    static func de(_ c: ConfigDoc, limite: Int, ahora: Date = Date(), soloDesdeAhora: Bool = true,
+                   agenda: [(titulo: String, hora: String)] = []) -> [ProximosS1] {
         let cal = Calendar.current
         let minutos = cal.component(.hour, from: ahora) * 60 + cal.component(.minute, from: ahora)
         let letra = letraDelDia(ahora)
@@ -216,7 +218,13 @@ struct ProximosS1: Identifiable, Equatable {
                                     hora: d.hora, icono: .sistema("alarm"), modulo: .dia))
             }
         }
-        return Array(l.sorted { $0.hora < $1.hora }.prefix(limite))
+        for (i, e) in agenda.enumerated() {
+            l.append(ProximosS1(id: "a\(i)", titulo: e.titulo, detalle: "Agenda", hora: e.hora.isEmpty ? "Todo el día" : e.hora,
+                                icono: .sistema("calendar"), modulo: .agenda))
+        }
+        // "Todo el día" antes que cualquier hora.
+        let orden = { (p: ProximosS1) in p.hora.first?.isNumber == true ? p.hora : "" }
+        return Array(l.sorted { orden($0) < orden($1) }.prefix(limite))
     }
 
     /// La letra del día como en los recordatorios (DIAS_SEMANA).

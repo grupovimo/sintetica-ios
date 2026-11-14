@@ -38,6 +38,12 @@ struct SinteticaApp: App {
             }
             .tint(Color.s1Naranja)
             .onOpenURL { url in
+                // Los widgets: sintetica://hoy y sintetica://inicio.
+                if url.scheme == "sintetica", let p = PestanaS1(rawValue: url.host ?? ""), p == .hoy || p == .inicio {
+                    ruta.removeAll()
+                    EleccionS1.compartida.pestanaPedida = p
+                    return
+                }
                 Task {
                     if await entrarConLink(url) != nil { ruta = [.cuenta] }
                 }
