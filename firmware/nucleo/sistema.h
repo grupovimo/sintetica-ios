@@ -20,7 +20,7 @@
 
 namespace sintetica {
 
-constexpr const char* VERSION_SINTETICAOS = "0.3.0";
+constexpr const char* VERSION_SINTETICAOS = "0.3.1";
 
 // Cómo es la placa: la pantalla y qué hace su pulsador.
 struct Perfil {
@@ -148,6 +148,11 @@ class Sistema {
   // WiFi y nube (v1.3). El perfil lee las credenciales guardadas y avisa cómo
   // está conectado.
   bool red(char* ssid, size_t capSsid, char* clave, size_t capClave) const;
+  // La i-ésima red guardada (0 = la de casa; las otras, de CmdSumarRed): el
+  // perfil prueba una por una hasta que alguna conecta.
+  bool red(int i, char* ssid, size_t capSsid, char* clave, size_t capClave) const;
+  int cantidadRedes() const;
+  static constexpr int MAX_REDES = 3;
   bool nube(char* url, size_t capUrl, char* usuario, size_t capUsuario, char* clave, size_t capClave) const;
   void conexiones(bool wifi, bool nube);
   bool wifiConectado() const { return wifi_; }

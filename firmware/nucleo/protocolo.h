@@ -65,6 +65,8 @@ enum Op : uint8_t {
   CmdDiario = 0x4D,      // → n × [0xCD][0][u16 día][u8 i][u8 n][u8 tipo][u8 dato][u8 etapa][texto] (v3; también aviso)
   CmdTarjeta = 0x4E,     // [u8 tipo: 0 cerrar, 1 QR, 2 paso, 3 dato, 4 lista][u8 i][u8 n][n][título][cuerpo hasta 120 bytes] (v4)
   CmdTrabajo = 0x4F,     // [u8 estado: 0 haciendo, 1 hecho, 2 falló][texto 1-60 bytes]: un paso de lo que está haciendo (v4)
+  CmdSumarRed = 0x50,    // [n][ssid][n][clave]: otra red además de la de casa (el celu), hasta 3 en total (v4.1)
+  CmdRedes = 0x51,       // vacío → [0xD1][0][u8 cantidad] + n × [n][ssid] (la 1ª es la de casa); [n][ssid] = olvidar esa (v4.1)
   // Imagen
   ImgInicio = 0x20,      // u8 espacio (0-7 imágenes, 8-19 sprites), u32 largo, u32 crc32
   ImgBloque = 0x21,      // u32 desplazamiento, datos

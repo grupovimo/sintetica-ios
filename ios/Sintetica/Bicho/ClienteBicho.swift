@@ -115,6 +115,25 @@ final class ClienteBicho {
         try await exigir(.comando, Comando.nube(url: url, usuario: usuario, clave: clave))
     }
     func olvidarRed() async throws { try await exigir(.comando, Comando.olvidarRed()); try await actualizarEstado() }
+    /// Otra red además de la de casa (el celu compartiendo internet), hasta 3.
+    func sumarRed(_ ssid: String, clave: String) async throws { try await exigir(.comando, Comando.sumarRed(ssid, clave: clave)); try await actualizarEstado() }
+    func olvidarUnaRed(_ ssid: String) async throws { try await exigir(.comando, Comando.olvidarUnaRed(ssid)) }
+    /// Las redes que tiene guardadas (la primera es la de casa).
+    func redes() async throws -> [String] {
+        let r = try await exigir(.comando, Comando.redes())
+        guard case let .resultado(_, _, detalle, _) = r else { return [] }
+        let b = Array(detalle.utf8)
+        guard let cantidad = b.first else { return [] }
+        var out: [String] = [], i = 1
+        for _ in 0 ..< Int(cantidad) {
+            guard i < b.count else { break }
+            let n = Int(b[i])
+            guard i + 1 + n <= b.count else { break }
+            out.append(String(decoding: b[(i + 1) ..< (i + 1 + n)], as: UTF8.self))
+            i += 1 + n
+        }
+        return out
+    }
 
     /// Instala un firmware firmado por BLE (el manifiesto lo da la API). El bicho
     /// verifica la firma, borra la otra partición (unos segundos), recibe los

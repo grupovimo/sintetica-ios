@@ -47,6 +47,27 @@ final class ModeloCerca {
         do { try await cliente?.configurarRed(ssid, clave: clave); mensaje = "Se conecta a «\(ssid)»." } catch { mensaje = error.localizedDescription }
     }
 
+    /// Las redes guardadas (la primera, la de casa); nil si el firmware no las sabe listar.
+    var redes: [String]?
+
+    func leerRedes() async {
+        redes = try? await cliente?.redes()
+    }
+
+    func sumarRed(_ ssid: String, _ clave: String) async {
+        ocupado = true
+        defer { ocupado = false }
+        do {
+            try await cliente?.sumarRed(ssid, clave: clave)
+            mensaje = "Si no encuentra la de casa, se conecta a «\(ssid)»."
+            await leerRedes()
+        } catch { mensaje = error.localizedDescription }
+    }
+
+    func olvidarUnaRed(_ ssid: String) async {
+        do { try await cliente?.olvidarUnaRed(ssid); await leerRedes() } catch { mensaje = error.localizedDescription }
+    }
+
     func olvidarRed() async {
         do { try await cliente?.olvidarRed(); mensaje = "Olvidó el WiFi." } catch { mensaje = error.localizedDescription }
     }
@@ -104,6 +125,8 @@ struct CercaVista: View {
     @Environment(\.dismiss) private var cerrar
     @State private var ssid = ""
     @State private var clave = ""
+    @State private var ssidOtra = ""
+    @State private var claveOtra = ""
 
     init(modelo: ModeloRobot) {
         _cerca = State(initialValue: ModeloCerca(id: modelo.id, cliente: modelo.esBle ? modelo.cliente : nil))
@@ -124,6 +147,7 @@ struct CercaVista: View {
                     Button { Task { await cerca.conectar() } } label: { Label("Buscar", systemImage: "dot.radiowaves.left.and.right") }.tecla(.naranja, ancha: true)
                 } else {
                     wifi
+                    otrasRedes
                     firmware
                 }
                 if !cerca.mensaje.isEmpty { AvisoConsola(texto: cerca.mensaje) }
@@ -132,7 +156,7 @@ struct CercaVista: View {
         }
         .background(FondoConsola())
         .presentationBackground(Color.fondo)
-        .task { await cerca.conectar() }
+        .task { await cerca.conectar(); await cerca.leerRedes() }
         .onDisappear { cerca.cerrar() }
     }
 
@@ -159,6 +183,32 @@ struct CercaVista: View {
             }
             if e?.redConfigurada == true {
                 Button { Task { await cerca.olvidarRed() } } label: { Text("Olvidar WiFi") }.tecla(.negra, chica: true)
+            }
+        }
+    }
+
+    /// Otras redes: el celu compartiendo internet (para sacarla a la calle).
+    @ViewBuilder private var otrasRedes: some View {
+        if let redes = cerca.redes {
+            Visor(relleno: 12) {
+                Grabado("Otras redes")
+                ForEach(Array(redes.enumerated()), id: \.offset) { k, r in
+                    HStack {
+                        Text(r).font(.system(size: 15, weight: .bold)).foregroundStyle(Color.papel)
+                        if k == 0 { Text("Casa").font(.system(size: 13, weight: .bold)).foregroundStyle(Color.gris) }
+                        Spacer()
+                        Button { Task { await cerca.olvidarUnaRed(r) } } label: { Text("Olvidar") }.tecla(.negra, chica: true)
+                    }
+                }
+                if redes.count < 3 {
+                    CampoVisor(rotulo: "Red", texto: $ssidOtra, ayuda: "El WiFi de tu celu", claro: false, teclado: .asciiCapable)
+                    SecureField("Clave", text: $claveOtra).font(.system(size: 17, weight: .bold)).foregroundStyle(Color.papel)
+                    Button { Task { await cerca.sumarRed(ssidOtra, claveOtra); ssidOtra = ""; claveOtra = "" } } label: {
+                        Label("Sumar otra red", systemImage: "personalhotspot")
+                    }
+                    .tecla(ancha: true)
+                    .disabled(ssidOtra.trimmingCharacters(in: .whitespaces).isEmpty || ssidOtra.utf8.count > 32 || claveOtra.utf8.count > 64 || cerca.ocupado)
+                }
             }
         }
     }

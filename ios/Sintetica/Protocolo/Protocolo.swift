@@ -38,6 +38,7 @@ enum Op {
     static let expresion: UInt8 = 0x10, nombre: UInt8 = 0x11, evento: UInt8 = 0x12
     static let vincular: UInt8 = 0x13, autenticar: UInt8 = 0x14, desvincular: UInt8 = 0x15
     static let red: UInt8 = 0x16, nube: UInt8 = 0x17, olvidarRed: UInt8 = 0x18, reproducir: UInt8 = 0x19
+    static let sumarRed: UInt8 = 0x50, redes: UInt8 = 0x51
     // v1.4: el motor de vida.
     static let hora: UInt8 = 0x1A, vida: UInt8 = 0x1B, memoria: UInt8 = 0x1C, restaurar: UInt8 = 0x1D, registro: UInt8 = 0x1E
     static let comportamiento: UInt8 = 0x1F
@@ -115,6 +116,12 @@ enum Comando {
     static func autenticar(_ clave: [UInt8]) -> [UInt8] { [Op.autenticar] + clave }
     static func desvincular() -> [UInt8] { [Op.desvincular] }
     static func red(_ ssid: String, clave: String = "") -> [UInt8] { [Op.red] + corto(ssid, 32) + corto(clave, 64) }
+    /// Otra red además de la de casa (el celu compartiendo internet), hasta 3.
+    static func sumarRed(_ ssid: String, clave: String = "") -> [UInt8] { [Op.sumarRed] + corto(ssid, 32) + corto(clave, 64) }
+    /// Las redes guardadas (sin claves) → [0xD1][0][cantidad] + n × [n][ssid].
+    static func redes() -> [UInt8] { [Op.redes] }
+    /// Olvida una red.
+    static func olvidarUnaRed(_ ssid: String) -> [UInt8] { [Op.redes] + corto(ssid, 32) }
     static func nube(url: String, usuario: String, clave: String) -> [UInt8] {
         [Op.nube] + corto(url, 160) + corto(usuario, 64) + corto(clave, 128)
     }

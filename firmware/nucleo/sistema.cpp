@@ -17,6 +17,8 @@ constexpr const char* CLAVE_CLAVES = "claves";
 constexpr const char* CLAVE_IMAGENES = "imagenes";
 constexpr const char* CLAVE_SPRITES = "sprites";
 constexpr const char* CLAVE_RED = "red";
+// Las redes de más (hasta MAX_REDES - 1): n × [n][ssid][n][clave].
+constexpr const char* CLAVE_REDES = "redes";
 constexpr const char* CLAVE_NUBE = "nube";
 constexpr const char* CLAVE_VIDA = "vida";
 
@@ -2458,6 +2460,61 @@ bool Sistema::red(char* ssid, size_t cs, char* clave, size_t cc) const {
   return protocolo::leerTextoCorto(b + k, static_cast<size_t>(n) - k, clave, cc) > 0;
 }
 
+namespace {
+// Las redes de más, crudas (sin la de casa).
+size_t leerRedesExtra(const Hal& h, uint8_t* b, size_t cap) {
+  const int n = h.leer ? h.leer(CLAVE_REDES, b, cap) : -1;
+  return n > 0 ? static_cast<size_t>(n) : 0;
+}
+
+// Cuánto ocupa la entrada que empieza en b ([n][ssid][n][clave]); 0 si está rota.
+size_t largoEntradaRed(const uint8_t* b, size_t n) {
+  if (n < 2 || b[0] == 0 || b[0] > 32 || 1u + b[0] + 1u > n) return 0;
+  const size_t k = 1u + b[0];
+  if (b[k] > 64 || k + 1u + b[k] > n) return 0;
+  return k + 1u + b[k];
+}
+
+bool mismoSsid(const uint8_t* entrada, const char* ssid) {
+  const size_t l = largo(ssid);
+  return entrada[0] == l && iguales(reinterpret_cast<const char*>(entrada + 1), ssid, l);
+}
+}  // namespace
+
+int Sistema::cantidadRedes() const {
+  char ssid[33], clave[65];
+  if (!red(ssid, sizeof ssid, clave, sizeof clave)) return 0;
+  int c = 1;
+  uint8_t b[(MAX_REDES - 1) * (2 + 32 + 64)];
+  const size_t n = leerRedesExtra(hal_, b, sizeof b);
+  for (size_t i = 0; i < n && c < MAX_REDES;) {
+    const size_t l = largoEntradaRed(b + i, n - i);
+    if (!l) break;
+    c++;
+    i += l;
+  }
+  return c;
+}
+
+bool Sistema::red(int cual, char* ssid, size_t cs, char* clave, size_t cc) const {
+  if (cual == 0) return red(ssid, cs, clave, cc);
+  if (cual < 0 || cual >= MAX_REDES) return false;
+  uint8_t b[(MAX_REDES - 1) * (2 + 32 + 64)];
+  const size_t n = leerRedesExtra(hal_, b, sizeof b);
+  int k = 1;
+  for (size_t i = 0; i < n;) {
+    const size_t l = largoEntradaRed(b + i, n - i);
+    if (!l) return false;
+    if (k == cual) {
+      const size_t a = protocolo::leerTextoCorto(b + i, l, ssid, cs);
+      return a && protocolo::leerTextoCorto(b + i + a, l - a, clave, cc) > 0;
+    }
+    k++;
+    i += l;
+  }
+  return false;
+}
+
 bool Sistema::nube(char* url, size_t cu, char* usuario, size_t cus, char* clave, size_t cc) const {
   uint8_t b[3 + 160 + 64 + 128];
   const int n = hal_.leer ? hal_.leer(CLAVE_NUBE, b, sizeof b) : -1;
@@ -2503,10 +2560,96 @@ void Sistema::comandoRed(uint8_t op, const uint8_t* d, size_t n) {
       log("nube nueva");
       break;
     }
+    case CmdSumarRed: {
+      char ssid[33], clave[65], casa[33], claveCasa[65];
+      size_t i = leerTextoCorto(d + 1, n - 1, ssid, sizeof ssid);
+      size_t k = i ? leerTextoCorto(d + 1 + i, n - 1 - i, clave, sizeof clave) : 0;
+      if (!i || !k || !ssid[0] || 1 + i + k != n) return responder(car, op, Malformado, "ssid de 1 a 32 bytes, clave de 0 a 64");
+      // Sin la de casa, esta es la de casa.
+      if (!red(casa, sizeof casa, claveCasa, sizeof claveCasa) || iguales(casa, ssid)) {
+        if (!hal_.guardar || !hal_.guardar(CLAVE_RED, d + 1, n - 1)) return responder(car, op, FalloOta, "no pude guardar");
+      } else {
+        // La nueva primero; las demás detrás, sin la repetida, hasta MAX_REDES - 1.
+        uint8_t viejas[(MAX_REDES - 1) * (2 + 32 + 64)], nuevas[sizeof viejas];
+        const size_t nv = leerRedesExtra(hal_, viejas, sizeof viejas);
+        size_t tam = n - 1;
+        copiarBytes(nuevas, d + 1, tam);
+        int cuantas = 1;
+        for (size_t j = 0; j < nv && cuantas < MAX_REDES - 1;) {
+          const size_t l = largoEntradaRed(viejas + j, nv - j);
+          if (!l) break;
+          if (!mismoSsid(viejas + j, ssid) && tam + l <= sizeof nuevas) {
+            copiarBytes(nuevas + tam, viejas + j, l);
+            tam += l;
+            cuantas++;
+          }
+          j += l;
+        }
+        if (!hal_.guardar || !hal_.guardar(CLAVE_REDES, nuevas, tam)) return responder(car, op, FalloOta, "no pude guardar");
+      }
+      leerRed();
+      responder(car, op, Ok);
+      log("WiFi sumado");
+      break;
+    }
+    case CmdRedes: {
+      if (n > 1) {  // olvidar una (si es la de casa, la primera de las otras pasa a ser la de casa)
+        char ssid[33], casa[33], claveCasa[65];
+        if (!leerTextoCorto(d + 1, n - 1, ssid, sizeof ssid) || !ssid[0]) return responder(car, op, Malformado, "[n][ssid]");
+        uint8_t viejas[(MAX_REDES - 1) * (2 + 32 + 64)], nuevas[sizeof viejas];
+        const size_t nv = leerRedesExtra(hal_, viejas, sizeof viejas);
+        size_t tam = 0;
+        bool sacarCasa = red(casa, sizeof casa, claveCasa, sizeof claveCasa) && iguales(casa, ssid);
+        bool nuevaCasa = false;
+        for (size_t j = 0; j < nv;) {
+          const size_t l = largoEntradaRed(viejas + j, nv - j);
+          if (!l) break;
+          if (!mismoSsid(viejas + j, ssid)) {
+            if (sacarCasa && !nuevaCasa) {
+              if (hal_.guardar) hal_.guardar(CLAVE_RED, viejas + j, l);
+              nuevaCasa = true;
+            } else {
+              copiarBytes(nuevas + tam, viejas + j, l);
+              tam += l;
+            }
+          }
+          j += l;
+        }
+        if (sacarCasa && !nuevaCasa && hal_.guardar) {
+          const uint8_t vacio[1] = {0};
+          hal_.guardar(CLAVE_RED, vacio, 1);
+        }
+        if (hal_.guardar) {
+          const uint8_t vacio[1] = {0};
+          hal_.guardar(CLAVE_REDES, tam ? nuevas : vacio, tam ? tam : 1);
+        }
+        leerRed();
+        responder(car, op, Ok);
+        break;
+      }
+      uint8_t b[3 + MAX_REDES * 33];
+      b[0] = static_cast<uint8_t>(op | Respuesta);
+      b[1] = Ok;
+      size_t tam = 3;
+      int c = 0;
+      for (int j = 0; j < MAX_REDES; j++) {
+        char ssid[33], clave[65];
+        if (!red(j, ssid, sizeof ssid, clave, sizeof clave)) continue;
+        const size_t l = largo(ssid);
+        b[tam++] = static_cast<uint8_t>(l);
+        copiarBytes(b + tam, ssid, l);
+        tam += l;
+        c++;
+      }
+      b[2] = static_cast<uint8_t>(c);
+      enviar(car, b, tam);
+      return;  // listar no cambia nada
+    }
     case CmdOlvidarRed: {
       const uint8_t vacio[1] = {0};
       if (hal_.guardar) {
         hal_.guardar(CLAVE_RED, vacio, 1);
+        hal_.guardar(CLAVE_REDES, vacio, 1);
         hal_.guardar(CLAVE_NUBE, vacio, 1);
       }
       leerRed();
@@ -2730,7 +2873,8 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
   const uint32_t ahora = hal_.ahoraMs();
 
   if (canal_ == Canal::Nube && car == CarComando &&
-      (op == CmdVincular || op == CmdAutenticar || op == CmdRed || op == CmdNube))
+      (op == CmdVincular || op == CmdAutenticar || op == CmdRed || op == CmdNube || op == CmdSumarRed ||
+       (op == CmdRedes && n > 1)))
     return responder(car, op, NoAutorizado, "eso solo se hace por BLE");
 
   // Vincular y autenticar son lo único que se puede hacer sin estar autenticado.
@@ -2878,6 +3022,8 @@ void Sistema::procesar(uint8_t car, const uint8_t* d, size_t n) {
       case CmdRed:
       case CmdNube:
       case CmdOlvidarRed:
+      case CmdSumarRed:
+      case CmdRedes:
         return comandoRed(op, d, n);
       case CmdHora: {
         if (n != 7) return responder(car, op, Malformado, "[u32 epoch][i16 zona en minutos]");
