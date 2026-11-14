@@ -11,8 +11,15 @@ enum Navegacion {
         return true
     }
 
-    /// Vuelve a Mis robots.
+    /// Vuelve al Inicio (la raíz).
     static func alInicio(_ ruta: inout [Ruta]) { ruta.removeAll() }
+
+    /// Elige esta S1 y vuelve al Inicio con ella.
+    @MainActor
+    static func abrir(_ id: String, _ ruta: inout [Ruta]) {
+        EleccionS1.compartida.elegir(id)
+        ruta.removeAll()
+    }
 }
 
 /// Las pantallas esconden la barra de navegación (tienen su propia tecla para

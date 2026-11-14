@@ -347,7 +347,7 @@ struct ModIntegraciones: View {
         let dias = a.dias ?? "LMXJVSD"
         return VStack(alignment: .leading, spacing: 8) {
             DatePicker("", selection: hora, displayedComponents: .hourAndMinute)
-                .labelsHidden().datePickerStyle(.compact).tint(Color.brasa).colorScheme(.dark)
+                .labelsHidden().datePickerStyle(.compact).tint(Color.brasa)
             HStack(spacing: 5) {
                 ForEach(DIAS_SEMANA, id: \.letra) { d in
                     Button { autos[i].alternarDia(d.letra); guardar() } label: { Text(d.letra) }

@@ -63,7 +63,7 @@ struct BloquePresencia: View {
 
     private func aprendido(_ t: String, _ icono: String, _ h: String) -> some View {
         Visor(relleno: 10) {
-            Image(systemName: icono).font(.system(size: 18, weight: .semibold)).foregroundStyle(h.isEmpty ? Color(hex: 0x5A524A) : Color.brasa)
+            Image(systemName: icono).font(.system(size: 18, weight: .semibold)).foregroundStyle(h.isEmpty ? Color.tinta3 : Color.brasa)
             Grabado(t)
             Digitos(texto: h.isEmpty ? "--:--" : h, chicos: true)
         }

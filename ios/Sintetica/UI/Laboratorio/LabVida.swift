@@ -73,13 +73,13 @@ struct LabVida: View {
                 .disabled(!modelo.conectado)
             }
             Text(haciendo(vida).uppercased()).font(Tipos.marca(32, .black)).tracking(-1)
-                .foregroundStyle(vida == nil ? Color(hex: 0x5A524A) : Color.brasa).lineLimit(2).minimumScaleFactor(0.5)
+                .foregroundStyle(vida == nil ? Color.tinta3 : Color.brasa).lineLimit(2).minimumScaleFactor(0.5)
             if let vida {
                 HStack(alignment: .bottom, spacing: 6) {
                     ForEach(VARIABLES_ESTADO, id: \.self) { v in Vumetro(nombre: NOMBRES_ESTADO[v] ?? v, valor: vida.estado[v] ?? 0, estres: v == "estres") }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 14)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color.hundido.shadow(.inner(color: .black.opacity(0.8), radius: 5, y: 3))))
+                .background(RoundedRectangle(cornerRadius: 18).fill(Color.hundido))
             }
         }
         .padding(20)

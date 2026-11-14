@@ -25,7 +25,7 @@ struct CuentaVista: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Button { if !Navegacion.volver(&ruta) { cerrar() } } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
+                Button { if !Navegacion.volver(&ruta) { cerrar() } } label: { Label("Atrás", systemImage: "chevron.left") }.tecla(.negra, chica: true)
                 Grabado("Tu cuenta", color: .brasa)
                 if cuenta.activa {
                     Titular(cuenta.email.isEmpty ? "Adentro" : cuenta.email, tamano: 30)

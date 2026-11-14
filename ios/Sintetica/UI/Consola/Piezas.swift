@@ -1,8 +1,9 @@
 import SwiftUI
 
-// Las piezas de la consola, como en web/src/lib/consola/consola.css.
+// Las piezas de siempre de los módulos, ahora con el sistema S1
+// (marca/diseno/APP.md): teclas con relieve, superficies, campos y chips.
 
-/// Un rótulo grabado en la chapa: mayúsculas, ancho, con aire entre letras.
+/// Un rótulo chico (caption fuerte, en tinta 2).
 struct Grabado: View {
     let texto: String
     var color: Color = .gris
@@ -12,51 +13,52 @@ struct Grabado: View {
     }
 
     var body: some View {
-        Text(texto.uppercased()).font(Tipos.grabado).tracking(1.4).foregroundStyle(color).lineLimit(1)
+        Text(texto).font(S1Tipo.captionFuerte).foregroundStyle(color).lineLimit(1)
     }
 }
 
-/// El título grande de cada pantalla.
+/// El título de una pantalla o de un paso (28, en una línea si entra).
 struct Titular: View {
     let texto: String
-    var tamano: CGFloat = 46
-    init(_ texto: String, tamano: CGFloat = 46) {
+    var tamano: CGFloat = 28
+    init(_ texto: String, tamano: CGFloat = 28) {
         self.texto = texto
         self.tamano = tamano
     }
 
     var body: some View {
-        Text(texto.uppercased()).font(Tipos.marca(tamano, .black)).tracking(-tamano * 0.04)
-            .foregroundStyle(Color.papel).lineLimit(2).minimumScaleFactor(0.5)
+        Text(texto).font(.system(size: min(28, max(17, tamano)), weight: .bold)).tracking(-0.5)
+            .foregroundStyle(Color.s1Tinta).lineLimit(2).minimumScaleFactor(0.6)
     }
 }
 
 enum EstadoLed { case apagado, on, verde, ambar, rojo }
 
+/// Un LED plano de 8 (como el del chip de estado).
 struct Led: View {
     var estado: EstadoLed = .on
-    var tamano: CGFloat = 9
+    var tamano: CGFloat = 8
 
-    private var color: Color? {
+    private var color: Color {
         switch estado {
-        case .apagado: nil
-        case .on: .led
-        case .verde: .verde
+        case .apagado: .s1Apagado
+        case .on: .s1Naranja
+        case .verde: .s1LedDespierta
         case .ambar: .ambar
-        case .rojo: .rojo
+        case .rojo: .s1Error
         }
     }
 
     var body: some View {
-        Circle().fill(color ?? Color.apagado).frame(width: tamano, height: tamano)
-            .shadow(color: color ?? .clear, radius: color == nil ? 0 : tamano * 0.6)
-            .accessibilityHidden(true)
+        Circle().fill(color).frame(width: tamano, height: tamano).accessibilityHidden(true)
     }
 }
 
 enum TipoTecla { case blanca, negra, naranja }
 
-/// Una tecla mecánica: se hunde al apretarla (y queda hundida si `hundida`).
+/// Una tecla: 48 de alto (40 la chica), radio 12, brillo arriba, 4 de canto y
+/// se hunde 3 al tocarla. La naranja es la acción principal; la negra va en
+/// tinta invertida. Hundida = seleccionada: tinta invertida, sin relieve.
 struct EstiloTecla: ButtonStyle {
     var tipo: TipoTecla = .blanca
     var chica = false
@@ -67,54 +69,64 @@ struct EstiloTecla: ButtonStyle {
 
     private var arriba: Color {
         switch tipo {
-        case .blanca: Color(hex: 0xFBF9F5)
-        case .negra: Color(hex: 0x3A3632)
-        case .naranja: Color(hex: 0xFF8A5C)
+        case .blanca: .s1TeclaBrillo
+        case .negra: .s1Inv
+        case .naranja: .s1NaranjaBrillo
         }
     }
 
-    private var abajoColor: Color {
+    private var abajo: Color {
         switch tipo {
-        case .blanca: Color(hex: 0xE9E4DC)
-        case .negra: Color(hex: 0x1D1B18)
-        case .naranja: Color(hex: 0xF2541A)
+        case .blanca: .s1Tecla
+        case .negra: .s1Inv
+        case .naranja: .s1Naranja
         }
     }
 
-    private var base: Color {
+    private var canto: Color {
         switch tipo {
-        case .blanca: Color(hex: 0xA39C90)
-        case .negra: Color.black
-        case .naranja: Color(hex: 0x9A3209)
+        case .blanca: .s1Canto
+        case .negra: .s1InvCanto
+        case .naranja: .s1NaranjaCanto
         }
     }
 
-    private var letra: Color { tipo == .negra ? .papel : .tinta }
+    private var letra: Color {
+        switch tipo {
+        case .blanca: .s1Tinta
+        case .negra: .s1InvTexto
+        case .naranja: .s1TintaFija
+        }
+    }
 
     func makeBody(configuration: Configuration) -> some View {
-        let abajo = (configuration.isPressed || hundida) && habilitada
-        let radio: CGFloat = chica || cuadrada ? 11 : 15
-        let alto: CGFloat = cuadrada ? 44 : chica ? 40 : 52
-        let forma = RoundedRectangle(cornerRadius: radio, style: .continuous)
-        let tamanoLetra: CGFloat = cuadrada ? 18 : chica ? 11 : 13
+        let seleccionada = hundida && tipo != .naranja
+        let apretada = configuration.isPressed && habilitada && !seleccionada
+        let alto: CGFloat = cuadrada ? 48 : chica ? 40 : 48
+        let forma = RoundedRectangle(cornerRadius: 12, style: .continuous)
         return configuration.label
-            .font(Tipos.marca(tamanoLetra, .heavy))
-            .tracking(cuadrada ? 0 : 0.7)
-            .textCase(.uppercase)
+            .font(S1Tipo.cuerpoFuerte)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            .foregroundStyle(letra)
-            .padding(.horizontal, cuadrada ? 0 : chica ? 14 : 22)
-            .frame(minWidth: cuadrada ? 44 : nil, maxWidth: ancha ? .infinity : nil, minHeight: alto)
-            .background(forma.fill(LinearGradient(colors: [arriba, abajoColor], startPoint: .top, endPoint: .bottom)))
-            .overlay(forma.strokeBorder(LinearGradient(colors: [Color.white.opacity(tipo == .negra ? 0.18 : 0.7), Color.clear],
-                                                       startPoint: .top, endPoint: .center), lineWidth: 1))
-            .background(forma.fill(base).offset(y: abajo ? 1 : 6))
-            .shadow(color: Color.black.opacity(abajo ? 0.2 : 0.45), radius: abajo ? 1 : 7, y: abajo ? 1 : 9)
-            .offset(y: abajo ? 5 : 0)
-            .padding(.bottom, 6)
-            .opacity(habilitada ? 1 : 0.45)
-            .animation(.easeOut(duration: 0.08), value: abajo)
+            .foregroundStyle(seleccionada ? Color.s1InvTexto : letra)
+            .padding(.horizontal, cuadrada ? 0 : chica ? 14 : 20)
+            .frame(minWidth: cuadrada ? 48 : nil, maxWidth: ancha ? .infinity : nil, minHeight: alto)
+            .background {
+                if seleccionada {
+                    forma.fill(Color.s1Inv)
+                } else {
+                    forma.fill(LinearGradient(colors: [arriba, abajo], startPoint: .top, endPoint: .bottom))
+                        .overlay(forma.strokeBorder(Color.white.opacity(tipo == .blanca ? 0.5 : 0.25), lineWidth: 0.5).mask {
+                            LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center)
+                        })
+                }
+            }
+            .background(forma.fill(seleccionada ? Color.clear : canto).offset(y: apretada ? 1 : 4))
+            .offset(y: apretada ? 3 : 0)
+            .padding(.bottom, seleccionada ? 0 : 4)
+            .padding(.top, seleccionada ? 4 : 0)
+            .opacity(habilitada ? 1 : 0.4)
+            .animation(.easeOut(duration: 0.08), value: apretada)
     }
 }
 
@@ -124,99 +136,127 @@ extension View {
     }
 }
 
-/// Un visor hundido, negro.
+/// Las teclas grandes (los grupos del laboratorio, modos, juegos): tecla
+/// clara, y en tinta invertida si están elegidas.
+struct EstiloTeclaModulo: ButtonStyle {
+    let elegido: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        let apretada = configuration.isPressed && !elegido
+        let forma = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return configuration.label
+            .foregroundStyle(elegido ? Color.s1InvTexto : Color.s1Tinta)
+            .background(forma.fill(elegido ? AnyShapeStyle(Color.s1Inv)
+                    : AnyShapeStyle(LinearGradient(colors: [Color.s1TeclaBrillo, Color.s1Tecla], startPoint: .top, endPoint: .bottom))))
+            .background(forma.fill(elegido ? Color.clear : Color.s1Canto).offset(y: apretada ? 1 : 4))
+            .offset(y: apretada ? 3 : 0)
+            .padding(.bottom, 4)
+            .animation(.easeOut(duration: 0.08), value: apretada)
+    }
+}
+
+/// Un visor: ahora un campo (blanco de día, casi negro de noche).
 struct Visor<Contenido: View>: View {
     var relleno: CGFloat = 16
     @ViewBuilder let contenido: Contenido
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) { contenido }
+        let forma = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        VStack(alignment: .leading, spacing: 8) { contenido }
             .padding(.vertical, relleno)
             .padding(.horizontal, relleno + 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.hundido.shadow(.inner(color: .black.opacity(0.85), radius: 5, y: 3))))
+            .background(forma.fill(Color.s1Campo))
+            .overlay(forma.strokeBorder(Color.s1Linea, lineWidth: 1))
     }
 }
 
-/// La placa naranja anodizada, con su trama de puntos.
+/// La placa de antes: ahora una tarjeta (superficie, radio 20). El naranja
+/// queda para la acción principal y para la S1.
 struct PlacaNaranja<Contenido: View>: View {
     var relleno: CGFloat = 16
-    var radio: CGFloat = 30
+    var radio: CGFloat = 20
     @ViewBuilder let contenido: Contenido
 
     var body: some View {
-        let forma = RoundedRectangle(cornerRadius: radio, style: .continuous)
         VStack(alignment: .leading, spacing: 16) { contenido }
             .padding(relleno)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                ZStack {
-                    forma.fill(LinearGradient(stops: [.init(color: Color(hex: 0xFF7039), location: 0), .init(color: Color(hex: 0xF2541A), location: 0.55),
-                                                      .init(color: Color(hex: 0xD9450F), location: 1)], startPoint: .top, endPoint: .bottom))
-                    Trama().clipShape(forma)
-                    forma.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.35), Color.clear], startPoint: .top, endPoint: .center), lineWidth: 1.5)
-                }
-                .shadow(color: Color.black.opacity(0.7), radius: 24, y: 24)
-            }
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.s1Superficie))
     }
 }
 
-/// La trama de puntos de la placa.
+/// Una trama de puntos (la del parlante).
 struct Trama: View {
+    var paso: CGFloat = 7
+    var color: Color = Color.black.opacity(0.14)
+    var radio: CGFloat = 1
+
     var body: some View {
         Canvas { ctx, tam in
-            let paso: CGFloat = 7
             var camino = Path()
             var y: CGFloat = paso / 2
             while y < tam.height {
                 var x: CGFloat = paso / 2
                 while x < tam.width {
-                    camino.addEllipse(in: CGRect(x: x - 1, y: y - 1, width: 2, height: 2))
+                    camino.addEllipse(in: CGRect(x: x - radio, y: y - radio, width: radio * 2, height: radio * 2))
                     x += paso
                 }
                 y += paso
             }
-            ctx.fill(camino, with: .color(Color.black.opacity(0.14)))
+            ctx.fill(camino, with: .color(color))
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 }
 
-/// Una bandeja hundida en la placa naranja.
+/// Un grupo: superficie de radio 20.
 struct Bandeja<Contenido: View>: View {
     var relleno: CGFloat = 16
-    var espacio: CGFloat = 14
+    var espacio: CGFloat = 12
     @ViewBuilder let contenido: Contenido
 
     var body: some View {
         VStack(alignment: .leading, spacing: espacio) { contenido }
             .padding(relleno)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.tinta.opacity(0.12).shadow(.inner(color: .black.opacity(0.25), radius: 4, y: 2))))
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.s1Superficie))
     }
 }
 
-/// La chapa oscura de las tarjetas.
+/// Una tarjeta.
 struct Chapa: ViewModifier {
-    var radio: CGFloat = 28
+    var radio: CGFloat = 20
     func body(content: Content) -> some View {
         let forma = RoundedRectangle(cornerRadius: radio, style: .continuous)
         return content
-            .background(forma.fill(LinearGradient(colors: [Color(hex: 0x2C2925), Color(hex: 0x1C1A17)], startPoint: .top, endPoint: .bottom)))
-            .overlay(forma.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.1), Color.clear], startPoint: .top, endPoint: .center), lineWidth: 1))
+            .background(forma.fill(Color.s1Superficie))
             .clipShape(forma)
-            .shadow(color: Color.black.opacity(0.7), radius: 20, y: 18)
     }
 }
 
 extension View {
-    func chapa(radio: CGFloat = 28) -> some View { modifier(Chapa(radio: radio)) }
+    func chapa(radio: CGFloat = 20) -> some View { modifier(Chapa(radio: radio)) }
 }
 
-/// Un interruptor con LED.
+/// El interruptor del sistema: 52 × 32; apagado con borde de 2 en tinta 2,
+/// prendido en tinta invertida.
+struct Interruptor: View {
+    let prendido: Bool
+
+    var body: some View {
+        ZStack(alignment: prendido ? .trailing : .leading) {
+            Capsule().fill(prendido ? Color.s1Inv : Color.clear)
+            Capsule().strokeBorder(prendido ? Color.s1Inv : Color.s1Tinta2, lineWidth: 2)
+            Circle().fill(prendido ? Color.s1Fondo : Color.s1Tinta2).frame(width: 20, height: 20).padding(.horizontal, 6)
+        }
+        .frame(width: 52, height: 32)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: prendido)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Un interruptor con su nombre (la llave de antes).
 struct Llave: View {
     let texto: String
     let prendida: Bool
@@ -225,48 +265,51 @@ struct Llave: View {
 
     var body: some View {
         Button(action: accion) {
-            HStack(spacing: 8) {
-                Led(estado: prendida ? .on : .apagado)
-                Text(texto.uppercased()).font(Tipos.marca(10.5, .heavy)).tracking(0.8).lineLimit(1).minimumScaleFactor(0.7)
+            HStack(spacing: 12) {
+                Text(texto).font(S1Tipo.cuerpo).foregroundStyle(Color.s1Tinta).lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 8)
+                Interruptor(prendido: prendida)
             }
-            .foregroundStyle(prendida ? Color.papel : Color.grisClaro)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: ancha ? .infinity : nil, minHeight: 44)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.hundido.shadow(.inner(color: .black.opacity(0.85), radius: 4, y: 2))))
+            .padding(.leading, 16).padding(.trailing, 8)
+            .frame(maxWidth: ancha ? .infinity : nil, minHeight: 48)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.s1Campo))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.s1Linea, lineWidth: 1))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(texto)
+        .accessibilityValue(prendida ? "Prendido" : "Apagado")
         .accessibilityAddTraits(prendida ? [.isSelected] : [])
         .sensoryFeedback(.selection, trigger: prendida)
     }
 }
 
-/// Un aviso corto (en un visor).
+/// Un aviso corto.
 struct AvisoConsola: View {
     let texto: String
     var error = false
     var body: some View {
-        HStack(spacing: 10) {
-            Led(estado: error ? .rojo : .on)
-            Text(texto).font(Tipos.marca(13, .bold)).foregroundStyle(Color.papel).fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: 12) {
+            Led(estado: error ? .rojo : .verde)
+            Text(texto).font(S1Tipo.cuerpo).foregroundStyle(Color.s1Tinta).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.hundido))
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.s1Superficie))
     }
 }
 
-/// Unos dígitos de visor, en brasa.
+/// Unos dígitos grandes.
 struct Digitos: View {
     let texto: String
     var chicos = false
     var body: some View {
-        Text(texto).font(chicos ? Tipos.digitosChicos : Tipos.digitos).foregroundStyle(Color.brasa)
-            .shadow(color: Color.led.opacity(0.45), radius: 9).lineLimit(1).minimumScaleFactor(0.6)
+        Text(texto).font(chicos ? Tipos.digitosChicos : S1Tipo.dato).foregroundStyle(Color.s1Tinta)
+            .lineLimit(1).minimumScaleFactor(0.6)
     }
 }
 
-/// Un campo de texto de visor.
+/// Un campo de texto: su rótulo arriba y el campo de 48.
 struct CampoVisor: View {
     let rotulo: String
     @Binding var texto: String
@@ -278,21 +321,25 @@ struct CampoVisor: View {
     @FocusState private var enfocado: Bool
 
     var body: some View {
-        Visor(relleno: 12) {
-            Grabado(rotulo)
-            TextField("", text: $texto, prompt: Text(ayuda).foregroundColor(Color(hex: 0x5A524A)))
-                .font(Tipos.marca(claro ? min(tamano, 18) : tamano, .black))
-                .foregroundStyle(claro ? Color.papel : Color.brasa)
-                .tint(Color.brasa)
+        let forma = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        VStack(alignment: .leading, spacing: 8) {
+            if !rotulo.isEmpty { Grabado(rotulo) }
+            TextField("", text: $texto, prompt: Text(ayuda).foregroundColor(Color.s1Tinta3))
+                .font(.system(size: claro ? 15 : min(22, max(15, tamano)), weight: claro ? .regular : .bold))
+                .foregroundStyle(Color.s1Tinta)
+                .tint(Color.s1Naranja)
                 .keyboardType(teclado)
                 .autocorrectionDisabled()
-                .textInputAutocapitalization(teclado == .URL ? .never : .sentences)
+                .textInputAutocapitalization(teclado == .URL || teclado == .emailAddress ? .never : .sentences)
                 .focused($enfocado)
                 .submitLabel(.done)
                 .onSubmit(alTerminar)
                 .onChange(of: enfocado) { _, si in if !si { alTerminar() } }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 48)
+                .background(forma.fill(Color.s1Campo))
+                .overlay(forma.strokeBorder(enfocado ? Color.s1Tinta : Color.s1Linea, lineWidth: enfocado ? 2 : 1))
         }
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(enfocado ? Color.brasa : Color.clear, lineWidth: 2))
     }
 }
 
@@ -339,14 +386,14 @@ struct Marca: View {
     var body: some View {
         Canvas { ctx, tam in
             let k = tam.width / 40
-            ctx.fill(Path(roundedRect: CGRect(x: 4 * k, y: 3 * k, width: 11 * k, height: 20 * k), cornerRadius: 5.5 * k), with: .color(.naranja))
+            ctx.fill(Path(roundedRect: CGRect(x: 4 * k, y: 3 * k, width: 11 * k, height: 20 * k), cornerRadius: 5.5 * k), with: .color(.s1Naranja))
             var p = Path()
             p.move(to: CGPoint(x: 25 * k, y: 8 * k))
             p.addLine(to: CGPoint(x: 36 * k, y: 3 * k))
             p.addLine(to: CGPoint(x: 36 * k, y: 18 * k))
             p.addArc(center: CGPoint(x: 30.5 * k, y: 18 * k), radius: 5.5 * k, startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
             p.closeSubpath()
-            ctx.fill(p, with: .color(.naranja))
+            ctx.fill(p, with: .color(.s1Naranja))
         }
         .frame(width: 36, height: 23)
         .accessibilityHidden(true)

@@ -44,7 +44,7 @@ struct ModMemoria: View {
         } else {
             VStack(spacing: 10) {
                 HStack(spacing: 8) {
-                    TextField("", text: $nuevo, prompt: Text("mi cumple es el 3 de mayo").foregroundColor(Color(hex: 0x5A524A)))
+                    TextField("", text: $nuevo, prompt: Text("mi cumple es el 3 de mayo").foregroundColor(Color.tinta3))
                         .font(Tipos.marca(16, .bold)).foregroundStyle(Color.papel)
                         .padding(12).background(RoundedRectangle(cornerRadius: 12).fill(Color.hundido))
                         .onSubmit { sumar() }

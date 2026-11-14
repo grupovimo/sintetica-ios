@@ -161,7 +161,7 @@ struct LeerVoz: View {
             Visor(relleno: 12) {
                 Grabado("Clave de ElevenLabs")
                 HStack(spacing: 8) {
-                    SecureField("", text: $clave, prompt: Text("sk_…").foregroundColor(Color(hex: 0x5A524A)))
+                    SecureField("", text: $clave, prompt: Text("sk_…").foregroundColor(Color.tinta3))
                         .font(Tipos.marca(15, .bold)).foregroundStyle(Color.papel)
                     Button {
                         let c = clave.trimmingCharacters(in: .whitespaces)

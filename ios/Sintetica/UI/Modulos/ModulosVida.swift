@@ -70,7 +70,7 @@ struct ModHabla: View {
             if !oido.isEmpty { AvisoConsola(texto: oido) }
             Visor(relleno: 12) {
                 HStack(spacing: 8) {
-                    TextField("", text: $nueva, prompt: Text(Self.ejemplo[situacion] ?? VidaBase.primeraFrase(situacion) ?? "Frase nueva").foregroundColor(Color(hex: 0x5A524A)))
+                    TextField("", text: $nueva, prompt: Text(Self.ejemplo[situacion] ?? VidaBase.primeraFrase(situacion) ?? "Frase nueva").foregroundColor(Color.tinta3))
                         .font(Tipos.marca(16, .black)).foregroundStyle(Color.papel).submitLabel(.done).onSubmit(agregar)
                         .onChange(of: nueva) { _, v in let x = cortarBytes(v, MAX_TEXTO); if x != v { nueva = x } }
                     Text("\(nueva.utf8.count)/\(MAX_TEXTO)").font(Tipos.marca(10, .heavy).monospacedDigit()).foregroundStyle(Color.gris)
@@ -163,7 +163,7 @@ struct ModCuidado: View {
                 Llave(texto: "Te extraña", prendida: c.extranar, ancha: true) { modelo.cambiar { $0.cambiarCuidado { $0.extranar.toggle() } } }
                 Button { modelo.cambiar { $0.cambiarCuidado { $0.extranarDias = max(1, $0.extranarDias - 1) } } } label: { Image(systemName: "minus") }
                     .tecla(.negra, cuadrada: true).disabled(!c.extranar).accessibilityLabel("Un día menos")
-                Text("\(c.extranarDias)d").font(Tipos.digitosChicos).foregroundStyle(c.extranar ? Color.brasa : Color(hex: 0x5A524A))
+                Text("\(c.extranarDias)d").font(Tipos.digitosChicos).foregroundStyle(c.extranar ? Color.brasa : Color.tinta3)
                     .frame(minWidth: 40).accessibilityLabel("\(c.extranarDias) días")
                 Button { modelo.cambiar { $0.cambiarCuidado { $0.extranarDias = min(7, $0.extranarDias + 1) } } } label: { Image(systemName: "plus") }
                     .tecla(.negra, cuadrada: true).disabled(!c.extranar).accessibilityLabel("Un día más")
@@ -200,7 +200,7 @@ struct ModJugar: View {
                             Text((NOMBRES_JUEGO[j] ?? j).uppercased()).font(Tipos.angosta(10, .black)).lineLimit(2).multilineTextAlignment(.center)
                                 .minimumScaleFactor(0.7)
                         }
-                        .foregroundStyle(jugando == j ? Color.papel : Color.tinta)
+                        .foregroundStyle(jugando == j ? Color.s1InvTexto : Color.tinta)
                         .frame(maxWidth: .infinity, minHeight: 92)
                     }
                     .buttonStyle(EstiloTeclaModulo(elegido: jugando == j))
@@ -349,7 +349,7 @@ struct BloqueUbicacion: View {
                                 Text("↑\(c.max)° ↓\(c.min)°").font(Tipos.chico).foregroundStyle(Color.gris)
                             }
                         } else {
-                            Text("--°").font(Tipos.digitosChicos).foregroundStyle(Color(hex: 0x5A524A))
+                            Text("--°").font(Tipos.digitosChicos).foregroundStyle(Color.tinta3)
                         }
                         Button { buscando = true } label: { Image(systemName: "magnifyingglass") }.tecla(.negra, cuadrada: true)
                             .accessibilityLabel("Cambiar la ciudad")
@@ -360,7 +360,7 @@ struct BloqueUbicacion: View {
                     Visor(relleno: 12) {
                         Grabado("Su ciudad")
                         HStack(spacing: 8) {
-                            TextField("", text: $q, prompt: Text("Buscá tu ciudad").foregroundColor(Color(hex: 0x5A524A)))
+                            TextField("", text: $q, prompt: Text("Buscá tu ciudad").foregroundColor(Color.tinta3))
                                 .font(Tipos.marca(17, .black)).foregroundStyle(Color.papel).autocorrectionDisabled()
                                 .onChange(of: q) { _, v in escribir(v) }
                                 .onSubmit { if let l = lugares.first { elegir(l) } }

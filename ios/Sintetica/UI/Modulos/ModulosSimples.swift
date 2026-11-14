@@ -129,7 +129,7 @@ struct ModCara: View {
                     .foregroundStyle(elegida ? Color.papel : Color.gris)
             }
             .padding(8)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.hundido.shadow(.inner(color: .black.opacity(0.8), radius: 3, y: 2))))
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color.hundido))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(elegida ? Color.brasa : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain)
@@ -147,7 +147,7 @@ struct ModCara: View {
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.hundido.shadow(.inner(color: .black.opacity(0.8), radius: 3, y: 2))))
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color.hundido))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(elegido ? color : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain)
@@ -209,7 +209,7 @@ struct BarraDia: View {
                 let cal = Calendar.current.dateComponents([.hour, .minute], from: ctx.date)
                 let ahora = Double((cal.hour ?? 0) * 60 + (cal.minute ?? 0)) / 1440
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 10).fill(Color.hundido.shadow(.inner(color: .black.opacity(0.8), radius: 4, y: 2)))
+                    RoundedRectangle(cornerRadius: 10).fill(Color.hundido)
                     ForEach(Array(tramos.enumerated()), id: \.offset) { _, t in
                         RoundedRectangle(cornerRadius: 6)
                             .fill(LinearGradient(colors: [Color.brasa, Color(hex: 0xF2541A)], startPoint: .top, endPoint: .bottom))
@@ -281,7 +281,7 @@ private struct HojaCumple: View {
         .padding(24)
         .presentationDetents([.medium])
         .presentationBackground(Color.fondo)
-        .colorScheme(.dark)
+        
     }
 }
 
@@ -347,7 +347,7 @@ struct ModModos: View {
             Image(systemName: icono).font(.system(size: 22, weight: .semibold))
             Text(nombre.uppercased()).font(Tipos.marca(15, .black)).lineLimit(1).minimumScaleFactor(0.7)
         }
-        .foregroundStyle(elegido ? Color.papel : Color.tinta)
+        .foregroundStyle(elegido ? Color.s1InvTexto : Color.tinta)
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
     }

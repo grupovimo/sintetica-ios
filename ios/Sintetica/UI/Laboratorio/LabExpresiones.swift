@@ -182,7 +182,7 @@ struct LabExpresiones: View {
                         Image(systemName: g.icono).font(.system(size: 16, weight: .semibold)).foregroundStyle(grupo == g.clave ? Color.brasa : Color.tinta)
                         Text(g.nombre.uppercased()).font(Tipos.angosta(9.5, .black)).lineLimit(1).minimumScaleFactor(0.6)
                     }
-                    .foregroundStyle(grupo == g.clave ? Color.papel : Color.tinta)
+                    .foregroundStyle(grupo == g.clave ? Color.s1InvTexto : Color.tinta)
                     .frame(maxWidth: .infinity, minHeight: 54)
                 }
                 .buttonStyle(EstiloTeclaModulo(elegido: grupo == g.clave))

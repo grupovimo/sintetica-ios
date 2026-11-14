@@ -59,8 +59,6 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Para escanear el QR que muestra tu robot.</string>
-	<key>UIUserInterfaceStyle</key>
-	<string>Dark</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

@@ -122,7 +122,7 @@ struct ModImagenes: View {
     private func hueco(_ e: Int, lleno: Bool, cuadros: [UIImage]) -> some View {
         let redonda = modelo.producto.redonda
         return ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.hundido.shadow(.inner(color: .black.opacity(0.9), radius: 6, y: 3)))
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.hundido)
             if !cuadros.isEmpty {
                 ImagenAnimada(cuadros: cuadros, duraciones: modelo.duraciones[e] ?? [])
                     .clipShape(redonda ? AnyShape(Circle()) : AnyShape(Rectangle()))
@@ -219,7 +219,7 @@ private struct FichaRecordatorio: View {
                 Visor(relleno: 10) {
                     Grabado("A las")
                     DatePicker("", selection: hora, displayedComponents: .hourAndMinute)
-                        .labelsHidden().datePickerStyle(.compact).tint(Color.brasa).colorScheme(.dark)
+                        .labelsHidden().datePickerStyle(.compact).tint(Color.brasa)
                 }
                 .frame(width: 140)
                 VStack(spacing: 8) {
@@ -271,20 +271,16 @@ private struct FichaRecordatorio: View {
     }
 }
 
-/// Las teclitas de los días.
+/// Los días: chips; el elegido en tinta invertida.
 struct EstiloDia: ButtonStyle {
     let prendido: Bool
     func makeBody(configuration: Configuration) -> some View {
-        let abajo = prendido || configuration.isPressed
-        let forma = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        let colores: [Color] = prendido ? [Color(hex: 0x2A2622), Color(hex: 0x151310)] : [Color(hex: 0xFBF9F5), Color(hex: 0xE6E0D6)]
-        return configuration.label
-            .font(Tipos.marca(13, .black))
-            .foregroundStyle(prendido ? Color.papel : Color.tinta.opacity(0.7))
+        configuration.label
+            .font(prendido ? S1Tipo.cuerpoFuerte : S1Tipo.cuerpo)
+            .foregroundStyle(prendido ? Color.s1InvTexto : Color.s1Tinta)
             .frame(maxWidth: .infinity, minHeight: 36)
-            .background(forma.fill(LinearGradient(colors: colores, startPoint: .top, endPoint: .bottom)))
-            .background(forma.fill(prendido ? Color.black : Color(hex: 0x8F887C)).offset(y: abajo ? 1 : 4))
-            .offset(y: abajo ? 3 : 0)
-            .padding(.bottom, 4)
+            .background(Capsule().fill(prendido ? Color.s1Inv : Color.clear))
+            .overlay(Capsule().strokeBorder(prendido ? Color.clear : Color.s1Linea, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }

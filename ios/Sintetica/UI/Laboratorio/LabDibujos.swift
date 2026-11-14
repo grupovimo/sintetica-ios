@@ -88,10 +88,10 @@ struct LabDibujos: View {
                     Text(n).font(Tipos.marca(9.5, .bold)).lineLimit(1).minimumScaleFactor(0.7)
                     if propios[n] != nil { Led(estado: .on, tamano: 6) }
                 }
-                .foregroundStyle(sel ? Color.papel : Color.tinta)
+                .foregroundStyle(sel ? Color.s1InvTexto : Color.tinta)
             }
             .padding(6)
-            .background(RoundedRectangle(cornerRadius: 12).fill(sel ? Color.tinta : Color.tinta.opacity(0.12)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(sel ? Color.s1Inv : Color.s1Superficie))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(n)

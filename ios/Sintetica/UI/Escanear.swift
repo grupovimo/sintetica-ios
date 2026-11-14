@@ -10,7 +10,7 @@ struct Escanear: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Button { if !Navegacion.volver(&ruta) { cerrar() } } label: { Label("Mis robots", systemImage: "chevron.left") }.tecla(.negra, chica: true)
+            Button { if !Navegacion.volver(&ruta) { cerrar() } } label: { Label("Atrás", systemImage: "chevron.left") }.tecla(.negra, chica: true)
             Grabado("Vincular", color: .brasa)
             Titular("Escaneá su QR", tamano: 38)
             ZStack {

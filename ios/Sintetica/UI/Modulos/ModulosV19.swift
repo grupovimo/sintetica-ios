@@ -129,7 +129,7 @@ struct ModAmigos: View {
         Visor(relleno: 12) {
             Grabado("Código de un amigo")
             HStack(spacing: 8) {
-                TextField("", text: $codigo, prompt: Text("ABCD-EFGH").foregroundColor(Color(hex: 0x5A524A)))
+                TextField("", text: $codigo, prompt: Text("ABCD-EFGH").foregroundColor(Color.tinta3))
                     .font(Tipos.marca(22, .black)).foregroundStyle(Color.brasa)
                     .textInputAutocapitalization(.characters).autocorrectionDisabled()
                     .onSubmit { Task { await aceptarCodigo() } }
@@ -175,7 +175,7 @@ struct ModAmigos: View {
                             Image(systemName: SIMBOLO_TOQUE[t] ?? "hand.point.up.left.fill").font(.system(size: 22, weight: .bold))
                             Text((NOMBRE_TOQUE[t] ?? t).uppercased()).font(Tipos.angosta(10, .black)).lineLimit(1)
                         }
-                        .foregroundStyle(mandando == "\(a.id):\(t)" ? Color.papel : Color.tinta)
+                        .foregroundStyle(mandando == "\(a.id):\(t)" ? Color.s1InvTexto : Color.tinta)
                         .frame(maxWidth: .infinity, minHeight: 64)
                     }
                     .buttonStyle(EstiloTeclaModulo(elegido: mandando == "\(a.id):\(t)"))
@@ -355,7 +355,7 @@ private struct FichaHabito: View {
                 Llave(texto: "Pregunta", prendida: !habito.hora.isEmpty) { poner { $0.hora = $0.hora.isEmpty ? "09:00" : "" } }
                 if !habito.hora.isEmpty {
                     DatePicker("", selection: hora, displayedComponents: .hourAndMinute)
-                        .labelsHidden().datePickerStyle(.compact).tint(Color.brasa).colorScheme(.dark)
+                        .labelsHidden().datePickerStyle(.compact).tint(Color.brasa)
                 }
                 Spacer(minLength: 0)
             }
@@ -442,7 +442,7 @@ struct ModAgenda: View {
             Visor(relleno: 12) {
                 Grabado("Pegala acá")
                 HStack(spacing: 8) {
-                    TextField("", text: $ics, prompt: Text("https://…/basic.ics").foregroundColor(Color(hex: 0x5A524A)))
+                    TextField("", text: $ics, prompt: Text("https://…/basic.ics").foregroundColor(Color.tinta3))
                         .font(Tipos.marca(14, .bold)).foregroundStyle(Color.papel)
                         .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     Button { Task { await conectar() } } label: { Text(conectando ? "…" : "Conectar") }.tecla(.naranja, chica: true)
@@ -651,7 +651,7 @@ struct ModAvisos: View {
                             }
                         } else {
                             HStack(spacing: 6) {
-                                SecureField("", text: $mp, prompt: Text("Access token").foregroundColor(Color(hex: 0x5A524A)))
+                                SecureField("", text: $mp, prompt: Text("Access token").foregroundColor(Color.tinta3))
                                     .font(Tipos.marca(13, .bold)).foregroundStyle(Color.papel)
                                     .padding(10).background(RoundedRectangle(cornerRadius: 10).fill(Color.hundido))
                                 Button { guardarMP() } label: { Text("Guardar") }.tecla(chica: true).disabled(mp.trimmingCharacters(in: .whitespaces).isEmpty)

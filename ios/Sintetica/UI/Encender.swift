@@ -137,7 +137,7 @@ struct EncenderVista: View {
             Titular("¿Una foto?")
             PhotosPicker(selection: $item, matching: .any(of: [.images, .videos])) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.hundido.shadow(.inner(color: .black.opacity(0.9), radius: 6, y: 3)))
+                    RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.hundido)
                     if let v = vistaFoto {
                         Image(uiImage: v).resizable().scaledToFit()
                     } else if foto != nil {

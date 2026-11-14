@@ -48,7 +48,7 @@ struct LaboratorioVista: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    Button { cerrar() } label: { Label("Consola", systemImage: "chevron.left") }.tecla(.negra, chica: true)
+                    Button { cerrar() } label: { Label("Atrás", systemImage: "chevron.left") }.tecla(.negra, chica: true)
                     Spacer()
                     Grabado("Laboratorio · \(modelo.nombre)", color: .brasa)
                 }
@@ -58,10 +58,10 @@ struct LaboratorioVista: View {
                         Button { rack = r } label: {
                             VStack(spacing: 8) {
                                 Image(systemName: r.icono).font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(rack == r ? Color.brasa : Color.tinta)
+                                    .foregroundStyle(rack == r ? Color.s1InvTexto : Color.tinta)
                                 Text(r.nombre.uppercased()).font(Tipos.angosta(10, .black)).lineLimit(1).minimumScaleFactor(0.6)
                             }
-                            .foregroundStyle(rack == r ? Color.papel : Color.tinta)
+                            .foregroundStyle(rack == r ? Color.s1InvTexto : Color.tinta)
                             .frame(maxWidth: .infinity, minHeight: 64)
                         }
                         .buttonStyle(EstiloTeclaModulo(elegido: rack == r))

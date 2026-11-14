@@ -42,7 +42,7 @@ struct Vinculando: View {
             let clave = try await c.vincular(qr.codigo)
             Vinculados.compartidos.guardar(Vinculado(id: qr.id, nombre: c.estado?.nombre ?? "Tu robot", serie: c.estado?.serie ?? "", clave: clave))
             c.cerrar()
-            ruta = [.robot(qr.id)]
+            Navegacion.abrir(qr.id, &ruta)
         } catch {
             cliente?.cerrar()
             self.error = error.localizedDescription

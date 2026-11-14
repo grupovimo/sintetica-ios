@@ -37,7 +37,7 @@ struct Perilla: View {
             .frame(width: tamano + 18, height: tamano + 18)
             .contentShape(Circle())
             .gesture(arrastre)
-            Grabado(nombre, color: Color.tinta.opacity(0.7))
+            Grabado(nombre)
             visor
         }
         .sensoryFeedback(.selection, trigger: Int((valor / paso).rounded()))
@@ -64,14 +64,11 @@ struct Perilla: View {
     }
 
     private var tapa: some View {
-        let relleno = RadialGradient(colors: [Color(hex: 0x3E3A35), Color(hex: 0x161412)], center: UnitPoint(x: 0.35, y: 0.3),
-                                     startRadius: 0, endRadius: tamano * 0.6)
-        let brillo = LinearGradient(colors: [Color.white.opacity(0.15), Color.clear], startPoint: .top, endPoint: .center)
-        let marca = Capsule().fill(Color.brasa).frame(width: 5, height: tamano * 0.26).padding(.top, tamano * 0.07).shadow(color: Color.led, radius: 4)
+        let relleno = LinearGradient(colors: [Color.s1TeclaBrillo, Color.s1Tecla], startPoint: .top, endPoint: .bottom)
+        let marca = Capsule().fill(Color.s1Naranja).frame(width: 5, height: tamano * 0.26).padding(.top, tamano * 0.07)
         return Circle().fill(relleno)
-            .overlay(Circle().strokeBorder(brillo, lineWidth: 1))
-            .background(Circle().fill(Color.black).offset(y: 5))
-            .shadow(color: Color(hex: 0x501400).opacity(0.7), radius: 6, y: 9)
+            .overlay(Circle().strokeBorder(Color.s1Linea, lineWidth: 1))
+            .background(Circle().fill(Color.s1Canto).offset(y: 4))
             .overlay(alignment: .top) { marca }
             .rotationEffect(.degrees(angulo))
             .frame(width: tamano, height: tamano)
@@ -79,10 +76,9 @@ struct Perilla: View {
     }
 
     private var visor: some View {
-        let fondo = Color.hundido.shadow(.inner(color: .black.opacity(0.8), radius: 3, y: 2))
-        return Text(texto).font(Tipos.marca(14, .black).monospacedDigit()).foregroundStyle(Color.brasa)
-            .frame(minWidth: 44).padding(.vertical, 5).padding(.horizontal, 8)
-            .background(RoundedRectangle(cornerRadius: 7).fill(fondo))
+        Text(texto).font(S1Tipo.mono(13)).foregroundStyle(Color.s1Tinta)
+            .frame(minWidth: 44).padding(.vertical, 4).padding(.horizontal, 8)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.s1Superficie))
     }
 }
 
@@ -134,14 +130,13 @@ struct Dial: View {
     private var perilla: some View {
         ZStack {
             Circle()
-                .fill(AngularGradient(colors: [Color(hex: 0xFBF9F5), Color(hex: 0xD4CCBF), Color(hex: 0xFBF9F5), Color(hex: 0xCFC7B9), Color(hex: 0xFBF9F5)],
-                                      center: .center, startAngle: .degrees(20), endAngle: .degrees(380)))
-                .background(Circle().fill(Color(hex: 0x8F887C)).offset(y: 9))
-                .shadow(color: Color(hex: 0x501400).opacity(0.6), radius: 14, y: 18)
-            Capsule().fill(Color.naranja).frame(width: 7, height: 40).offset(y: -45)
+                .fill(LinearGradient(colors: [Color.s1TeclaBrillo, Color.s1Tecla], startPoint: .top, endPoint: .bottom))
+                .overlay(Circle().strokeBorder(Color.s1Linea, lineWidth: 1))
+                .background(Circle().fill(Color.s1Canto).offset(y: 6))
+            Capsule().fill(Color.s1Naranja).frame(width: 7, height: 40).offset(y: -45)
                 .rotationEffect(.degrees(Double(indice) * 45))
                 .animation(.spring(response: 0.45, dampingFraction: 0.55), value: indice)
-            Circle().fill(RadialGradient(colors: [Color.papel, Color(hex: 0xBDB4A6)], center: UnitPoint(x: 0.4, y: 0.35), startRadius: 0, endRadius: 30))
+            Circle().fill(Color.s1Superficie)
                 .frame(width: 46, height: 46)
         }
         .frame(width: 150, height: 150)
@@ -154,11 +149,11 @@ struct Dial: View {
         let x = CGFloat(150 + cos(a) * 128), y = CGFloat(140 + sin(a) * 118)
         let elegida = valor == p
         return Button { alCambiar(p) } label: {
-            Text((NOMBRES_PRESET[p] ?? p).uppercased())
-                .font(Tipos.marca(10.5, .heavy)).tracking(0.6)
-                .foregroundStyle(elegida ? Color.white : Color.tinta.opacity(0.78))
-                .padding(.horizontal, 9).padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 9).fill(elegida ? Color.tinta : Color.clear))
+            Text(NOMBRES_PRESET[p] ?? p)
+                .font(elegida ? S1Tipo.captionFuerte : S1Tipo.caption)
+                .foregroundStyle(elegida ? Color.s1InvTexto : Color.s1Tinta)
+                .padding(.horizontal, 12).frame(height: 32)
+                .background(Capsule().fill(elegida ? Color.s1Inv : Color.clear))
                 .fixedSize()
         }
         .buttonStyle(.plain)
@@ -179,13 +174,14 @@ struct Pad: View {
             let fx = CGFloat((x - minX) / (maxX - minX))
             let fy = CGFloat(1 - (y - minY) / (maxY - minY))
             ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.hundido.shadow(.inner(color: .black.opacity(0.85), radius: 5, y: 3)))
-                Rectangle().fill(Color.white.opacity(0.1)).frame(width: g.size.width * 0.8, height: 1)
-                Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: g.size.height * 0.8)
+                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.s1Campo)
+                RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.s1Linea, lineWidth: 1)
+                Rectangle().fill(Color.s1Linea).frame(width: g.size.width * 0.8, height: 1)
+                Rectangle().fill(Color.s1Linea).frame(width: 1, height: g.size.height * 0.8)
                 Circle()
-                    .fill(RadialGradient(colors: [Color(hex: 0xFFB08A), Color(hex: 0xF2541A)], center: UnitPoint(x: 0.35, y: 0.3), startRadius: 0, endRadius: 14))
+                    .fill(Color.s1Naranja)
                     .frame(width: 26, height: 26)
-                    .shadow(color: Color.led, radius: 8)
+                    .background(Circle().fill(Color.s1NaranjaCanto).offset(y: 3))
                     .position(x: fx * g.size.width, y: fy * g.size.height)
             }
             .contentShape(Rectangle())
@@ -213,7 +209,7 @@ struct Pad: View {
     }
 }
 
-/// Un visor de reloj con + y −.
+/// Un stepper (48): − el valor +.
 struct VisorMasMenos: View {
     let rotulo: String
     let valor: String
@@ -222,18 +218,17 @@ struct VisorMasMenos: View {
     let mas: () -> Void
 
     var body: some View {
-        Visor(relleno: 14) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Grabado(rotulo)
-                    Digitos(texto: valor, chicos: chicos)
-                }
-                Spacer(minLength: 0)
-                VStack(spacing: 4) {
-                    Button(action: mas) { Image(systemName: "plus") }.tecla(.negra, cuadrada: true).accessibilityLabel("\(rotulo): más")
-                    Button(action: menos) { Image(systemName: "minus") }.tecla(.negra, cuadrada: true).accessibilityLabel("\(rotulo): menos")
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            Grabado(rotulo)
+            HStack(spacing: 8) {
+                Button(action: menos) { Image(systemName: "minus").font(.system(size: 17, weight: .bold)) }
+                    .tecla(cuadrada: true).accessibilityLabel("\(rotulo): menos")
+                Text(valor).font(chicos ? Tipos.digitosChicos : S1Tipo.dato).foregroundStyle(Color.s1Tinta)
+                    .lineLimit(1).minimumScaleFactor(0.6).frame(maxWidth: .infinity)
+                Button(action: mas) { Image(systemName: "plus").font(.system(size: 17, weight: .bold)) }
+                    .tecla(cuadrada: true).accessibilityLabel("\(rotulo): más")
             }
         }
+        .accessibilityElement(children: .contain)
     }
 }
