@@ -68,7 +68,12 @@ enum Nucleo {
         }
         h.identificador = UnsafePointer(identificador)
         sintetica_iniciar_perfil(&h, Int32(ancho), Int32(alto), redonda ? 1 : 0, broche ? 1 : 0)
+        iniciado = true
     }
+
+    /// Si ya arrancó: antes, el núcleo no tiene su HAL y un tick lo rompe (la
+    /// cara viva se dibuja mientras la S1 todavía se está conectando).
+    private(set) static var iniciado = false
 
     nonisolated static let inicioSinAislar = Date()
     /// Cuánto se adelantó el reloj del núcleo (para sacar fotos de caras sin
@@ -94,11 +99,11 @@ enum Nucleo {
     }
 
     static func vistaPrevia() { sintetica_vista_previa() }
-    static func tick() { sintetica_tick() }
+    static func tick() { if iniciado { sintetica_tick() } }
     static var ancho: Int { Int(sintetica_ancho()) }
     static var alto: Int { Int(sintetica_alto()) }
-    static func tacto(_ apretado: Bool) { sintetica_tacto(apretado ? 1 : 0) }
-    static func evento(_ e: Int) { sintetica_evento(Int32(e)) }
+    static func tacto(_ apretado: Bool) { if iniciado { sintetica_tacto(apretado ? 1 : 0) } }
+    static func evento(_ e: Int) { if iniciado { sintetica_evento(Int32(e)) } }
     static func bleConexion(_ conectado: Bool) { sintetica_ble_conexion(conectado ? 1 : 0) }
 
     static func bleEscribir(_ car: Int, _ datos: Data) {
@@ -172,6 +177,7 @@ enum Nucleo {
 
     /// El último cuadro como imagen (RGBA de 8 bits).
     static func imagen() -> CGImage? {
+        guard iniciado else { return nil }
         let w = ancho, h = alto
         var rgba = [UInt8](repeating: 0, count: w * h * 4)
         sintetica_pixeles_rgba(&rgba)
