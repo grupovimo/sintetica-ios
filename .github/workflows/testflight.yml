@@ -44,6 +44,7 @@ jobs:
           P12: ${{ secrets.DIST_P12 }}
           P12_CLAVE: ${{ secrets.DIST_P12_CLAVE }}
           PERFIL_APP: ${{ secrets.PERFIL_APP }}
+          PERFIL_WIDGETS: ${{ secrets.PERFIL_WIDGETS }}
         run: |
           LLAVERO="$RUNNER_TEMP/firma.keychain-db"
           CLAVE_LLAVERO=$(openssl rand -hex 16)
@@ -57,6 +58,7 @@ jobs:
           rm "$RUNNER_TEMP/dist.p12"
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           printf '%s' "$PERFIL_APP" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/sintetica-app.mobileprovision
+          printf '%s' "$PERFIL_WIDGETS" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/sintetica-widgets.mobileprovision
       - name: Archive firmado (en Release, como se prueba)
         run: |
           set -o pipefail
@@ -81,6 +83,7 @@ jobs:
             <key>signingCertificate</key><string>Apple Distribution</string>
             <key>provisioningProfiles</key><dict>
               <key>com.sinteticalabs.app</key><string>Sintetica App Store</string>
+              <key>com.sinteticalabs.app.widgets</key><string>Sintetica Widgets App Store</string>
             </dict>
             <key>uploadSymbols</key><true/>
           </dict></plist>

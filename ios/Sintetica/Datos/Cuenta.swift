@@ -23,6 +23,7 @@ final class Cuenta {
         email = UserDefaults.standard.string(forKey: "email") ?? ""
         token = ""
         token = leerToken() ?? ""
+        LlaveroCompartido.guardar(servidor: servidor, token: token) // para los widgets
     }
 
     /// El guardado, salvo que sea el de antes (la Mac en la red local): ese pasa a la nube.
@@ -34,11 +35,13 @@ final class Cuenta {
     func entrar(_ t: String) {
         token = t
         guardarToken(t)
+        LlaveroCompartido.guardar(servidor: servidor, token: t)
     }
 
     func salir() {
         token = ""
         SecItemDelete(consulta() as CFDictionary)
+        LlaveroCompartido.guardar(servidor: servidor, token: "")
     }
 
     private func consulta() -> [String: Any] {
