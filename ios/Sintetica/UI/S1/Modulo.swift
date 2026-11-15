@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Los módulos: cada uno se abre en su pantalla (header + atrás) y se guarda solo.
 enum Modulo: String, CaseIterable, Identifiable, Hashable {
-    case listas, recordatorios, agenda, habitos, dia, jugar, timer, cobrar, pagaron, rutinas
+    case listas, recordatorios, agenda, habitos, dia, jugar, timer, cobrar, pagaron, rutinas, conversaciones
     case cara, imagenes, modos, caracter, habla, voz, memoria, diario, integraciones, iaGasto, reflejos
     case amigos, cuidado, chicos, avisosCelu, avisos
     case ajustes
@@ -20,6 +20,7 @@ enum Modulo: String, CaseIterable, Identifiable, Hashable {
         case .cobrar: "Cobrar"
         case .pagaron: "Te pagaron"
         case .rutinas: "Rutinas"
+        case .conversaciones: "Conversaciones"
         case .cara: "Su cara"
         case .imagenes: "Imágenes"
         case .modos: "Su pantalla"
@@ -51,6 +52,7 @@ enum Modulo: String, CaseIterable, Identifiable, Hashable {
         case .timer: .timer
         case .cobrar, .pagaron: .cobrar
         case .rutinas: .hoy
+        case .conversaciones: .sistema("mic")
         case .cara: .sistema("face.smiling")
         case .imagenes: .sistema("photo")
         case .modos: .cubo
@@ -72,7 +74,7 @@ enum Modulo: String, CaseIterable, Identifiable, Hashable {
     }
 
     /// Las que arman su pantalla entera (su header, el scroll y el botón fijo).
-    var pantallaPropia: Bool { self == .timer || self == .cobrar || self == .pagaron }
+    var pantallaPropia: Bool { self == .timer || self == .cobrar || self == .pagaron || self == .conversaciones }
 
     /// Las que muestran su pantalla de 160 (sin la de 72 en el header).
     var conPantallaGrande: Bool { self == .cara || self == .habitos }

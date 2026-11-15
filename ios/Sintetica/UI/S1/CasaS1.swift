@@ -234,6 +234,7 @@ struct DetalleModulo: View {
         switch modulo {
         case .timer: TimerVista(sesion: sesion, ir: ir)
         case .cobrar: CobrarS1(sesion: sesion, ir: ir)
+        case .conversaciones: ConversacionesS1(sesion: sesion, ir: ir)
         default: TePagaronS1(sesion: sesion, pago: pago, ir: ir)
         }
     }
@@ -264,7 +265,7 @@ struct DetalleModulo: View {
         case .chicos: ChicosS1(sesion: sesion, ir: ir)
         case .avisosCelu: AvisosCeluS1(sesion: sesion)
         case .avisos: ModAvisos(modelo: modelo)
-        case .timer, .cobrar, .pagaron: EmptyView()
+        case .timer, .cobrar, .pagaron, .conversaciones: EmptyView()
         case .ajustes:
             LaS1Vista(sesion: sesion, ir: ir, volver: {
                 EleccionS1.compartida.elegir(nil)

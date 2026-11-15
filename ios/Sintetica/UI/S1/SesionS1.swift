@@ -63,6 +63,9 @@ final class SesionS1 {
     let timer: TimerS1
     /// Los cobros con Mercado Pago (Cobrar y Te pagaron).
     let cobros = CobrosS1()
+    /// Grabar una conversación con el celu (Conversaciones): sigue aunque
+    /// se cambie de pantalla.
+    let grabador = GrabadorConversacion()
     /// Acaba de llegar un pago: CasaS1 abre "Te pagaron".
     var pagoNuevo: PagoRecibido?
     /// La lista abierta en Listas (la muestra el header: regla 7).
@@ -140,6 +143,7 @@ final class SesionS1 {
 
     func cerrar() {
         conversacion.cortar()
+        if grabador.grabando { Task { [grabador] in await grabador.terminar() } }
         modelo.cerrar()
         if let o = oyente { EnVivo.compartido.dejar(o) }
         oyente = nil
@@ -195,6 +199,8 @@ final class SesionS1 {
     func hablar() {
         soltar?.cancel()
         apretadaEn = Date()
+        // Grabando una conversación, el micrófono es de la grabación.
+        if grabador.activo { return }
         if conversacion.activa { conversacion.cortar(); apretadaEn = .distantPast; return }
         Task { await conversacion.empezar(id: id) }
     }

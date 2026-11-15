@@ -53,7 +53,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Para marcar tu casa y que tu robot sepa cuándo llegás.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Para hablarle a tu robot en tiempo real.</string>
+	<string>Para hablarle a tu robot en tiempo real y grabar tus conversaciones.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

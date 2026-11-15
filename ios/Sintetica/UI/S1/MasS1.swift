@@ -16,7 +16,7 @@ struct MasS1: View {
 
     private static func de(_ m: Modulo) -> Tecla { Tecla(id: m.rawValue, nombre: m.nombre, icono: m.icono, destino: .modulo(m)) }
 
-    private static let todosLosDias: [Tecla] = [Modulo.listas, .agenda, .habitos, .rutinas, .timer, .cobrar, .recordatorios, .dia, .jugar]
+    private static let todosLosDias: [Tecla] = [Modulo.listas, .agenda, .habitos, .rutinas, .timer, .cobrar, .recordatorios, .conversaciones, .dia, .jugar]
         .map(MasS1.de)
     private static let ella: [Tecla] = [Modulo.cara, .modos, .memoria, .diario, .integraciones, .iaGasto, .imagenes, .caracter, .habla, .voz, .reflejos]
         .map(MasS1.de)
